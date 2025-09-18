@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: leadership-training-db-staging
+    environment:
+      POSTGRES_DB: leadership_training
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5433:5432"  # Different port for staging
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - staging-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    container_name: leadership-training-backend-staging
+    env_file:
+      - .env.staging
+    environment:
+      NODE_ENV: staging
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: leadership_training
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      JWT_SECRET: staging-jwt-secret-key-replace-with-secure-key
+      PORT: 3001
+      # QR Code Configuration - use environment variable
+      QR_CLOUD_API_URL: https://qrcodes.at/api
+      QR_CLOUD_API_KEY: ${QR_CLOUD_API_KEY}
+      QR_CODE_ERROR_CORRECTION: M
+      QR_CODE_SIZE: 300x300
+      QR_CODE_FORMAT: PNG
+    ports:
+      - "3002:3001"  # Different port for staging
+    networks:
+      - staging-network
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./packages/frontend
+      dockerfile: Dockerfile
+    container_name: leadership-training-frontend-staging
+    environment:
+      NODE_ENV: staging
+      VITE_API_URL: http://localhost:3002  # Point to staging backend
+    ports:
+      - "3001:3000"  # Different port for staging frontend
+    networks:
+      - staging-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_staging_data:
+
+networks:
+  staging-network:
+    driver: bridge

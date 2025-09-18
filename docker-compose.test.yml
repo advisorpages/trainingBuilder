@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  test-database:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: training_builder_test
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d training_builder_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data  # In-memory for faster testing
+    networks:
+      - test-network
+
+  backend-test:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+      target: development
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test_user:test_password@test-database:5432/training_builder_test
+      JWT_SECRET: test-jwt-secret-key-for-testing-only
+      API_PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      test-database:
+        condition: service_healthy
+    networks:
+      - test-network
+    command: npm run test:watch
+
+  frontend-test:
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile
+      target: development
+    environment:
+      NODE_ENV: test
+      VITE_API_BASE_URL: http://backend-test:3001
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend-test
+    networks:
+      - test-network
+    command: npm run test:watch
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  test-postgres-data:
+    driver: local

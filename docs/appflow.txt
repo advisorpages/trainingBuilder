@@ -1,0 +1,50 @@
+Training Builder
+
+Step 1: Users visit home page. They can see ALL published upcoming sessions for the first 7 days and upcoming incentives. The info shown is promo info AIDA/PAS, date, time and location and link to landing page (if it exists). The goal of this is to get them excited and wanting to attend the seminar and take part of the incentives. Trainers and Content developers can log in for more details.
+
+Step 2: When those who are able to login enter their creds they enter the dashboard where they can see ALL published sessions and incentives. The are also presented with links to create new sessions, add new topics. 
+
+Step 3: When they click new session they see all sessions info, a list of all published or in draft. They can edit, delete or add new sessions. 
+
+When they add a new session they are presented with a wizard where the content developer inputs:
+
+User enters
+Type of session: training, event.
+What do we want to talk about (eg. Life insurance, investments, recruiting, licensing): users can pick from a drop down or enter a custom one if it doesn’t exits. Capture the entry for future use. 
+Enter date
+Start time
+End time
+Location (join from existing table)
+Audience: clients, prospects, team mates, leadership
+What kind of tone do you want this message to be created.
+Rough title of the event
+What do you want them walking away with after attending.
+Select the topics they want to deliver from a list of available topics.
+- once the topic is delivered they select the duration and select the trainer (default trainer is no selection). Trainer is an optional field.
+-  
+
+Once all this data is entered, I creates a prompt telling an ai chat agent to create copy for this training session. The copy is geared to attract more people to come to the session. It gives details about the session and generate promo content using AIDA and PAS as the structure.
+
+It will populate the database in its respective fields (the database is already populated. Use existing fields and make new ones if required).
+
+The generated ai prompt is captured in the database and presented with one of 2 options. Use the ChatGPT API to send the prompt or copy and paste the the prompt for manual entry to a chat tool of their choice.
+
+The ai output response will be structured in a way that it maps perfectly with the required database fields.
+
+ Before inserting into the database the user can review the outputted fields. If they like all of them they can move forward. If not they can select the fields they want to change via a check box and it will just regenerate the fields they select keeping the unselected ones intact.   Each time it will either send direct to OpenAI api or output a response to feed into chat agent and repopulate the field.
+
+Once this all been done a final preview appears to confirm if they like what they see.
+
+At this point the data is inserted into the db.
+
+The next part is asking a question if they want a landing page created for this session. The goal of the landing pages is to make it easy for others to invite people. If they want a landing page, it will be created using the sales copy and session details created prior.
+
+The landing page it generates will have a hero section, left side is a headline and subheadline. The right side is a “save a spot” registration for that captures name, email, and referred by. This form will webhook out to a third party service. The remainder of the page will cover who is this session for, why attend, topics and benefits and an emotional call to action. (Maybe more specific landing page copy can be generated at the time we get ai copy when building a session, I’m just not sure what that looks like).
+
+User moves forward and they review all the content and can make final edits to the copy before finalizing.
+
+When finalized landing page is generated, link to landing page is generated via qr-cloud api (which I will provide api docs later) along with a QR code. All of this is along with the landing page copy is inserted into the db. 
+
+A final confirmation is shown asking if we should publish the session and landing page OR just the session or place in review.
+
+Once saved it user is taken back to the dashboard where they can see the newly created session with details in a card. If they choose to later they can enter the session by clicking edit to change anything they like and change the status from draft or in-review to published.

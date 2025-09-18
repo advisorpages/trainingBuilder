@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: leadership-training-db
+    environment:
+      POSTGRES_DB: leadership_training
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: ./packages/backend/Dockerfile
+    container_name: leadership-training-backend
+    environment:
+      NODE_ENV: development
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: leadership_training
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      JWT_SECRET: your-jwt-secret-key-change-in-production
+      PORT: 3001
+      # QR Code Configuration
+      QR_CLOUD_API_URL: https://qrcodes.at/api
+      QR_CLOUD_API_KEY: ${QR_CLOUD_API_KEY:-your_api_key_here}
+      QR_CODE_ERROR_CORRECTION: M
+      QR_CODE_SIZE: 300x300
+      QR_CODE_FORMAT: PNG
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./packages/backend:/app/packages/backend
+      - ./packages/shared:/app/packages/shared
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      - database
+    restart: unless-stopped
+    command: npm run start:dev
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./packages/frontend/Dockerfile
+    container_name: leadership-training-frontend
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://backend:3001/api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./packages/frontend:/app/packages/frontend
+      - ./packages/shared:/app/packages/shared
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
