@@ -41,7 +41,7 @@ export class UsersController {
   @Get(':id')
   async getUserById(@Param('id') id: string, @CurrentUser() currentUser: any) {
     // Users can view their own profile, Content Developers can view any profile
-    if (currentUser.userId === id || currentUser.roleName === UserRole.CONTENT_DEVELOPER) {
+    if (String(currentUser.userId) === id || currentUser.roleName === UserRole.CONTENT_DEVELOPER) {
       return this.usersService.findOne(id);
     }
     throw new Error('Access denied');
