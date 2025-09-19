@@ -495,7 +495,7 @@ export class SessionsService {
     }
 
     let aiContent = null;
-    let previewData = {
+    const previewData = {
       title: session.title,
       description: session.description || '',
       promotionalHeadline: session.promotionalHeadline,

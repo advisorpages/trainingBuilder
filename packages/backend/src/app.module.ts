@@ -21,6 +21,7 @@ import { TrainerDashboardModule } from './modules/trainer-dashboard/trainer-dash
 import { EmailModule } from './modules/email/email.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { IncentivesModule } from './modules/incentives/incentives.module';
+import { HealthModule } from './modules/health/health.module';
 import { entities } from './entities';
 import { DatabaseHealthService } from './services/database-health.service';
 import { WebhookSyncService } from './services/webhook-sync.service';
@@ -78,6 +79,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     EmailModule,
     AdminModule,
     IncentivesModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [

@@ -5,7 +5,7 @@ const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
 
 class AuthService {
   private baseURL = API_BASE_URL;
-  private refreshTimer: NodeJS.Timeout | null = null;
+  private refreshTimer: number | null = null;
   private readonly TOKEN_REFRESH_BUFFER = 60; // seconds before expiration to refresh
 
   constructor() {
@@ -130,6 +130,10 @@ class AuthService {
     return localStorage.getItem('accessToken');
   }
 
+  getToken(): string | null {
+    return this.getAccessToken();
+  }
+
   getRefreshToken(): string | null {
     return localStorage.getItem('refreshToken');
   }
@@ -185,7 +189,7 @@ class AuthService {
 
       if (refreshTime > currentTime) {
         const timeUntilRefresh = refreshTime - currentTime;
-        this.refreshTimer = setTimeout(async () => {
+        this.refreshTimer = window.setTimeout(async () => {
           try {
             await this.refreshToken();
           } catch (error) {
@@ -232,4 +236,5 @@ class AuthService {
   }
 }
 
-export default new AuthService();
+export const authService = new AuthService();
+export default authService;

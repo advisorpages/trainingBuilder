@@ -13,7 +13,7 @@ interface QrCodeDisplayProps {
 
 const QrCodeDisplay: React.FC<QrCodeDisplayProps> = ({
   qrCodeUrl,
-  sessionId: _sessionId,
+  // sessionId: _sessionId, // Currently unused but part of interface
   sessionTitle,
   showLabel = true,
   size = 'medium',

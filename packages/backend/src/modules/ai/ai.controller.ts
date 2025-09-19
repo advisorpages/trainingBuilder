@@ -10,7 +10,7 @@ export class AIController {
   @Post('generate-prompt')
   async generatePrompt(
     @Body() request: AIPromptRequest,
-    @Request() req
+    @Request() _req
   ): Promise<AIPromptResponse> {
     return this.aiService.generatePrompt(request);
   }
@@ -18,7 +18,7 @@ export class AIController {
   @Post('generate-content')
   async generateContent(
     @Body() request: AIContentGenerationRequest,
-    @Request() req
+    @Request() _req
   ): Promise<AIContentResponse> {
     return this.aiService.generateContent(request);
   }
@@ -26,7 +26,7 @@ export class AIController {
   @Post('regenerate-content')
   async regenerateContent(
     @Body() request: ContentRegenerationRequest,
-    @Request() req
+    @Request() _req
   ): Promise<AIContentResponse> {
     return this.aiService.regenerateContent(request);
   }
@@ -39,7 +39,7 @@ export class AIController {
   @Post('generate-incentive-content')
   async generateIncentiveContent(
     @Body() request: AIIncentiveContentRequest,
-    @Request() req
+    @Request() _req
   ): Promise<AIIncentiveContentResponse> {
     return this.aiService.generateIncentiveContent(request);
   }

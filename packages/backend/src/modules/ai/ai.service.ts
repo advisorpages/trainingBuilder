@@ -494,7 +494,7 @@ The Training Team`;
     const duration = this.calculateDuration(sessionData.startTime, sessionData.endTime);
 
     // Find previous content for this type
-    const previousContent = request.previousContent?.find(c => c.type === contentType);
+    const _previousContent = request.previousContent?.find(c => c.type === contentType);
 
     // Apply regeneration parameters and feedback
     let modifier = '';

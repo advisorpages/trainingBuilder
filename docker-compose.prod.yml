@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15-alpine
+    container_name: leadership-training-db-prod
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-leadership_training}
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - app-network
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-postgres}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  backend:
+    build:
+      context: .
+      dockerfile: ./packages/backend/Dockerfile.prod
+    container_name: leadership-training-backend-prod
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${DATABASE_NAME:-leadership_training}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      PORT: 3001
+      # QR Code Configuration
+      QR_CLOUD_API_URL: ${QR_CLOUD_API_URL:-https://qrcodes.at/api}
+      QR_CLOUD_API_KEY: ${QR_CLOUD_API_KEY}
+      QR_CODE_ERROR_CORRECTION: ${QR_CODE_ERROR_CORRECTION:-M}
+      QR_CODE_SIZE: ${QR_CODE_SIZE:-300x300}
+      QR_CODE_FORMAT: ${QR_CODE_FORMAT:-PNG}
+      # Email Configuration
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM}
+      # Webhook Configuration
+      WEBHOOK_REGISTRATION_URL: ${WEBHOOK_REGISTRATION_URL}
+      # Security
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+    networks:
+      - app-network
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./packages/frontend/Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: leadership-training-frontend-prod
+    networks:
+      - app-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  nginx:
+    image: nginx:alpine
+    container_name: leadership-training-nginx
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - app-network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+volumes:
+  postgres_data_prod:
+  nginx_logs:
+
+networks:
+  app-network:
+    driver: bridge

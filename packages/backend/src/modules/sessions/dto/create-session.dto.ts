@@ -46,5 +46,5 @@ export class CreateSessionDto {
 
   @IsInt()
   @Min(1)
-  maxRegistrations: number = 50;
+  maxRegistrations = 50;
 }

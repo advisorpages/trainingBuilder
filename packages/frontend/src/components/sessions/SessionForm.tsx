@@ -53,7 +53,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState(true);
 
   // Refs for auto-save functionality
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveTimeoutRef = useRef<number | null>(null);
   const initialFormDataRef = useRef<any>(null);
 
   // Draft recovery functionality
@@ -198,7 +198,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
       }
 
       // Set new timeout for auto-save (3 seconds after user stops typing)
-      autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveTimeoutRef.current = window.setTimeout(() => {
         performAutoSave();
       }, 3000);
     }

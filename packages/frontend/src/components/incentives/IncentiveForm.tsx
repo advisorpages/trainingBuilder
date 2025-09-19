@@ -44,7 +44,7 @@ export const IncentiveForm: React.FC<IncentiveFormProps> = ({
   const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState(true);
 
   // Refs for auto-save functionality
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveTimeoutRef = useRef<number | null>(null);
   const initialFormDataRef = useRef<any>(null);
 
   // AI generation state
@@ -134,7 +134,7 @@ export const IncentiveForm: React.FC<IncentiveFormProps> = ({
       }
 
       // Set new timeout for auto-save (3 seconds after user stops typing)
-      autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveTimeoutRef.current = window.setTimeout(() => {
         performAutoSave();
       }, 3000);
     }
@@ -225,7 +225,7 @@ export const IncentiveForm: React.FC<IncentiveFormProps> = ({
   const handleApplyAIContent = (generatedContent: IncentiveGeneratedContent) => {
     // Apply the generated content to the form
     if (generatedContent.title) {
-      handleInputChange('title', generatedContent.title.replace(/^[🎯⚡🚀🎁💫]\s*/, '')); // Remove emoji prefixes for form field
+      handleInputChange('title', generatedContent.title.replace(/^[🎯⚡🚀🎁💫]\s*/u, '')); // Remove emoji prefixes for form field
     }
 
     if (generatedContent.longDescription) {

@@ -1,0 +1,119 @@
+import { plainToClass, Transform } from 'class-transformer';
+import { IsEnum, IsOptional, IsString, IsNumber, Min, Max, validateSync, IsNotEmpty } from 'class-validator';
+
+enum Environment {
+  Development = 'development',
+  Staging = 'staging',
+  Production = 'production',
+  Test = 'test',
+}
+
+export class EnvironmentVariables {
+  @IsEnum(Environment)
+  @IsOptional()
+  NODE_ENV: Environment = Environment.Development;
+
+  @IsNumber()
+  @Min(1)
+  @Max(65535)
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsOptional()
+  PORT: number = 3001;
+
+  // Database Configuration
+  @IsString()
+  @IsNotEmpty()
+  DATABASE_HOST: string;
+
+  @IsNumber()
+  @Transform(({ value }) => parseInt(value, 10))
+  DATABASE_PORT: number;
+
+  @IsString()
+  @IsNotEmpty()
+  DATABASE_NAME: string;
+
+  @IsString()
+  @IsNotEmpty()
+  DATABASE_USER: string;
+
+  @IsString()
+  @IsNotEmpty()
+  DATABASE_PASSWORD: string;
+
+  // JWT Configuration
+  @IsString()
+  @IsNotEmpty()
+  JWT_SECRET: string;
+
+  // QR Code Configuration
+  @IsString()
+  @IsOptional()
+  QR_CLOUD_API_URL: string = 'https://qrcodes.at/api';
+
+  @IsString()
+  @IsOptional()
+  QR_CLOUD_API_KEY: string;
+
+  @IsString()
+  @IsOptional()
+  QR_CODE_ERROR_CORRECTION: string = 'M';
+
+  @IsString()
+  @IsOptional()
+  QR_CODE_SIZE: string = '300x300';
+
+  @IsString()
+  @IsOptional()
+  QR_CODE_FORMAT: string = 'PNG';
+
+  // Optional Email Configuration
+  @IsString()
+  @IsOptional()
+  EMAIL_HOST: string;
+
+  @IsNumber()
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsOptional()
+  EMAIL_PORT: number;
+
+  @IsString()
+  @IsOptional()
+  EMAIL_USER: string;
+
+  @IsString()
+  @IsOptional()
+  EMAIL_PASSWORD: string;
+}
+
+export function validateEnvironment(config: Record<string, unknown>) {
+  const validatedConfig = plainToClass(EnvironmentVariables, config, {
+    enableImplicitConversion: true,
+  });
+
+  const errors = validateSync(validatedConfig, {
+    skipMissingProperties: false,
+  });
+
+  if (errors.length > 0) {
+    const errorMessages = errors.map(error =>
+      `${error.property}: ${Object.values(error.constraints || {}).join(', ')}`
+    );
+    throw new Error(`Environment validation failed:\n${errorMessages.join('\n')}`);
+  }
+
+  // Additional security validations
+  if (validatedConfig.NODE_ENV === Environment.Production) {
+    if (validatedConfig.JWT_SECRET.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters long in production');
+    }
+
+    if (validatedConfig.JWT_SECRET.includes('dev') ||
+        validatedConfig.JWT_SECRET.includes('test') ||
+        validatedConfig.JWT_SECRET.includes('example')) {
+      throw new Error('JWT_SECRET appears to be a development placeholder in production');
+    }
+  }
+
+  return validatedConfig;
+}

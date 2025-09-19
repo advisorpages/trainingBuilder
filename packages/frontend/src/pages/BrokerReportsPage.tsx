@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Session, Incentive } from '../../../shared/src/types'
 import { sessionService } from '../services/session.service'
 import { incentiveService } from '../services/incentive.service'
 

@@ -1,0 +1,54 @@
+# Multi-stage build for production
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY ./packages/shared ./packages/shared
+COPY ./packages/frontend/package*.json ./packages/frontend/
+
+# Install dependencies
+RUN npm ci
+
+# Build shared package
+RUN cd packages/shared && npm run build
+
+# Copy frontend source
+COPY ./packages/frontend ./packages/frontend
+
+# Build frontend
+WORKDIR /app/packages/frontend
+RUN npm run build
+
+# Production stage with nginx
+FROM nginx:alpine AS production
+
+# Copy nginx configuration
+COPY --from=builder /app/packages/frontend/nginx.conf /etc/nginx/nginx.conf
+
+# Copy built application
+COPY --from=builder /app/packages/frontend/dist /usr/share/nginx/html
+
+# Create non-root user
+RUN addgroup -g 1001 -S frontend
+RUN adduser -S frontend -u 1001
+
+# Set ownership
+RUN chown -R frontend:frontend /usr/share/nginx/html
+RUN chown -R frontend:frontend /var/cache/nginx
+RUN chown -R frontend:frontend /var/log/nginx
+RUN chown -R frontend:frontend /etc/nginx/conf.d
+RUN touch /var/run/nginx.pid
+RUN chown -R frontend:frontend /var/run/nginx.pid
+
+# Switch to non-root user
+USER frontend
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]

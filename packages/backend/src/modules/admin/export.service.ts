@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import { Repository, MoreThanOrEqual } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ExcelJS from 'exceljs';
@@ -49,7 +49,7 @@ export class ExportService {
     private analyticsService: AnalyticsService,
   ) {}
 
-  async exportData(options: ExportOptions, userId: number): Promise<ExportResult> {
+  async exportData(options: ExportOptions, _userId: number): Promise<ExportResult> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `analytics-export-${options.format}-${timestamp}`;
 
@@ -290,7 +290,7 @@ export class ExportService {
 
   private async collectExportData(options: ExportOptions) {
     const startDate = new Date(options.dateRange.startDate);
-    const endDate = new Date(options.dateRange.endDate);
+    const _endDate = new Date(options.dateRange.endDate);
 
     const data: any = {};
 

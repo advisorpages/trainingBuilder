@@ -118,6 +118,22 @@ export const IncentiveWorksheetPage: React.FC = () => {
     }
   };
 
+  // Clone handler for Story 6.5
+  const handleCloneIncentive = async (incentive: Incentive) => {
+    try {
+      const clonedIncentive = await incentiveService.cloneIncentive(incentive.id);
+
+      showNotification('success', `Incentive cloned successfully as "${clonedIncentive.title}"`);
+      setRefreshTrigger(prev => prev + 1);
+
+      // Automatically open the cloned incentive for editing
+      setSelectedIncentive(clonedIncentive);
+      setViewMode('edit');
+    } catch (error: any) {
+      showNotification('error', error.response?.data?.message || 'Failed to clone incentive');
+    }
+  };
+
   const handleCreateNew = () => {
     setSelectedIncentive(null);
     setViewMode('create');
@@ -290,6 +306,7 @@ export const IncentiveWorksheetPage: React.FC = () => {
             onDeleteDraft={handleDeleteDraft}
             onPublishIncentive={handlePublishIncentive}
             onUnpublishIncentive={handleUnpublishIncentive}
+            onCloneIncentive={handleCloneIncentive}
             refreshTrigger={refreshTrigger}
           />
         )}

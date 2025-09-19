@@ -1,10 +1,10 @@
 import React from 'react';
 
 interface KPIKardProps {
-  title: string;
-  value: string;
-  change: string | number;
-  changeType: 'increase' | 'decrease' | 'stable';
+  title?: string;
+  value?: string;
+  change?: string | number;
+  changeType?: 'increase' | 'decrease' | 'stable';
   loading?: boolean;
 }
 

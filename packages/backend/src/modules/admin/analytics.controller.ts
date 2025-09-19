@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Query, Body, UseGuards, Res, Param } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Response } from 'express';
@@ -37,6 +38,8 @@ interface AnalyticsOverviewDto {
   };
 }
 
+@ApiTags('analytics')
+@ApiBearerAuth('JWT-auth')
 @Controller('admin/analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.CONTENT_DEVELOPER)
@@ -54,7 +57,7 @@ export class AnalyticsController {
 
   @Get('overview')
   async getAnalyticsOverview(
-    @Query('dateRange') dateRange: string = 'last-30-days'
+    @Query('dateRange') dateRange = 'last-30-days'
   ): Promise<AnalyticsOverviewDto> {
     const { currentPeriodStart, previousPeriodStart, previousPeriodEnd } = this.getDateRanges(dateRange);
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { RegistrationRequest } from '../../../shared/src/types'
 import { sessionService } from '../services/session.service'
 import './RegistrationForm.css'

@@ -220,7 +220,7 @@ describe('TrainerDashboardService - Epic 4 Fixed Tests', () => {
         const result = await service.getTrainerSessionDetail('1', mockUser as any);
 
         expect(result).toBeDefined();
-        expect(result.id).toBe('1');
+        expect(result.id).toBe(1);
 
         // FIXED: Verify correct query structure
         expect(sessionRepository.findOne).toHaveBeenCalledWith({

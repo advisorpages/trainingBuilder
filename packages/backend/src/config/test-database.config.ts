@@ -1,5 +1,4 @@
 import { DataSource } from 'typeorm';
-import { ConfigService } from '@nestjs/config';
 
 export async function createTestDatabase(): Promise<DataSource> {
   const dataSource = new DataSource({

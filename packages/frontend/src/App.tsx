@@ -1,35 +1,46 @@
+import { Suspense, lazy } from 'react'
 import { Routes, Route } from 'react-router-dom'
-import PublicHomepage from './pages/PublicHomepage'
-import SessionDetailPage from './pages/SessionDetailPage'
-import HomePage from './pages/HomePage'
-import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
-import AnalyticsPage from './pages/AnalyticsPage'
-import { SessionWorksheetPage } from './pages/SessionWorksheetPage'
-import { IncentiveWorksheetPage } from './pages/IncentiveWorksheetPage'
-import { ManageSessionsPage } from './pages/ManageSessionsPage'
-import { ManageLocationsPage } from './pages/ManageLocationsPage'
-import { ManageTrainersPage } from './pages/ManageTrainersPage'
-import { ManageSettingsPage } from './pages/ManageSettingsPage'
-import { ManageTopicsPage } from './pages/ManageTopicsPage'
-import { ManageAudiencesPage } from './pages/ManageAudiencesPage'
-import { ManageTonesPage } from './pages/ManageTonesPage'
-import { ManageCategoriesPage } from './pages/ManageCategoriesPage'
-import TrainerDashboardPage from './pages/TrainerDashboardPage'
-import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
-import BrokerSessionsPage from './pages/BrokerSessionsPage'
-import BrokerIncentivesPage from './pages/BrokerIncentivesPage'
-import BrokerReportsPage from './pages/BrokerReportsPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import SessionTimeoutWarning from './components/auth/SessionTimeoutWarning'
 import { UserRole } from './types/auth.types'
 import './App.css'
 
+// Lazy load components for code splitting
+const PublicHomepage = lazy(() => import('./pages/PublicHomepage'))
+const SessionDetailPage = lazy(() => import('./pages/SessionDetailPage'))
+const HomePage = lazy(() => import('./pages/HomePage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const SessionWorksheetPage = lazy(() => import('./pages/SessionWorksheetPage').then(module => ({ default: module.SessionWorksheetPage })))
+const IncentiveWorksheetPage = lazy(() => import('./pages/IncentiveWorksheetPage').then(module => ({ default: module.IncentiveWorksheetPage })))
+const ManageSessionsPage = lazy(() => import('./pages/ManageSessionsPage').then(module => ({ default: module.ManageSessionsPage })))
+const ManageLocationsPage = lazy(() => import('./pages/ManageLocationsPage').then(module => ({ default: module.ManageLocationsPage })))
+const ManageTrainersPage = lazy(() => import('./pages/ManageTrainersPage').then(module => ({ default: module.ManageTrainersPage })))
+const ManageSettingsPage = lazy(() => import('./pages/ManageSettingsPage').then(module => ({ default: module.ManageSettingsPage })))
+const ManageTopicsPage = lazy(() => import('./pages/ManageTopicsPage').then(module => ({ default: module.ManageTopicsPage })))
+const ManageAudiencesPage = lazy(() => import('./pages/ManageAudiencesPage').then(module => ({ default: module.ManageAudiencesPage })))
+const ManageTonesPage = lazy(() => import('./pages/ManageTonesPage').then(module => ({ default: module.ManageTonesPage })))
+const ManageCategoriesPage = lazy(() => import('./pages/ManageCategoriesPage').then(module => ({ default: module.ManageCategoriesPage })))
+const TrainerDashboardPage = lazy(() => import('./pages/TrainerDashboardPage'))
+const TrainerSessionDetailPage = lazy(() => import('./pages/TrainerSessionDetailPage'))
+const BrokerSessionsPage = lazy(() => import('./pages/BrokerSessionsPage'))
+const BrokerIncentivesPage = lazy(() => import('./pages/BrokerIncentivesPage'))
+const BrokerReportsPage = lazy(() => import('./pages/BrokerReportsPage'))
+
+// Loading component
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
+  </div>
+)
+
 function App() {
   return (
     <div className="App">
       <main>
-        <Routes>
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
           <Route path="/" element={<PublicHomepage />} />
           <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
           <Route path="/admin" element={<HomePage />} />
@@ -163,7 +174,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-        </Routes>
+          </Routes>
+        </Suspense>
       </main>
 
       <SessionTimeoutWarning warningThreshold={5} />

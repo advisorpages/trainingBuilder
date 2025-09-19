@@ -115,6 +115,12 @@ class IncentiveService {
     return response.data;
   }
 
+  // Clone method for Story 6.5
+  async cloneIncentive(id: string): Promise<Incentive> {
+    const response = await this.api.post(`${API_ENDPOINTS.INCENTIVES}/${id}/clone`);
+    return response.data;
+  }
+
   // Public methods (no auth required)
   async getActiveIncentives(): Promise<Incentive[]> {
     const response = await api.get(`${API_ENDPOINTS.INCENTIVES}/public/active`);

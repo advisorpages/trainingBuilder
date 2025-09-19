@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom';
-import { beforeAll, afterEach, afterAll } from 'vitest';
+import { beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 // Mock environment variables
 beforeAll(() => {
   // Set test environment variables
-  process.env.VITE_API_BASE_URL = 'http://localhost:3001';
+  if (typeof globalThis !== 'undefined' && globalThis.process) {
+    globalThis.process.env.VITE_API_BASE_URL = 'http://localhost:3001';
+  }
 
   // Mock window.matchMedia for responsive components
   Object.defineProperty(window, 'matchMedia', {
@@ -29,17 +31,17 @@ beforeAll(() => {
   });
 
   // Mock localStorage
-  const localStorageMock = {
-    getItem: (key: string) => {
+  const localStorageMock: Record<string, any> = {
+    getItem: (key: string): string | null => {
       return localStorageMock[key] || null;
     },
-    setItem: (key: string, value: string) => {
+    setItem: (key: string, value: string): void => {
       localStorageMock[key] = value;
     },
-    removeItem: (key: string) => {
+    removeItem: (key: string): void => {
       delete localStorageMock[key];
     },
-    clear: () => {
+    clear: (): void => {
       Object.keys(localStorageMock).forEach(key => {
         if (key !== 'getItem' && key !== 'setItem' && key !== 'removeItem' && key !== 'clear') {
           delete localStorageMock[key];

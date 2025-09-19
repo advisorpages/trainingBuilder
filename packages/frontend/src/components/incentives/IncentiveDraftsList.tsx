@@ -8,6 +8,7 @@ interface IncentiveDraftsListProps {
   onDeleteDraft: (incentive: Incentive) => void;
   onPublishIncentive?: (incentive: Incentive) => void;
   onUnpublishIncentive?: (incentive: Incentive) => void;
+  onCloneIncentive?: (incentive: Incentive) => void;
   refreshTrigger: number;
 }
 
@@ -16,6 +17,7 @@ export const IncentiveDraftsList: React.FC<IncentiveDraftsListProps> = ({
   onDeleteDraft,
   onPublishIncentive,
   onUnpublishIncentive,
+  onCloneIncentive,
   refreshTrigger
 }) => {
   const [incentives, setIncentives] = useState<Incentive[]>([]);
@@ -217,6 +219,20 @@ export const IncentiveDraftsList: React.FC<IncentiveDraftsListProps> = ({
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                         </svg>
                         Unpublish
+                      </button>
+                    )}
+
+                    {/* Clone Button for Story 6.5 */}
+                    {onCloneIncentive && (
+                      <button
+                        onClick={() => onCloneIncentive(incentive)}
+                        className="inline-flex items-center px-3 py-1.5 border border-blue-300 shadow-sm text-xs font-medium rounded text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        title="Create a copy of this incentive"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Clone
                       </button>
                     )}
 

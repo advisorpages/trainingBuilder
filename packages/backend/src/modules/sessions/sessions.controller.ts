@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { SessionsService } from './sessions.service';
 import { SessionStatusService } from './services/session-status.service';
@@ -8,6 +9,8 @@ import { WorkflowMonitoringService } from './services/workflow-monitoring.servic
 import { CreateSessionDto, UpdateSessionDto, SavePromptDto, IntegrateAIContentDto, StatusUpdateDto, CreateRegistrationDto } from './dto';
 import { Session } from '../../entities/session.entity';
 
+@ApiTags('sessions')
+@ApiBearerAuth('JWT-auth')
 @Controller('sessions')
 export class SessionsController {
   constructor(

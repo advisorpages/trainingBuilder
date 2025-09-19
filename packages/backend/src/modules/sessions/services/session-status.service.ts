@@ -27,7 +27,7 @@ export class SessionStatusService {
     sessionId: string,
     newStatus: SessionStatus,
     changedBy?: string,
-    isAutomated: boolean = false,
+    isAutomated = false,
     reason?: string,
   ): Promise<Session> {
     return await this.dataSource.transaction(async (manager) => {
