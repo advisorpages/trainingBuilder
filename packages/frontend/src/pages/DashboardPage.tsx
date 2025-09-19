@@ -146,9 +146,21 @@ const DashboardPage = () => {
           <div>
             <h3>Broker Access</h3>
             <ul style={{ textAlign: 'left', maxWidth: '400px', margin: '0 auto' }}>
-              <li>📚 View Published Sessions</li>
-              <li>🎯 Available Incentives</li>
-              <li>📊 Basic Reports</li>
+              <li>
+                <Link to="/broker/sessions" style={{ color: '#007bff', textDecoration: 'none' }}>
+                  📚 View Published Sessions
+                </Link>
+              </li>
+              <li>
+                <Link to="/broker/incentives" style={{ color: '#007bff', textDecoration: 'none' }}>
+                  🎯 Available Incentives
+                </Link>
+              </li>
+              <li>
+                <Link to="/broker/reports" style={{ color: '#007bff', textDecoration: 'none' }}>
+                  📊 Basic Reports
+                </Link>
+              </li>
             </ul>
           </div>
         )

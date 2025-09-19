@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { Session, RegistrationRequest } from '../../../shared/src/types';
+import { API_ENDPOINTS } from '../../../shared/src/constants';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -26,7 +27,7 @@ export interface StatusUpdateRequest {
 
 class SessionService {
   private api = axios.create({
-    baseURL: `${API_BASE_URL}/sessions`,
+    baseURL: `${API_BASE_URL}${API_ENDPOINTS.SESSIONS.BASE}`,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -133,17 +134,17 @@ class SessionService {
 
   // Public methods for homepage (no auth required)
   async getPublishedSessions(): Promise<Session[]> {
-    const response = await axios.get(`${API_BASE_URL}/sessions/public`);
+    const response = await axios.get(`${API_BASE_URL}/api/sessions/public`);
     return response.data;
   }
 
   async getPublicSession(id: string): Promise<Session> {
-    const response = await axios.get(`${API_BASE_URL}/sessions/public/${id}`);
+    const response = await axios.get(`${API_BASE_URL}/api/sessions/public/${id}`);
     return response.data;
   }
 
   async registerForSession(sessionId: string, registrationData: RegistrationRequest): Promise<any> {
-    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/register`, registrationData);
+    const response = await axios.post(`${API_BASE_URL}/api/sessions/${sessionId}/register`, registrationData);
     return response.data;
   }
 }

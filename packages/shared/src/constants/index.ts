@@ -36,6 +36,15 @@ export const API_ENDPOINTS = {
   TOPICS: '/admin/topics',
   SETTINGS: '/admin/settings',
 
+  // Analytics
+  ANALYTICS: '/admin/analytics',
+
+  // AI
+  AI: '/ai',
+
+  // Incentives
+  INCENTIVES: '/incentives',
+
   // Health
   HEALTH: '/health',
 } as const;

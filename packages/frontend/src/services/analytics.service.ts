@@ -1,6 +1,13 @@
 import axios from 'axios';
+import { API_ENDPOINTS } from '../../../shared/src/constants';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 export interface AnalyticsOverviewResponse {
   totalSessions: {
@@ -26,12 +33,7 @@ export interface AnalyticsOverviewResponse {
 }
 
 class AnalyticsService {
-  private api = axios.create({
-    baseURL: `${API_BASE_URL}/admin/analytics`,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  private api = api;
 
   constructor() {
     // Add auth token to requests
@@ -64,7 +66,7 @@ class AnalyticsService {
   }
 
   async getOverview(dateRange: string = 'last-30-days'): Promise<AnalyticsOverviewResponse> {
-    const response = await this.api.get('/overview', {
+    const response = await this.api.get(`${API_ENDPOINTS.ANALYTICS}/overview`, {
       params: { dateRange }
     });
     return response.data;

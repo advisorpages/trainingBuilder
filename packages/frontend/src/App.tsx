@@ -13,6 +13,9 @@ import { ManageTrainersPage } from './pages/ManageTrainersPage'
 import { ManageSettingsPage } from './pages/ManageSettingsPage'
 import TrainerDashboardPage from './pages/TrainerDashboardPage'
 import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
+import BrokerSessionsPage from './pages/BrokerSessionsPage'
+import BrokerIncentivesPage from './pages/BrokerIncentivesPage'
+import BrokerReportsPage from './pages/BrokerReportsPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import SessionTimeoutWarning from './components/auth/SessionTimeoutWarning'
 import { UserRole } from './types/auth.types'
@@ -97,6 +100,30 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER]}>
                 <AnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/broker/sessions"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.BROKER]}>
+                <BrokerSessionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/broker/incentives"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.BROKER]}>
+                <BrokerIncentivesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/broker/reports"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.BROKER]}>
+                <BrokerReportsPage />
               </ProtectedRoute>
             }
           />

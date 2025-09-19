@@ -175,7 +175,7 @@ export class WorkflowMonitoringService {
         status: SessionStatus.COMPLETED,
         isActive: true,
       },
-      select: ['createdAt', 'statusChangedAt'],
+      select: ['id', 'createdAt', 'statusChangedAt'],
       take: 100, // Last 100 completed sessions
       order: { createdAt: 'DESC' },
     });
@@ -220,12 +220,14 @@ export class WorkflowMonitoringService {
    * Gets count of sessions with scheduling conflicts in validation errors
    */
   private async getSchedulingConflictCount(): Promise<number> {
-    return await this.sessionRepository.count({
-      where: {
-        contentValidationErrors: 'conflict' as any, // Simplified - would need JSON query
-        isActive: true,
-      },
-    });
+    // Use query builder for JSON array contains operation
+    const result = await this.sessionRepository
+      .createQueryBuilder('session')
+      .where('session.isActive = :isActive', { isActive: true })
+      .andWhere('session.contentValidationErrors::text LIKE :conflict', { conflict: '%conflict%' })
+      .getCount();
+
+    return result;
   }
 
   /**

@@ -1,7 +1,14 @@
 import axios from 'axios';
 import { Audience, Tone, Category, Topic } from '../../../shared/src/types';
+import { API_ENDPOINTS } from '../../../shared/src/constants';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 export interface PromptTemplate {
   id: string;
@@ -192,12 +199,7 @@ Design this as a complete facilitation guide that any qualified trainer could us
 ];
 
 class AIPromptService {
-  private api = axios.create({
-    baseURL: `${API_BASE_URL}/ai`,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  private api = api;
 
   constructor() {
     // Add auth token to requests
@@ -230,7 +232,7 @@ class AIPromptService {
   // Generate a prompt using the backend AI service
   async generatePrompt(request: PromptGenerationRequest): Promise<string> {
     try {
-      const response = await this.api.post('/generate-prompt', request);
+      const response = await this.api.post(`${API_ENDPOINTS.AI}/generate-prompt`, request);
       return response.data.prompt;
     } catch (error) {
       console.error('Error generating prompt:', error);
@@ -278,7 +280,7 @@ class AIPromptService {
   // Get all available templates from backend
   async getTemplates(): Promise<PromptTemplate[]> {
     try {
-      const response = await this.api.get('/templates');
+      const response = await this.api.get(`${API_ENDPOINTS.AI}/templates`);
       return response.data.map((template: any) => ({
         ...template,
         template: '', // Template content not needed on frontend

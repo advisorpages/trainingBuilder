@@ -7,7 +7,7 @@
     "build": "nest build",
     "dev": "nest build && node dist/backend/src/main",
     "start": "nest start",
-    "start:dev": "nest build && node dist/backend/src/main",
+    "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/backend/src/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
@@ -24,7 +24,8 @@
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/typeorm.config.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/typeorm.config.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
-    "schema:drop": "typeorm-ts-node-commonjs schema:drop -d src/config/typeorm.config.ts"
+    "schema:drop": "typeorm-ts-node-commonjs schema:drop -d src/config/typeorm.config.ts",
+    "seed": "ts-node -r tsconfig-paths/register src/scripts/seed-database.ts"
   },
   "dependencies": {
     "@leadership-training/shared": "*",

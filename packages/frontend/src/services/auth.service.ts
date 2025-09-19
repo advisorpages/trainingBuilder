@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 import { LoginCredentials, AuthResponse, RefreshResponse, User } from '../types/auth.types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
 
 class AuthService {
   private baseURL = API_BASE_URL;
@@ -49,14 +49,8 @@ class AuthService {
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      // DEBUG: Log the exact URL being called
-      const loginUrl = `${this.baseURL}/auth/login`;
-      console.log('🔍 DEBUG - Login URL:', loginUrl);
-      console.log('🔍 DEBUG - Base URL:', this.baseURL);
-      console.log('🔍 DEBUG - Full URL will be:', new URL(loginUrl, window.location.origin).href);
-      
       const response: AxiosResponse<AuthResponse> = await axios.post(
-        loginUrl,
+        `${this.baseURL}/auth/login`,
         credentials
       );
 
@@ -69,18 +63,8 @@ class AuthService {
       this.scheduleTokenRefresh();
 
       return response.data;
-    } catch (error: any) {
-      // DEBUG: Enhanced error logging
-      console.error('❌ Login error:', error);
-      if (error.response) {
-        console.error('❌ Response status:', error.response.status);
-        console.error('❌ Response URL:', error.response.config?.url);
-        console.error('❌ Full request URL:', error.response.config?.baseURL + error.response.config?.url);
-        console.error('❌ Response data:', error.response.data);
-      }
-      if (error.request) {
-        console.error('❌ Request URL:', error.request.responseURL || error.config?.url);
-      }
+    } catch (error) {
+      console.error('Login error:', error);
       throw new Error('Invalid email or password');
     }
   }

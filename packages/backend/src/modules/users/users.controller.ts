@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Patch, Body } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Body, ForbiddenException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -41,10 +41,10 @@ export class UsersController {
   @Get(':id')
   async getUserById(@Param('id') id: string, @CurrentUser() currentUser: any) {
     // Users can view their own profile, Content Developers can view any profile
-    if (currentUser.userId === id || currentUser.roleName === UserRole.CONTENT_DEVELOPER) {
+    if (String(currentUser.userId) === id || currentUser.roleName === UserRole.CONTENT_DEVELOPER) {
       return this.usersService.findOne(id);
     }
-    throw new Error('Access denied');
+    throw new ForbiddenException('Access denied');
   }
 
   @Patch(':id/deactivate')
