@@ -12,6 +12,10 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { TrainersModule } from './modules/trainers/trainers.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AttributesModule } from './modules/attributes/attributes.module';
+import { TopicsModule } from './modules/topics/topics.module';
+import { AudiencesModule } from './modules/audiences/audiences.module';
+import { TonesModule } from './modules/tones/tones.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 import { AIModule } from './modules/ai/ai.module';
 import { TrainerDashboardModule } from './modules/trainer-dashboard/trainer-dashboard.module';
 import { EmailModule } from './modules/email/email.module';
@@ -65,6 +69,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     TrainersModule,
     SettingsModule,
     AttributesModule,
+    TopicsModule,
+    AudiencesModule,
+    TonesModule,
+    CategoriesModule,
     AIModule,
     TrainerDashboardModule,
     EmailModule,

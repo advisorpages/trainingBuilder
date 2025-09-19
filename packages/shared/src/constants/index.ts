@@ -34,6 +34,9 @@ export const API_ENDPOINTS = {
   LOCATIONS: '/admin/locations',
   TRAINERS: '/admin/trainers',
   TOPICS: '/admin/topics',
+  AUDIENCES: '/admin/audiences',
+  TONES: '/admin/tones',
+  CATEGORIES: '/admin/categories',
   SETTINGS: '/admin/settings',
 
   // Analytics

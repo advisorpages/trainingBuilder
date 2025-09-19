@@ -71,6 +71,34 @@ class AnalyticsService {
     });
     return response.data;
   }
+
+  async getSessionPerformance(params: any) {
+    const response = await this.api.get(`${API_ENDPOINTS.ANALYTICS}/sessions/performance`, {
+      params
+    });
+    return response.data;
+  }
+
+  async getSessionTrends(params: any) {
+    const response = await this.api.get(`${API_ENDPOINTS.ANALYTICS}/sessions/trends`, {
+      params
+    });
+    return response.data;
+  }
+
+  async getTopicsPopularity(params: any) {
+    const response = await this.api.get(`${API_ENDPOINTS.ANALYTICS}/topics/popularity`, {
+      params
+    });
+    return response.data;
+  }
+
+  async getTrainersPerformance(params: any) {
+    const response = await this.api.get(`${API_ENDPOINTS.ANALYTICS}/trainers/performance`, {
+      params
+    });
+    return response.data;
+  }
 }
 
 export const analyticsService = new AnalyticsService();

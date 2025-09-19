@@ -11,6 +11,10 @@ import { ManageSessionsPage } from './pages/ManageSessionsPage'
 import { ManageLocationsPage } from './pages/ManageLocationsPage'
 import { ManageTrainersPage } from './pages/ManageTrainersPage'
 import { ManageSettingsPage } from './pages/ManageSettingsPage'
+import { ManageTopicsPage } from './pages/ManageTopicsPage'
+import { ManageAudiencesPage } from './pages/ManageAudiencesPage'
+import { ManageTonesPage } from './pages/ManageTonesPage'
+import { ManageCategoriesPage } from './pages/ManageCategoriesPage'
 import TrainerDashboardPage from './pages/TrainerDashboardPage'
 import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
 import BrokerSessionsPage from './pages/BrokerSessionsPage'
@@ -76,6 +80,38 @@ function App() {
             element={
               <ProtectedRoute>
                 <ManageSettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/topics"
+            element={
+              <ProtectedRoute>
+                <ManageTopicsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/audiences"
+            element={
+              <ProtectedRoute>
+                <ManageAudiencesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/tones"
+            element={
+              <ProtectedRoute>
+                <ManageTonesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/categories"
+            element={
+              <ProtectedRoute>
+                <ManageCategoriesPage />
               </ProtectedRoute>
             }
           />

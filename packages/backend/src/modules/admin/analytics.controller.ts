@@ -1,12 +1,18 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, UseGuards, Res, Param } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Response } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard, UserRole } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { GetUser } from '../../common/decorators/get-user.decorator';
 import { Session, SessionStatus } from '../../entities/session.entity';
 import { Registration } from '../../entities/registration.entity';
 import { Trainer } from '../../entities/trainer.entity';
+import { AnalyticsService, SessionPerformanceFilters } from './analytics.service';
+import { ExportService, ExportOptions } from './export.service';
 
 interface AnalyticsOverviewDto {
   totalSessions: {
@@ -42,6 +48,8 @@ export class AnalyticsController {
     private registrationRepository: Repository<Registration>,
     @InjectRepository(Trainer)
     private trainerRepository: Repository<Trainer>,
+    private analyticsService: AnalyticsService,
+    private exportService: ExportService,
   ) {}
 
   @Get('overview')
@@ -170,5 +178,124 @@ export class AnalyticsController {
     const change = this.calculatePercentageChange(current, previous);
     if (Math.abs(change) < 1) return 'stable'; // Less than 1% change considered stable
     return change > 0 ? 'up' : 'down';
+  }
+
+  @Get('sessions/performance')
+  async getSessionPerformance(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('trainerId') trainerId?: string,
+    @Query('status') status?: SessionStatus,
+    @Query('topicId') topicId?: string,
+    @Query('locationId') locationId?: string,
+    @Query('timeRange') timeRange: 'day' | 'week' | 'month' = 'month'
+  ) {
+    const filters: SessionPerformanceFilters = {
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      trainerId: trainerId ? parseInt(trainerId) : undefined,
+      status,
+      topicId: topicId ? parseInt(topicId) : undefined,
+      locationId: locationId ? parseInt(locationId) : undefined,
+    };
+
+    return await this.analyticsService.getSessionPerformanceTrends(filters, timeRange);
+  }
+
+  @Get('sessions/trends')
+  async getSessionTrends(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('trainerId') trainerId?: string,
+    @Query('status') status?: SessionStatus,
+    @Query('topicId') topicId?: string,
+    @Query('locationId') locationId?: string,
+    @Query('timeRange') timeRange: 'day' | 'week' | 'month' = 'month'
+  ) {
+    const filters: SessionPerformanceFilters = {
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      trainerId: trainerId ? parseInt(trainerId) : undefined,
+      status,
+      topicId: topicId ? parseInt(topicId) : undefined,
+      locationId: locationId ? parseInt(locationId) : undefined,
+    };
+
+    return await this.analyticsService.getRegistrationTrends(filters, timeRange);
+  }
+
+  @Get('topics/popularity')
+  async getTopicsPopularity(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('trainerId') trainerId?: string,
+    @Query('status') status?: SessionStatus,
+    @Query('locationId') locationId?: string
+  ) {
+    const filters: SessionPerformanceFilters = {
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      trainerId: trainerId ? parseInt(trainerId) : undefined,
+      status,
+      locationId: locationId ? parseInt(locationId) : undefined,
+    };
+
+    return await this.analyticsService.getTopicDistribution(filters);
+  }
+
+  @Get('trainers/performance')
+  async getTrainersPerformance(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('status') status?: SessionStatus,
+    @Query('topicId') topicId?: string,
+    @Query('locationId') locationId?: string
+  ) {
+    const filters: SessionPerformanceFilters = {
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+      status,
+      topicId: topicId ? parseInt(topicId) : undefined,
+      locationId: locationId ? parseInt(locationId) : undefined,
+    };
+
+    return await this.analyticsService.getTrainerPerformance(filters);
+  }
+
+  @Post('export')
+  async exportAnalytics(
+    @Body() exportOptions: ExportOptions,
+    @GetUser() user: any
+  ) {
+    try {
+      const result = await this.exportService.exportData(exportOptions, user.id);
+      return result;
+    } catch (error) {
+      throw new Error(`Export failed: ${error.message}`);
+    }
+  }
+
+  @Get('exports/download/:filename')
+  async downloadExport(
+    @Param('filename') filename: string,
+    @Res() res: Response
+  ) {
+    const filePath = path.join(process.cwd(), 'uploads', 'exports', filename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Security check - ensure filename doesn't contain path traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({ message: 'Invalid filename' });
+    }
+
+    res.download(filePath, filename, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+        res.status(500).json({ message: 'Download failed' });
+      }
+    });
   }
 }

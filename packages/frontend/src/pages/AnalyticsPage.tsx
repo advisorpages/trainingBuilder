@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { UserRole } from '../types/auth.types'
 import { analyticsService, AnalyticsOverviewResponse } from '../services/analytics.service'
+import {
+  AttendanceTrendChart,
+  RegistrationBarChart,
+  TopicDistributionChart,
+  TrainerPerformanceChart
+} from '../components/features/analytics/charts'
+import ExportModal from '../components/features/analytics/export/ExportModal'
 
 const AnalyticsPage: React.FC = () => {
   const { user } = useAuth()
@@ -9,6 +16,14 @@ const AnalyticsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [analyticsData, setAnalyticsData] = useState<AnalyticsOverviewResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Performance chart data
+  const [attendanceData, setAttendanceData] = useState([])
+  const [registrationData, setRegistrationData] = useState([])
+  const [topicData, setTopicData] = useState([])
+  const [trainerData, setTrainerData] = useState([])
+  const [chartsLoading, setChartsLoading] = useState(true)
+  const [showExportModal, setShowExportModal] = useState(false)
 
   // Date range options
   const dateRangeOptions = [
@@ -39,7 +54,63 @@ const AnalyticsPage: React.FC = () => {
     }
 
     loadAnalyticsData()
+    loadPerformanceData()
   }, [user, selectedDateRange])
+
+  // Load performance chart data
+  const loadPerformanceData = async () => {
+    if (!user || user.role.name !== UserRole.CONTENT_DEVELOPER) {
+      return
+    }
+
+    try {
+      setChartsLoading(true)
+
+      const [startDate, endDate] = getDateRangeFromSelection(selectedDateRange)
+      const apiParams = {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        timeRange: 'month'
+      }
+
+      const [attendanceData, registrationData, topicData, trainerData] = await Promise.all([
+        analyticsService.getSessionPerformance(apiParams),
+        analyticsService.getSessionTrends(apiParams),
+        analyticsService.getTopicsPopularity(apiParams),
+        analyticsService.getTrainersPerformance(apiParams)
+      ])
+
+      setAttendanceData(attendanceData)
+      setRegistrationData(registrationData)
+      setTopicData(topicData)
+      setTrainerData(trainerData)
+    } catch (err) {
+      console.error('Failed to load performance data:', err)
+    } finally {
+      setChartsLoading(false)
+    }
+  }
+
+  const getDateRangeFromSelection = (range: string): [Date, Date] => {
+    const now = new Date()
+    const endDate = new Date(now)
+    let startDate: Date
+
+    switch (range) {
+      case 'last-7-days':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        break
+      case 'last-90-days':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+        break
+      case 'last-30-days':
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+        break
+    }
+
+    return [startDate, endDate]
+  }
 
   // Handle date range change
   const handleDateRangeChange = (newDateRange: string) => {
@@ -94,6 +165,13 @@ const AnalyticsPage: React.FC = () => {
             <p className="mt-2 text-gray-600">Training session performance metrics and insights</p>
           </div>
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+              disabled={isLoading || chartsLoading}
+            >
+              📊 Export Data
+            </button>
             <select
               value={selectedDateRange}
               onChange={(e) => handleDateRangeChange(e.target.value)}
@@ -258,13 +336,15 @@ const AnalyticsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Empty State / Coming Soon */}
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="text-gray-400 text-6xl mb-4">📊</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Detailed Analytics Coming Soon</h3>
-          <p className="text-gray-600">
-            Advanced charts, session breakdowns, and detailed reporting features will be available in future releases.
-          </p>
+        {/* Performance Analytics Charts */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+          <AttendanceTrendChart data={attendanceData} loading={chartsLoading} />
+          <RegistrationBarChart data={registrationData} loading={chartsLoading} />
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
+          <TopicDistributionChart data={topicData} loading={chartsLoading} />
+          <TrainerPerformanceChart data={trainerData} loading={chartsLoading} />
         </div>
 
         {/* Navigation Back */}
@@ -276,6 +356,17 @@ const AnalyticsPage: React.FC = () => {
             Back to Dashboard
           </button>
         </div>
+
+        {/* Export Modal */}
+        <ExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          currentFilters={{
+            dateRange: selectedDateRange,
+            startDate: getDateRangeFromSelection(selectedDateRange)[0].toISOString(),
+            endDate: getDateRangeFromSelection(selectedDateRange)[1].toISOString()
+          }}
+        />
       </div>
     </div>
   )
