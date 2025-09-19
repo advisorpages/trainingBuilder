@@ -147,6 +147,11 @@ const DashboardPage = () => {
             <h3>Broker Access</h3>
             <ul style={{ textAlign: 'left', maxWidth: '400px', margin: '0 auto' }}>
               <li>
+                <Link to="/sessions/worksheet" style={{ color: '#007bff', textDecoration: 'none' }}>
+                  📝 Session Worksheet
+                </Link>
+              </li>
+              <li>
                 <Link to="/broker/sessions" style={{ color: '#007bff', textDecoration: 'none' }}>
                   📚 View Published Sessions
                 </Link>

@@ -22,8 +22,8 @@ export const SessionWorksheetPage: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // Check if user is Content Developer
-  const canCreateSessions = user?.role?.name === 'Content Developer';
+  // Check if user is Content Developer or Broker
+  const canCreateSessions = user?.role?.name === 'Content Developer' || user?.role?.name === 'Broker';
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -147,7 +147,7 @@ export const SessionWorksheetPage: React.FC = () => {
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-yellow-800">Access Restricted</h3>
                 <p className="mt-1 text-sm text-yellow-700">
-                  You need Content Developer permissions to create training sessions.
+                  You need Content Developer or Broker permissions to create training sessions.
                 </p>
               </div>
             </div>
