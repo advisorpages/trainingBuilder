@@ -5,6 +5,9 @@ import { Session } from './session.entity';
 import { Incentive } from './incentive.entity';
 import { CoachingTip } from './coaching-tip.entity';
 
+// Re-export UserRole from shared types for backward compatibility
+export { UserRole } from '@leadership-training/shared';
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')

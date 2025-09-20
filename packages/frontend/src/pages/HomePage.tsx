@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { Button } from '../components/ui/Button'
 
 const HomePage = () => {
   const [backendHealth, setBackendHealth] = useState<string>('Checking...')
@@ -23,32 +24,56 @@ const HomePage = () => {
   }, [])
 
   return (
-    <div className="page">
-      <h2>Welcome to Leadership Training App</h2>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold text-center mb-8">Welcome to Leadership Training App</h1>
 
-      <div className={`health-status ${backendHealth.includes('✅') ? 'healthy' : 'error'}`}>
+      <div className={`p-4 mb-6 rounded-lg border ${
+        backendHealth.includes('✅')
+          ? 'bg-success-50 border-success-200 text-success-800'
+          : 'bg-danger-50 border-danger-200 text-danger-800'
+      }`}>
         <strong>Backend Status:</strong> {backendHealth}
       </div>
 
-      <p>
+      <p className="text-lg text-center text-secondary-600 mb-8">
         This is the public homepage where training sessions will be displayed.
       </p>
 
-      <div style={{ marginTop: '2rem' }}>
+      <div className="mt-8">
         <Link to="/login">
-          <button className="btn">Login</button>
+          <Button variant="primary" size="lg">
+            Login
+          </Button>
         </Link>
       </div>
 
-      <div style={{ marginTop: '2rem', fontSize: '0.9rem', color: '#666' }}>
-        <h3>Development Status</h3>
-        <ul style={{ textAlign: 'left', maxWidth: '400px', margin: '0 auto' }}>
-          <li>✅ Monorepo structure</li>
-          <li>✅ Docker environment</li>
-          <li>✅ Frontend React app</li>
-          <li>🔄 Backend API (in progress)</li>
-          <li>🔄 Database connection</li>
-          <li>⏳ Authentication</li>
+      <div className="mt-12">
+        <h3 className="text-lg font-semibold mb-4 text-center">Development Status</h3>
+        <ul className="max-w-md mx-auto space-y-2 text-sm text-secondary-600">
+          <li className="flex items-center">
+            <span className="text-success-500 mr-2">✅</span>
+            Monorepo structure
+          </li>
+          <li className="flex items-center">
+            <span className="text-success-500 mr-2">✅</span>
+            Docker environment
+          </li>
+          <li className="flex items-center">
+            <span className="text-success-500 mr-2">✅</span>
+            Frontend React app
+          </li>
+          <li className="flex items-center">
+            <span className="text-warning-500 mr-2">🔄</span>
+            Backend API (in progress)
+          </li>
+          <li className="flex items-center">
+            <span className="text-warning-500 mr-2">🔄</span>
+            Database connection
+          </li>
+          <li className="flex items-center">
+            <span className="text-secondary-400 mr-2">⏳</span>
+            Authentication
+          </li>
         </ul>
       </div>
     </div>
