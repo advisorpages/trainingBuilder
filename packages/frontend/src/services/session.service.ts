@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Session, RegistrationRequest } from '../../../shared/src/types';
 import { API_ENDPOINTS } from '../../../shared/src/constants';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 export interface CreateSessionRequest {
   title: string;
@@ -37,7 +37,7 @@ class SessionService {
     // Add auth token to requests
     this.api.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('accessToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -53,7 +53,9 @@ class SessionService {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          localStorage.removeItem('authToken');
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
           window.location.href = '/login';
         }
         return Promise.reject(error);
@@ -134,17 +136,17 @@ class SessionService {
 
   // Public methods for homepage (no auth required)
   async getPublishedSessions(): Promise<Session[]> {
-    const response = await axios.get(`${API_BASE_URL}/api/sessions/public`);
+    const response = await axios.get(`${API_BASE_URL}/sessions/public`);
     return response.data;
   }
 
   async getPublicSession(id: string): Promise<Session> {
-    const response = await axios.get(`${API_BASE_URL}/api/sessions/public/${id}`);
+    const response = await axios.get(`${API_BASE_URL}/sessions/public/${id}`);
     return response.data;
   }
 
   async registerForSession(sessionId: string, registrationData: RegistrationRequest): Promise<any> {
-    const response = await axios.post(`${API_BASE_URL}/api/sessions/${sessionId}/register`, registrationData);
+    const response = await axios.post(`${API_BASE_URL}/sessions/${sessionId}/register`, registrationData);
     return response.data;
   }
 }

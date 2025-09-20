@@ -11,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 type ViewMode = 'list' | 'create' | 'edit';
 
 export const SessionWorksheetPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,6 +22,20 @@ export const SessionWorksheetPage: React.FC = () => {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  // Show loading while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex justify-center items-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <span className="ml-4 text-gray-600">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Check if user is Content Developer or Broker
   const canCreateSessions = user?.role?.name === 'Content Developer' || user?.role?.name === 'Broker';

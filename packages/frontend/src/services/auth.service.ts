@@ -1,12 +1,13 @@
 import axios, { AxiosResponse } from 'axios';
 import { LoginCredentials, AuthResponse, RefreshResponse, User } from '../types/auth.types';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
 
 class AuthService {
   private baseURL = API_BASE_URL;
   private refreshTimer: number | null = null;
   private readonly TOKEN_REFRESH_BUFFER = 60; // seconds before expiration to refresh
+  private onUnauthorized: (() => void) | null = null;
 
   constructor() {
     // Setup axios interceptor for authentication
@@ -38,7 +39,13 @@ class AuthService {
           } catch (refreshError) {
             // Refresh failed, redirect to login
             await this.logout();
-            window.location.href = '/login';
+
+            // Use callback function if available, otherwise fallback to window.location
+            if (this.onUnauthorized) {
+              this.onUnauthorized();
+            } else if (typeof window !== 'undefined') {
+              window.location.href = '/login';
+            }
           }
         }
 
@@ -152,11 +159,18 @@ class AuthService {
     if (!token) return false;
 
     try {
-      // Simple token expiration check (decode JWT payload)
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const currentTime = Date.now() / 1000;
+      // Validate JWT token structure
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return false;
+      }
 
-      return payload.exp > currentTime;
+      // Simple token expiration check (decode JWT payload)
+      const payload = JSON.parse(atob(parts[1]));
+      const currentTime = Date.now() / 1000;
+      const isExpired = payload.exp <= currentTime;
+
+      return !isExpired;
     } catch (error) {
       return false;
     }
@@ -233,6 +247,23 @@ class AuthService {
     if (!expirationTime) return null;
 
     return Math.max(0, expirationTime.getTime() - Date.now());
+  }
+
+  setUnauthorizedCallback(callback: () => void): void {
+    this.onUnauthorized = callback;
+  }
+
+  clearUnauthorizedCallback(): void {
+    this.onUnauthorized = null;
+  }
+
+  // Debug method to force clear all auth data
+  forceClearAuth(): void {
+    this.clearRefreshTimer();
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    delete axios.defaults.headers.common['Authorization'];
   }
 }
 

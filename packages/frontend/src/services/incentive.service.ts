@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Incentive } from '../../../shared/src/types';
 import { API_ENDPOINTS } from '../../../shared/src/constants';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -30,7 +30,7 @@ class IncentiveService {
     // Add auth token to requests
     this.api.interceptors.request.use(
       (config) => {
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('accessToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -46,7 +46,7 @@ class IncentiveService {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          localStorage.removeItem('authToken');
+          localStorage.removeItem('accessToken');
           window.location.href = '/login';
         }
         return Promise.reject(error);

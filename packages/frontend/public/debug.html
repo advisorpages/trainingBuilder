@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        .error { background: #ffeeee; color: red; }
+        .success { background: #eeffee; color: green; }
+    </style>
+</head>
+<body>
+    <h1>Debug API Calls</h1>
+    <button onclick="testSessions()">Test Sessions API</button>
+    <button onclick="testIncentives()">Test Incentives API</button>
+    <button onclick="testBoth()">Test Both APIs</button>
+
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+
+        function addResult(message, type = 'result') {
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        async function testSessions() {
+            try {
+                addResult('Testing Sessions API...', 'result');
+                const response = await fetch('http://localhost:3001/api/sessions/public');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                addResult(`Sessions API Success: ${data.length} sessions found`, 'success');
+                addResult(`<pre>${JSON.stringify(data, null, 2)}</pre>`, 'result');
+            } catch (error) {
+                addResult(`Sessions API Error: ${error.message}`, 'error');
+                console.error('Sessions error:', error);
+            }
+        }
+
+        async function testIncentives() {
+            try {
+                addResult('Testing Incentives API...', 'result');
+                const response = await fetch('http://localhost:3001/api/incentives/public/active');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                addResult(`Incentives API Success: ${data.length} incentives found`, 'success');
+                addResult(`<pre>${JSON.stringify(data, null, 2)}</pre>`, 'result');
+            } catch (error) {
+                addResult(`Incentives API Error: ${error.message}`, 'error');
+                console.error('Incentives error:', error);
+            }
+        }
+
+        async function testBoth() {
+            results.innerHTML = '';
+            await testSessions();
+            await testIncentives();
+        }
+
+        // Auto-run tests on page load
+        window.onload = () => testBoth();
+    </script>
+</body>
+</html>

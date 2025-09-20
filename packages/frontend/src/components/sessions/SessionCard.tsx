@@ -1,6 +1,5 @@
 import { Session } from '../../../../shared/src/types'
 import QrCodeDisplay from './QrCodeDisplay'
-import { Button } from '../ui/Button'
 import './SessionCard.css'
 
 interface SessionCardProps {
@@ -39,19 +38,6 @@ const SessionCard = ({ session }: SessionCardProps) => {
 
   const { date, time } = formatDateTime(session.startTime)
   const statusDisplay = getStatusDisplay(session.status)
-
-  const getStatusClasses = (status: string) => {
-    switch (status) {
-      case 'published':
-        return 'bg-success-50 text-success-700 border-success-200'
-      case 'completed':
-        return 'bg-secondary-50 text-secondary-600 border-secondary-200'
-      case 'cancelled':
-        return 'bg-danger-50 text-danger-700 border-danger-200'
-      default:
-        return 'bg-success-50 text-success-700 border-success-200'
-    }
-  }
 
   return (
     <div className="session-card">

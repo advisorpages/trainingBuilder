@@ -9,10 +9,22 @@ const LoginPage = () => {
   const [error, setError] = useState('')
   const navigate = useNavigate()
   const location = useLocation()
-  const { login, isAuthenticated } = useAuth()
+  const { login, isAuthenticated, isLoading } = useAuth()
 
   // Get the redirect path from location state or default to dashboard
   const from = (location.state as any)?.from?.pathname || '/dashboard'
+
+  // Wait for auth loading to complete before checking authentication
+  if (isLoading) {
+    return (
+      <div className="page">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <span className="ml-4">Loading...</span>
+        </div>
+      </div>
+    )
+  }
 
   // Redirect if already authenticated
   if (isAuthenticated) {

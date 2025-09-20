@@ -4,6 +4,8 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  margin: 0;
+  padding: 0;
 }
 
 .App-header {
@@ -20,7 +22,7 @@
 
 main {
   flex: 1;
-  padding: 1rem;
+  /* Remove padding to eliminate gap at top */
 }
 
 /* Updated form styles - consistent with Tailwind */

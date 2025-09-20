@@ -69,7 +69,7 @@ const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, currentFilte
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         },
         body: JSON.stringify({
           ...exportOptions,

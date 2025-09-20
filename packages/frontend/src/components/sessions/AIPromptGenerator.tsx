@@ -35,14 +35,19 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
     const loadTemplates = async () => {
       try {
         setLoadingTemplates(true);
+        console.log('Loading templates...');
         const availableTemplates = await aiPromptService.getTemplates();
+        console.log('Templates loaded from API:', availableTemplates);
         setTemplates(availableTemplates);
       } catch (error) {
         console.error('Error loading templates:', error);
         // Fallback to local templates
-        setTemplates(aiPromptService.getLocalTemplates());
+        const localTemplates = aiPromptService.getLocalTemplates();
+        console.log('Using local templates:', localTemplates);
+        setTemplates(localTemplates);
       } finally {
         setLoadingTemplates(false);
+        console.log('Templates loading complete');
       }
     };
 
@@ -305,8 +310,14 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     <span className="ml-3 text-gray-600">Loading templates...</span>
                   </div>
+                ) : templates.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No templates available</p>
+                    <p className="text-sm text-gray-400 mt-2">Debug: Loading: {loadingTemplates.toString()}, Count: {templates.length}</p>
+                  </div>
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-1">
+                    <p className="text-sm text-gray-500 mb-2">Found {templates.length} templates</p>
                     {templates.map((template) => (
                     <div
                       key={template.id}

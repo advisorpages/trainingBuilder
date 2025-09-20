@@ -14,6 +14,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     initializeAuth();
+
+    // Set up the unauthorized callback for the auth service
+    const handleUnauthorized = () => {
+      // Only clear user state, don't redirect here
+      // Let ProtectedRoute handle the redirection logic
+      setUser(null);
+    };
+
+    authService.setUnauthorizedCallback(handleUnauthorized);
+
+    // Cleanup
+    return () => {
+      authService.clearUnauthorizedCallback();
+    };
   }, []);
 
   const initializeAuth = async () => {
@@ -25,22 +39,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Try to get current user from storage first
         const storedUser = authService.getUserFromStorage();
         if (storedUser) {
-          setUser(storedUser);
-          // Initialize automatic token refresh
-          authService.initializeTokenRefresh();
+          // Verify stored user is still valid by checking token expiration
+          try {
+            setUser(storedUser);
+            // Initialize automatic token refresh
+            authService.initializeTokenRefresh();
+          } catch (error) {
+            // If token validation fails, clear everything
+            await authService.logout();
+            setUser(null);
+          }
         } else {
           // Fetch current user from API
-          const currentUser = await authService.getCurrentUser();
-          setUser(currentUser);
-          authService.setUserInStorage(currentUser);
-          // Initialize automatic token refresh
-          authService.initializeTokenRefresh();
+          try {
+            const currentUser = await authService.getCurrentUser();
+            setUser(currentUser);
+            authService.setUserInStorage(currentUser);
+            // Initialize automatic token refresh
+            authService.initializeTokenRefresh();
+          } catch (error) {
+            // If API call fails, clear invalid tokens
+            await authService.logout();
+            setUser(null);
+          }
         }
+      } else {
+        // No valid token, ensure user state is cleared
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth initialization error:', error);
       // Clear any invalid tokens
       await authService.logout();
+      setUser(null);
     } finally {
       setIsLoading(false);
     }

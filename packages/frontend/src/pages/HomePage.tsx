@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
+import { sessionService } from '../services/session.service'
+import SessionCard from '../components/sessions/SessionCard'
+import { Session } from '../../../shared/src/types'
 
 const HomePage = () => {
   const [backendHealth, setBackendHealth] = useState<string>('Checking...')
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const checkBackendHealth = async () => {
@@ -20,7 +26,34 @@ const HomePage = () => {
       }
     }
 
+    const fetchUpcomingSessions = async () => {
+      try {
+        setLoading(true)
+        console.log('Fetching sessions...')
+        console.log('VITE_API_URL:', import.meta.env.VITE_API_URL)
+        const publishedSessions = await sessionService.getPublishedSessions()
+        console.log('Published sessions:', publishedSessions)
+
+        // Filter for upcoming sessions (future start time)
+        const now = new Date()
+        console.log('Current time:', now)
+        const upcomingSessions = publishedSessions
+          .filter(session => new Date(session.startTime) > now)
+          .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+          .slice(0, 6) // Show max 6 upcoming sessions
+
+        console.log('Upcoming sessions:', upcomingSessions)
+        setSessions(upcomingSessions)
+      } catch (err) {
+        console.error('Error fetching sessions:', err)
+        setError('Failed to load upcoming sessions')
+      } finally {
+        setLoading(false)
+      }
+    }
+
     checkBackendHealth()
+    fetchUpcomingSessions()
   }, [])
 
   return (
@@ -35,14 +68,37 @@ const HomePage = () => {
         <strong>Backend Status:</strong> {backendHealth}
       </div>
 
-      <p className="text-lg text-center text-secondary-600 mb-8">
-        This is the public homepage where training sessions will be displayed.
-      </p>
+      {/* Upcoming Training Sessions Section */}
+      <div className="mb-12">
+        <h2 className="text-2xl font-semibold text-center mb-6">Upcoming Training Sessions</h2>
 
-      <div className="mt-8">
+        {loading ? (
+          <div className="text-center text-secondary-600">
+            Loading upcoming sessions...
+          </div>
+        ) : error ? (
+          <div className="text-center text-danger-600 bg-danger-50 border border-danger-200 rounded-lg p-4">
+            {error}
+          </div>
+        ) : sessions.length === 0 ? (
+          <div className="text-center text-secondary-600 bg-secondary-50 border border-secondary-200 rounded-lg p-6">
+            No upcoming training sessions scheduled at this time.
+            <br />
+            Check back soon for new sessions!
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {sessions.map((session) => (
+              <SessionCard key={session.id} session={session} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="text-center mb-8">
         <Link to="/login">
-          <Button variant="primary" size="lg">
-            Login
+          <Button variant="default" size="lg">
+            Login to Manage Sessions
           </Button>
         </Link>
       </div>
