@@ -8,8 +8,8 @@ export class DiskHealthIndicator extends HealthIndicator {
 
   async isHealthy(
     key: string,
-    path: string = '/',
-    thresholdPercent: number = 0.9
+    path = '/',
+    thresholdPercent = 0.9
   ): Promise<HealthIndicatorResult> {
     try {
       const diskUsage = await this.getDiskUsage(path);

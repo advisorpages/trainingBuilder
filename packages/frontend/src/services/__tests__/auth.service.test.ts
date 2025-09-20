@@ -1,16 +1,10 @@
 import { authService } from '../auth.service';
 import { vi, beforeEach, describe, it, expect } from 'vitest';
+import axios from 'axios';
 
-const mockApiClient = {
-  post: vi.fn(),
-  get: vi.fn(),
-  setAuthToken: vi.fn(),
-  clearAuthToken: vi.fn(),
-};
+vi.mock('axios');
 
-vi.mock('../api', () => ({
-  apiClient: mockApiClient,
-}));
+const mockedAxios = vi.mocked(axios);
 
 describe('AuthService', () => {
   beforeEach(() => {
@@ -20,122 +14,144 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('successfully logs in and stores token', async () => {
+      // Create valid JWT tokens
+      const mockAccessPayload = { exp: Math.floor(Date.now() / 1000) + 3600 }; // 1 hour from now
+      const mockAccessToken = `header.${btoa(JSON.stringify(mockAccessPayload))}.signature`;
+
       const mockResponse = {
         data: {
           user: { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' },
-          access_token: 'mock-token',
+          accessToken: mockAccessToken,
+          refreshToken: 'mock-refresh-token',
         },
       };
 
-      mockApiClient.post.mockResolvedValue(mockResponse);
+      mockedAxios.post.mockResolvedValue(mockResponse);
 
-      const result = await authService.login('test@example.com', 'password');
+      const result = await authService.login({ email: 'test@example.com', password: 'password' });
 
-      expect(mockApiClient.post).toHaveBeenCalledWith('/auth/login', {
+      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:3001/api/auth/login', {
         email: 'test@example.com',
         password: 'password',
       });
 
-      expect(result).toEqual({
-        user: mockResponse.data.user,
-        token: 'mock-token',
-      });
-
-      expect(localStorage.getItem('token')).toBe('mock-token');
-      expect(mockApiClient.setAuthToken).toHaveBeenCalledWith('mock-token');
+      expect(result).toEqual(mockResponse.data);
+      expect(localStorage.getItem('accessToken')).toBe(mockAccessToken);
+      expect(localStorage.getItem('refreshToken')).toBe('mock-refresh-token');
     });
 
     it('throws error on failed login', async () => {
-      mockApiClient.post.mockRejectedValue(new Error('Invalid credentials'));
+      mockedAxios.post.mockRejectedValue(new Error('Invalid credentials'));
 
-      await expect(authService.login('test@example.com', 'wrong-password'))
-        .rejects.toThrow('Invalid credentials');
+      await expect(authService.login({ email: 'test@example.com', password: 'wrong-password' }))
+        .rejects.toThrow('Invalid email or password');
 
-      expect(localStorage.getItem('token')).toBeNull();
+      expect(localStorage.getItem('accessToken')).toBeNull();
     });
   });
 
   describe('logout', () => {
     it('clears token and makes logout request', async () => {
-      localStorage.setItem('token', 'existing-token');
-      mockApiClient.post.mockResolvedValue({});
+      localStorage.setItem('accessToken', 'existing-access-token');
+      localStorage.setItem('refreshToken', 'existing-refresh-token');
+      mockedAxios.post.mockResolvedValue({});
 
       await authService.logout();
 
-      expect(mockApiClient.post).toHaveBeenCalledWith('/auth/logout');
-      expect(localStorage.getItem('token')).toBeNull();
-      expect(mockApiClient.clearAuthToken).toHaveBeenCalled();
+      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:3001/api/auth/logout');
+      expect(localStorage.getItem('accessToken')).toBeNull();
+      expect(localStorage.getItem('refreshToken')).toBeNull();
     });
 
     it('clears token even if logout request fails', async () => {
-      localStorage.setItem('token', 'existing-token');
-      mockApiClient.post.mockRejectedValue(new Error('Server error'));
+      localStorage.setItem('accessToken', 'existing-access-token');
+      localStorage.setItem('refreshToken', 'existing-refresh-token');
+      mockedAxios.post.mockRejectedValue(new Error('Server error'));
 
       await authService.logout();
 
-      expect(localStorage.getItem('token')).toBeNull();
-      expect(mockApiClient.clearAuthToken).toHaveBeenCalled();
+      expect(localStorage.getItem('accessToken')).toBeNull();
+      expect(localStorage.getItem('refreshToken')).toBeNull();
     });
   });
 
   describe('getCurrentUser', () => {
     it('returns user data when token exists', async () => {
       const mockUser = { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' };
-      localStorage.setItem('token', 'valid-token');
-      mockApiClient.get.mockResolvedValue({ data: mockUser });
+      localStorage.setItem('accessToken', 'valid-token');
+      mockedAxios.get.mockResolvedValue({ data: mockUser });
 
       const result = await authService.getCurrentUser();
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/auth/me');
+      expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:3001/api/auth/profile');
       expect(result).toEqual(mockUser);
     });
 
-    it('returns null when no token exists', async () => {
-      const result = await authService.getCurrentUser();
+    it('throws error when API call fails', async () => {
+      localStorage.setItem('accessToken', 'invalid-token');
+      mockedAxios.get.mockRejectedValue(new Error('Unauthorized'));
 
-      expect(result).toBeNull();
-      expect(mockApiClient.get).not.toHaveBeenCalled();
-    });
-
-    it('clears invalid token and returns null', async () => {
-      localStorage.setItem('token', 'invalid-token');
-      mockApiClient.get.mockRejectedValue(new Error('Unauthorized'));
-
-      const result = await authService.getCurrentUser();
-
-      expect(result).toBeNull();
-      expect(localStorage.getItem('token')).toBeNull();
-      expect(mockApiClient.clearAuthToken).toHaveBeenCalled();
+      await expect(authService.getCurrentUser()).rejects.toThrow('Unauthorized');
     });
   });
 
   describe('refreshToken', () => {
     it('refreshes token successfully', async () => {
-      const newToken = 'new-token';
-      mockApiClient.post.mockResolvedValue({ data: { access_token: newToken } });
+      // Create valid JWT token
+      const mockAccessPayload = { exp: Math.floor(Date.now() / 1000) + 3600 }; // 1 hour from now
+      const newToken = `header.${btoa(JSON.stringify(mockAccessPayload))}.signature`;
+      localStorage.setItem('refreshToken', 'valid-refresh-token');
+      mockedAxios.post.mockResolvedValue({ data: { accessToken: newToken } });
 
       const result = await authService.refreshToken();
 
-      expect(mockApiClient.post).toHaveBeenCalledWith('/auth/refresh');
-      expect(result).toBe(newToken);
-      expect(localStorage.getItem('token')).toBe(newToken);
-      expect(mockApiClient.setAuthToken).toHaveBeenCalledWith(newToken);
+      expect(mockedAxios.post).toHaveBeenCalledWith('http://localhost:3001/api/auth/refresh', { refreshToken: 'valid-refresh-token' });
+      expect(result).toBe(true);
+      expect(localStorage.getItem('accessToken')).toBe(newToken);
     });
 
-    it('throws error when refresh fails', async () => {
-      mockApiClient.post.mockRejectedValue(new Error('Refresh failed'));
+    it('returns false when no refresh token exists', async () => {
+      const result = await authService.refreshToken();
 
-      await expect(authService.refreshToken()).rejects.toThrow('Refresh failed');
+      expect(result).toBe(false);
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('returns false when refresh fails', async () => {
+      localStorage.setItem('refreshToken', 'invalid-refresh-token');
+      mockedAxios.post.mockRejectedValue(new Error('Refresh failed'));
+
+      const result = await authService.refreshToken();
+
+      expect(result).toBe(false);
     });
   });
 
   describe('isAuthenticated', () => {
-    it('returns true when token exists', () => {
-      localStorage.setItem('token', 'valid-token');
+    it('returns true when valid token exists', () => {
+      // Create a mock JWT token that won't expire soon
+      const mockPayload = { exp: Math.floor(Date.now() / 1000) + 3600 }; // 1 hour from now
+      const mockToken = `header.${btoa(JSON.stringify(mockPayload))}.signature`;
+      localStorage.setItem('accessToken', mockToken);
+
       expect(authService.isAuthenticated()).toBe(true);
     });
 
     it('returns false when no token exists', () => {
+      expect(authService.isAuthenticated()).toBe(false);
+    });
+
+    it('returns false when token is expired', () => {
+      // Create a mock JWT token that is expired
+      const mockPayload = { exp: Math.floor(Date.now() / 1000) - 3600 }; // 1 hour ago
+      const mockToken = `header.${btoa(JSON.stringify(mockPayload))}.signature`;
+      localStorage.setItem('accessToken', mockToken);
+
+      expect(authService.isAuthenticated()).toBe(false);
+    });
+
+    it('returns false when token is malformed', () => {
+      localStorage.setItem('accessToken', 'invalid-token');
       expect(authService.isAuthenticated()).toBe(false);
     });
   });

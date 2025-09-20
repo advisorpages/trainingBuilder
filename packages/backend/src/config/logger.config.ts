@@ -19,7 +19,7 @@ const developmentFormat = winston.format.combine(
   })
 );
 
-export const createLoggerConfig = (nodeEnv: string = 'development') => {
+export const createLoggerConfig = (nodeEnv = 'development') => {
   const isDevelopment = nodeEnv === 'development';
   const isProduction = nodeEnv === 'production';
 

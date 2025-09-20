@@ -7,7 +7,7 @@ import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { StatusUpdateDto } from './dto/status-update.dto';
 import { SessionStatus } from '../../entities/session.entity';
-import { UserRole } from '../../entities/user.entity';
+import { UserRole } from '@leadership-training/shared';
 
 describe('SessionsController', () => {
   let controller: SessionsController;

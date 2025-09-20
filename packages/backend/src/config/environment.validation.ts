@@ -18,7 +18,7 @@ export class EnvironmentVariables {
   @Max(65535)
   @Transform(({ value }) => parseInt(value, 10))
   @IsOptional()
-  PORT: number = 3001;
+  PORT = 3001;
 
   // Database Configuration
   @IsString()
@@ -49,7 +49,7 @@ export class EnvironmentVariables {
   // QR Code Configuration
   @IsString()
   @IsOptional()
-  QR_CLOUD_API_URL: string = 'https://qrcodes.at/api';
+  QR_CLOUD_API_URL = 'https://qrcodes.at/api';
 
   @IsString()
   @IsOptional()
@@ -57,15 +57,15 @@ export class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  QR_CODE_ERROR_CORRECTION: string = 'M';
+  QR_CODE_ERROR_CORRECTION = 'M';
 
   @IsString()
   @IsOptional()
-  QR_CODE_SIZE: string = '300x300';
+  QR_CODE_SIZE = '300x300';
 
   @IsString()
   @IsOptional()
-  QR_CODE_FORMAT: string = 'PNG';
+  QR_CODE_FORMAT = 'PNG';
 
   // Optional Email Configuration
   @IsString()

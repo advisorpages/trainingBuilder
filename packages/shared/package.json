@@ -9,7 +9,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "eslint src --ext ts --report-unused-disable-directives --max-warnings 0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "echo 'No tests configured for shared package'"
   },
   "dependencies": {},
   "devDependencies": {

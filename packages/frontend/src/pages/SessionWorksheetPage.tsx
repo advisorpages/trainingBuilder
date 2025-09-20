@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Session } from '../../../shared/src/types';
 import { sessionService, CreateSessionRequest, UpdateSessionRequest } from '../services/session.service';
 import { SessionForm } from '../components/sessions/SessionForm';
@@ -135,8 +136,8 @@ export const SessionWorksheetPage: React.FC = () => {
 
   if (!canCreateSessions) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -158,8 +159,8 @@ export const SessionWorksheetPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex justify-between items-center">
@@ -204,9 +205,9 @@ export const SessionWorksheetPage: React.FC = () => {
           <nav className="flex mt-4" aria-label="Breadcrumb">
             <ol className="flex items-center space-x-2">
               <li>
-                <a href="/dashboard" className="text-blue-600 hover:text-blue-800">
+                <Link to="/dashboard" className="text-blue-600 hover:text-blue-800">
                   Dashboard
-                </a>
+                </Link>
               </li>
               <li>
                 <span className="text-gray-400">/</span>

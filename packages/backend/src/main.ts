@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { createLoggerConfig } from './config/logger.config';
+import { DevSeederService } from './modules/dev/dev-seeder.service';
 
 // Add crypto polyfill for NestJS schedule module
 if (typeof (global as any).crypto === 'undefined') {
@@ -75,6 +76,16 @@ async function bootstrap() {
   logger.log(`📖 API documentation available at http://localhost:${port}/api/docs`);
   logger.log(`🏥 Health checks available at http://localhost:${port}/api/health`);
   logger.log(`📊 Metrics available at http://localhost:${port}/api/health/metrics`);
+
+  // Seed development data
+  const isDevelopment = configService.get('NODE_ENV') === 'development';
+  const forceSeed = configService.get('SEED_DEMO') === 'true';
+
+  if (isDevelopment || forceSeed) {
+    const devSeeder = app.get(DevSeederService);
+    await devSeeder.seedDemo();
+    logger.log('✅ Development seeding completed');
+  }
 }
 
 bootstrap();

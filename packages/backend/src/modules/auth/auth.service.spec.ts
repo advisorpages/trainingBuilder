@@ -4,8 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { AuthService } from './auth.service';
-import { User } from '../entities/user.entity';
+import { AuthService } from '../../auth/auth.service';
+import { User } from '../../entities/user.entity';
 import { UnauthorizedException } from '@nestjs/common';
 
 jest.mock('bcrypt');
@@ -19,9 +19,11 @@ describe('AuthService', () => {
   const mockUser = {
     id: 'test-id',
     email: 'test@example.com',
-    password: 'hashedPassword',
-    role: 'CONTENT_DEVELOPER',
+    passwordHash: 'hashedPassword',
+    roleId: 1,
     isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   } as User;
 
   beforeEach(async () => {

@@ -11,13 +11,19 @@ COPY ./packages/shared ./packages/shared
 # Copy backend package.json
 COPY ./packages/backend/package*.json ./packages/backend/
 
-# Install all workspace dependencies
+# Install all workspace dependencies at root level
+RUN npm install
+
+# Install backend specific dependencies
+WORKDIR /app/packages/backend
 RUN npm install
 
 # Build shared package
-RUN cd packages/shared && npm run build
+WORKDIR /app/packages/shared
+RUN npm run build
 
 # Copy backend source code
+WORKDIR /app
 COPY ./packages/backend ./packages/backend
 
 # Switch to backend directory

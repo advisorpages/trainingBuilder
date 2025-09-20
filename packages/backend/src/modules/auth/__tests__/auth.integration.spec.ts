@@ -3,7 +3,8 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AuthModule } from '../auth.module';
-import { User, UserRole } from '../../../entities/user.entity';
+import { User } from '../../../entities/user.entity';
+import { UserRole } from '@leadership-training/shared';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 

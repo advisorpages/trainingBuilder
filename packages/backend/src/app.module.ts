@@ -22,6 +22,7 @@ import { EmailModule } from './modules/email/email.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { IncentivesModule } from './modules/incentives/incentives.module';
 import { HealthModule } from './modules/health/health.module';
+import { DevModule } from './modules/dev/dev.module';
 import { entities } from './entities';
 import { DatabaseHealthService } from './services/database-health.service';
 import { WebhookSyncService } from './services/webhook-sync.service';
@@ -53,7 +54,7 @@ import { RolesGuard } from './common/guards/roles.guard';
         database: configService.get('DATABASE_NAME', 'leadership_training'),
         entities: entities,
         migrations: ['dist/migrations/*.js'],
-        synchronize: false, // Don't auto-sync in production
+        synchronize: configService.get('NODE_ENV') === 'development', // Auto-sync in development only
         logging: configService.get('NODE_ENV') === 'development',
       }),
       inject: [ConfigService],
@@ -80,6 +81,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AdminModule,
     IncentivesModule,
     HealthModule,
+    DevModule,
   ],
   controllers: [AppController],
   providers: [
