@@ -70,10 +70,10 @@ const iconSvgs = {
 }
 
 const sizeClasses = {
-  sm: 'h-4 w-4',
-  md: 'h-5 w-5',
-  lg: 'h-6 w-6',
-  xl: 'h-8 w-8',
+  sm: 'h-4 w-4 min-h-4 min-w-4 max-h-4 max-w-4',
+  md: 'h-5 w-5 min-h-5 min-w-5 max-h-5 max-w-5',
+  lg: 'h-6 w-6 min-h-6 min-w-6 max-h-6 max-w-6',
+  xl: 'h-8 w-8 min-h-8 min-w-8 max-h-8 max-w-8',
 }
 
 export const Icon: React.FC<IconProps> = ({ name, size = 'md', className = '' }) => {

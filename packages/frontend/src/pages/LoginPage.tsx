@@ -65,22 +65,21 @@ const LoginPage = () => {
         </div>
 
         {error && (
-          <div style={{ color: 'red', marginBottom: '1rem' }}>
+          <div className="text-red-600 mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
             {error}
           </div>
         )}
 
         <button
           type="submit"
-          className="btn"
+          className="btn w-full"
           disabled={loading}
-          style={{ width: '100%' }}
         >
           {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
 
-      <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
+      <div className="mt-4 text-sm text-gray-600">
         <p><strong>Test Accounts:</strong></p>
         <p>📧 Content Developer: sarah.content@company.com</p>
         <p>👨‍🏫 Trainer: john.trainer@company.com</p>

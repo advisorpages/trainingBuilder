@@ -1,6 +1,7 @@
 import { Session } from '../../../../shared/src/types'
 import QrCodeDisplay from './QrCodeDisplay'
 import { Button } from '../ui/Button'
+import './SessionCard.css'
 
 interface SessionCardProps {
   session: Session
@@ -53,39 +54,39 @@ const SessionCard = ({ session }: SessionCardProps) => {
   }
 
   return (
-    <div className="bg-white border border-secondary-200 rounded-lg p-6 mb-4 shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-1">
-      <div className="flex justify-between items-start mb-4 gap-4">
-        <h3 className="text-xl font-semibold text-secondary-900 leading-tight flex-1">
+    <div className="session-card">
+      <div className="session-card-header">
+        <h3 className="session-title">
           {session.title}
         </h3>
-        <span className={`px-3 py-1 rounded-full text-sm font-medium border whitespace-nowrap flex-shrink-0 ${getStatusClasses(session.status)}`}>
+        <span className={`session-status ${session.status}`}>
           {statusDisplay}
         </span>
       </div>
 
-      <div className="space-y-3 mb-4">
-        <div className="flex items-center gap-4">
-          <div className="font-semibold text-secondary-900">{date}</div>
-          <div className="text-secondary-600">{time}</div>
+      <div className="session-details">
+        <div className="session-datetime">
+          <div className="session-date">{date}</div>
+          <div className="session-time">{time}</div>
         </div>
 
-        <div className="flex gap-2">
-          <span className="font-medium text-secondary-600 min-w-[70px] text-sm">Location:</span>
-          <span className="text-secondary-900 text-sm">
+        <div className="session-location">
+          <span className="detail-label">Location:</span>
+          <span className="detail-value">
             {session.location?.name || 'TBD'}
           </span>
         </div>
 
-        <div className="flex gap-2">
-          <span className="font-medium text-secondary-600 min-w-[70px] text-sm">Trainer:</span>
-          <span className="text-secondary-900 text-sm">
+        <div className="session-trainer">
+          <span className="detail-label">Trainer:</span>
+          <span className="detail-value">
             {session.trainer?.name || 'TBD'}
           </span>
         </div>
       </div>
 
       {session.description && (
-        <div className="text-secondary-600 leading-relaxed mb-6 text-sm">
+        <div className="session-description">
           {session.description.length > 150
             ? `${session.description.substring(0, 150)}...`
             : session.description
@@ -108,15 +109,9 @@ const SessionCard = ({ session }: SessionCardProps) => {
         </div>
       )}
 
-      <div className="flex justify-end pt-4 border-t border-secondary-100">
-        <a href={`/sessions/${session.id}`} className="inline-block">
-          <Button
-            variant="primary"
-            size="sm"
-            aria-label={`View details for ${session.title}`}
-          >
-            View Details
-          </Button>
+      <div className="session-card-footer">
+        <a href={`/sessions/${session.id}`} className="session-details-link btn btn-primary">
+          View Details
         </a>
       </div>
     </div>
