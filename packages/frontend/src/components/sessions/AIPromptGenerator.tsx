@@ -18,9 +18,9 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
 }) => {
   const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate | null>(null);
   const [generatedPrompt, setGeneratedPrompt] = useState<string>('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  // const [isGenerating, setIsGenerating] = useState(false); // Removed for new workflow
   const [customVariables, setCustomVariables] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'select' | 'preview' | 'review'>('select');
+  const [activeTab, setActiveTab] = useState<'select' | 'generate' | 'paste' | 'review'>('select');
 
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -29,6 +29,11 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
   const [showContentDisplay, setShowContentDisplay] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<AIContentResponse | null>(null);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+
+  // JSON response handling
+  const [jsonResponse, setJsonResponse] = useState<string>('');
+  const [parsedContent, setParsedContent] = useState<any>(null);
+  const [parseError, setParseError] = useState<string>('');
 
   // Load templates on component mount
   useEffect(() => {
@@ -55,7 +60,7 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
   }, []);
 
   useEffect(() => {
-    if (selectedTemplate && activeTab === 'preview') {
+    if (selectedTemplate && activeTab === 'generate') {
       generatePreview();
     }
   }, [selectedTemplate, sessionData, customVariables, activeTab]);
@@ -77,42 +82,43 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
     }
   };
 
-  const handleGeneratePrompt = async () => {
-    if (!selectedTemplate) return;
+  // Removed handleGeneratePrompt - not needed in new workflow
 
-    setIsGenerating(true);
-    setActiveTab('review');
+  const handleCopyPrompt = async () => {
+    if (generatedPrompt) {
+      try {
+        await navigator.clipboard.writeText(generatedPrompt);
+        // Could show success notification here
+      } catch (error) {
+        console.error('Failed to copy prompt:', error);
+        // Fallback: create a temporary textarea
+        const textarea = document.createElement('textarea');
+        textarea.value = generatedPrompt;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+    }
+  };
 
+  const handleParseJSON = () => {
+    setParseError('');
     try {
-      const request: PromptGenerationRequest = {
-        templateId: selectedTemplate.id,
-        sessionData: {
-          title: sessionData.title,
-          description: sessionData.description,
-          startTime: new Date(sessionData.startTime),
-          endTime: new Date(sessionData.endTime),
-          maxRegistrations: sessionData.maxRegistrations,
-          // These would be populated from actual selected data
-          audience: sessionData.audienceId ? { id: 1, name: 'Target Audience', isActive: true, createdAt: new Date(), updatedAt: new Date() } : undefined,
-          tone: sessionData.toneId ? { id: 1, name: 'Professional', isActive: true, createdAt: new Date(), updatedAt: new Date() } : undefined,
-          category: sessionData.categoryId ? { id: 1, name: 'Leadership', isActive: true, createdAt: new Date(), updatedAt: new Date() } : undefined,
-          topics: sessionData.topicIds?.length > 0 ? [{ id: 1, name: 'Communication Skills', isActive: true, createdAt: new Date(), updatedAt: new Date() }] : undefined,
-        },
-        customVariables
-      };
-
-      const finalPrompt = await aiPromptService.generatePrompt(request);
-      setGeneratedPrompt(finalPrompt);
+      const parsed = JSON.parse(jsonResponse);
+      setParsedContent(parsed);
+      setActiveTab('review');
     } catch (error) {
-      setGeneratedPrompt(`Error generating prompt: ${(error as Error).message}`);
-    } finally {
-      setIsGenerating(false);
+      setParseError('Invalid JSON format. Please check your input and try again.');
     }
   };
 
   const handleAcceptPrompt = () => {
-    if (selectedTemplate && generatedPrompt) {
-      onPromptGenerated(generatedPrompt, selectedTemplate.id);
+    if (selectedTemplate && parsedContent) {
+      // Convert parsed content to the expected format
+      const contentString = JSON.stringify(parsedContent);
+      onPromptGenerated(contentString, selectedTemplate.id);
+      onClose(); // Close the modal after accepting the prompt
     }
   };
 
@@ -126,11 +132,11 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
       const contentRequest = {
         prompt: generatedPrompt,
         sessionData: {
-          title: sessionData.title,
-          description: sessionData.description,
-          startTime: new Date(sessionData.startTime),
-          endTime: new Date(sessionData.endTime),
-          maxRegistrations: sessionData.maxRegistrations,
+          title: sessionData.title || 'Untitled Session',
+          description: sessionData.description || 'No description provided',
+          startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
+          endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
+          maxRegistrations: sessionData.maxRegistrations || 50,
           audience: sessionData.audienceId ? { name: 'Target Audience' } : undefined,
           tone: sessionData.toneId ? { name: 'Professional' } : undefined,
           category: sessionData.categoryId ? { name: 'Leadership' } : undefined,
@@ -251,7 +257,7 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onClose}></div>
 
         {/* Modal panel */}
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+        <div className="relative inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full" style={{maxHeight: '90vh'}}>
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
@@ -276,18 +282,16 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
               <nav className="flex space-x-8">
                 {[
                   { id: 'select', name: 'Select Template', icon: '📝' },
-                  { id: 'preview', name: 'Preview', icon: '👀', disabled: !selectedTemplate },
-                  { id: 'review', name: 'Review & Edit', icon: '✏️', disabled: !generatedPrompt }
+                  { id: 'generate', name: 'Generate Prompt', icon: '⚡' },
+                  { id: 'paste', name: 'Paste JSON Response', icon: '📋' },
+                  { id: 'review', name: 'Review & Edit', icon: '✏️' }
                 ].map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => !tab.disabled && setActiveTab(tab.id as any)}
-                    disabled={tab.disabled}
+                    onClick={() => setActiveTab(tab.id as any)}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === tab.id
                         ? 'border-blue-500 text-blue-600'
-                        : tab.disabled
-                        ? 'border-transparent text-gray-300 cursor-not-allowed'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                   >
@@ -376,8 +380,8 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
               </div>
             )}
 
-            {/* Preview Tab */}
-            {activeTab === 'preview' && selectedTemplate && (
+            {/* Generate Prompt Tab */}
+            {activeTab === 'generate' && selectedTemplate && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="font-medium text-gray-900">Prompt Preview</h4>
@@ -409,95 +413,473 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
                   </div>
                 )}
 
-                {/* Preview */}
+                {/* Instructions */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h5 className="text-sm font-medium text-blue-900 mb-2">Instructions</h5>
+                  <ol className="text-sm text-blue-800 space-y-1">
+                    <li>1. Copy the enhanced prompt below using the "Copy to Clipboard" button</li>
+                    <li>2. Paste it into ChatGPT or your preferred AI assistant</li>
+                    <li>3. The AI will generate comprehensive promotional content in JSON format</li>
+                    <li>4. Copy the complete JSON response and paste it in the next tab for editing</li>
+                  </ol>
+                  <div className="mt-3 p-3 bg-blue-100 rounded">
+                    <p className="text-xs text-blue-900 font-medium">
+                      💡 This enhanced prompt generates complete marketing campaigns including headlines, landing page content, social media posts, email copy, and more!
+                    </p>
+                  </div>
+                </div>
+
+                {/* Generated Prompt */}
                 <div className="border rounded-lg p-4 bg-gray-50">
-                  <h5 className="text-sm font-medium text-gray-900 mb-2">Generated Prompt Preview</h5>
+                  <div className="flex items-center justify-between mb-2">
+                    <h5 className="text-sm font-medium text-gray-900">AI Prompt for ChatGPT</h5>
+                    <button
+                      onClick={handleCopyPrompt}
+                      className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Copy to Clipboard
+                    </button>
+                  </div>
                   <div className="text-sm text-gray-700 whitespace-pre-wrap font-mono bg-white rounded border p-3 max-h-64 overflow-y-auto">
-                    {generatedPrompt || 'Loading preview...'}
+                    {generatedPrompt || 'Loading prompt...'}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Review Tab */}
-            {activeTab === 'review' && (
+            {/* Paste JSON Response Tab */}
+            {activeTab === 'paste' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-gray-900">Review and Edit Prompt</h4>
-                  {isGenerating && (
-                    <div className="flex items-center text-blue-600">
-                      <svg className="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Generating...
-                    </div>
+                  <h4 className="font-medium text-gray-900">Paste ChatGPT JSON Response</h4>
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <h5 className="text-sm font-medium text-yellow-900 mb-2">Instructions</h5>
+                  <p className="text-sm text-yellow-800 mb-2">
+                    Paste the complete JSON response from ChatGPT below. The response should include all promotional content fields like headlines, descriptions, social media posts, landing page content, and more.
+                  </p>
+                  <div className="text-xs text-yellow-700 bg-yellow-100 p-2 rounded">
+                    <strong>Expected fields:</strong> headlines, subheadlines, description, socialMedia, emailCopy, keyBenefits, callToAction, whoIsThisFor, whyAttend, topicsAndBenefits, emotionalCallToAction, heroHeadline, heroSubheadline, registrationFormCTA
+                  </div>
+                </div>
+
+                {/* JSON Input */}
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    ChatGPT JSON Response
+                  </label>
+                  <textarea
+                    value={jsonResponse}
+                    onChange={(e) => setJsonResponse(e.target.value)}
+                    rows={12}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono"
+                    placeholder='Paste the complete JSON response here, e.g.:
+{
+  "headlines": ["Transform Your Leadership Impact", "Unlock Executive Presence"],
+  "subheadlines": ["Develop the skills that set great leaders apart"],
+  "description": "Join us for this comprehensive leadership workshop...",
+  "socialMedia": ["🚀 Ready to elevate your leadership? Join our exclusive workshop!", "Transform your management style and inspire your team to achieve more"],
+  "emailCopy": "Subject: Unlock Your Leadership Potential - Limited Seats Available...",
+  "keyBenefits": ["Develop authentic leadership presence", "Master difficult conversations"],
+  "callToAction": "Reserve your spot today - limited seats available!",
+  "whoIsThisFor": "Mid-level managers and emerging leaders ready to make an impact",
+  "whyAttend": "This workshop provides practical tools you can implement immediately",
+  "heroHeadline": "Transform Your Leadership Impact in One Day",
+  "heroSubheadline": "Join 50+ professionals who are mastering the art of authentic leadership",
+  "registrationFormCTA": "Save My Seat"
+}'
+                  />
+                  {parseError && (
+                    <p className="text-sm text-red-600">{parseError}</p>
                   )}
                 </div>
 
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Final AI Prompt
-                  </label>
-                  <textarea
-                    value={generatedPrompt}
-                    onChange={(e) => setGeneratedPrompt(e.target.value)}
-                    rows={12}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono"
-                    placeholder="Your generated prompt will appear here..."
-                  />
-                  <p className="text-sm text-gray-500">
-                    You can edit this prompt before using it to generate AI content.
-                  </p>
+                {/* Parse Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleParseJSON}
+                    disabled={!jsonResponse.trim()}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Parse & Continue
+                  </button>
                 </div>
+              </div>
+            )}
+
+            {/* Review Tab */}
+            {activeTab === 'review' && parsedContent && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-gray-900">Review and Edit Content</h4>
+                  <span className="text-sm text-gray-500">Edit individual fields before saving</span>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Headlines */}
+                  {parsedContent.headlines && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Headlines</label>
+                      {Array.isArray(parsedContent.headlines) ?
+                        parsedContent.headlines.map((headline: string, index: number) => (
+                          <input
+                            key={index}
+                            type="text"
+                            value={headline}
+                            onChange={(e) => {
+                              const newHeadlines = [...parsedContent.headlines];
+                              newHeadlines[index] = e.target.value;
+                              setParsedContent({...parsedContent, headlines: newHeadlines});
+                            }}
+                            className="block w-full mb-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder={`Headline ${index + 1}`}
+                          />
+                        )) :
+                        <input
+                          type="text"
+                          value={parsedContent.headlines}
+                          onChange={(e) => setParsedContent({...parsedContent, headlines: e.target.value})}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="Headline"
+                        />
+                      }
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {parsedContent.description && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                      <textarea
+                        value={parsedContent.description}
+                        onChange={(e) => setParsedContent({...parsedContent, description: e.target.value})}
+                        rows={4}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Session description"
+                      />
+                    </div>
+                  )}
+
+                  {/* Social Media Posts */}
+                  {parsedContent.socialMedia && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Social Media Posts</label>
+                      {Array.isArray(parsedContent.socialMedia) ?
+                        parsedContent.socialMedia.map((post: string, index: number) => (
+                          <textarea
+                            key={index}
+                            value={post}
+                            onChange={(e) => {
+                              const newPosts = [...parsedContent.socialMedia];
+                              newPosts[index] = e.target.value;
+                              setParsedContent({...parsedContent, socialMedia: newPosts});
+                            }}
+                            rows={3}
+                            className="block w-full mb-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder={`Social media post ${index + 1}`}
+                          />
+                        )) :
+                        <textarea
+                          value={parsedContent.socialMedia}
+                          onChange={(e) => setParsedContent({...parsedContent, socialMedia: e.target.value})}
+                          rows={3}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="Social media post"
+                        />
+                      }
+                    </div>
+                  )}
+
+                  {/* Email Copy */}
+                  {parsedContent.emailCopy && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Email Copy</label>
+                      <textarea
+                        value={parsedContent.emailCopy}
+                        onChange={(e) => setParsedContent({...parsedContent, emailCopy: e.target.value})}
+                        rows={4}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Email marketing copy"
+                      />
+                    </div>
+                  )}
+
+                  {/* Key Benefits */}
+                  {parsedContent.keyBenefits && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Key Benefits</label>
+                      {Array.isArray(parsedContent.keyBenefits) ?
+                        parsedContent.keyBenefits.map((benefit: string, index: number) => (
+                          <input
+                            key={index}
+                            type="text"
+                            value={benefit}
+                            onChange={(e) => {
+                              const newBenefits = [...parsedContent.keyBenefits];
+                              newBenefits[index] = e.target.value;
+                              setParsedContent({...parsedContent, keyBenefits: newBenefits});
+                            }}
+                            className="block w-full mb-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder={`Key benefit ${index + 1}`}
+                          />
+                        )) :
+                        <textarea
+                          value={parsedContent.keyBenefits}
+                          onChange={(e) => setParsedContent({...parsedContent, keyBenefits: e.target.value})}
+                          rows={3}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="Key benefits"
+                        />
+                      }
+                    </div>
+                  )}
+
+                  {/* Call to Action */}
+                  {parsedContent.callToAction && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Call to Action</label>
+                      <input
+                        type="text"
+                        value={parsedContent.callToAction}
+                        onChange={(e) => setParsedContent({...parsedContent, callToAction: e.target.value})}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Call to action text"
+                      />
+                    </div>
+                  )}
+
+                  {/* Subheadlines */}
+                  {parsedContent.subheadlines && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Subheadlines</label>
+                      {Array.isArray(parsedContent.subheadlines) ?
+                        parsedContent.subheadlines.map((subheadline: string, index: number) => (
+                          <input
+                            key={index}
+                            type="text"
+                            value={subheadline}
+                            onChange={(e) => {
+                              const newSubheadlines = [...parsedContent.subheadlines];
+                              newSubheadlines[index] = e.target.value;
+                              setParsedContent({...parsedContent, subheadlines: newSubheadlines});
+                            }}
+                            className="block w-full mb-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder={`Subheadline ${index + 1}`}
+                          />
+                        )) :
+                        <input
+                          type="text"
+                          value={parsedContent.subheadlines}
+                          onChange={(e) => setParsedContent({...parsedContent, subheadlines: e.target.value})}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="Subheadline"
+                        />
+                      }
+                    </div>
+                  )}
+
+                  {/* Who Is This For */}
+                  {parsedContent.whoIsThisFor && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Who Is This For</label>
+                      <textarea
+                        value={parsedContent.whoIsThisFor}
+                        onChange={(e) => setParsedContent({...parsedContent, whoIsThisFor: e.target.value})}
+                        rows={3}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Target audience description"
+                      />
+                    </div>
+                  )}
+
+                  {/* Why Attend */}
+                  {parsedContent.whyAttend && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Why Attend</label>
+                      <textarea
+                        value={parsedContent.whyAttend}
+                        onChange={(e) => setParsedContent({...parsedContent, whyAttend: e.target.value})}
+                        rows={3}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Compelling reasons to attend"
+                      />
+                    </div>
+                  )}
+
+                  {/* Topics and Benefits */}
+                  {parsedContent.topicsAndBenefits && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Topics and Benefits</label>
+                      {Array.isArray(parsedContent.topicsAndBenefits) ?
+                        parsedContent.topicsAndBenefits.map((item: string, index: number) => (
+                          <input
+                            key={index}
+                            type="text"
+                            value={item}
+                            onChange={(e) => {
+                              const newItems = [...parsedContent.topicsAndBenefits];
+                              newItems[index] = e.target.value;
+                              setParsedContent({...parsedContent, topicsAndBenefits: newItems});
+                            }}
+                            className="block w-full mb-2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                            placeholder={`Topic and benefit ${index + 1}`}
+                          />
+                        )) :
+                        <textarea
+                          value={parsedContent.topicsAndBenefits}
+                          onChange={(e) => setParsedContent({...parsedContent, topicsAndBenefits: e.target.value})}
+                          rows={4}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="Topics and benefits"
+                        />
+                      }
+                    </div>
+                  )}
+
+                  {/* Emotional Call to Action */}
+                  {parsedContent.emotionalCallToAction && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Emotional Call to Action</label>
+                      <textarea
+                        value={parsedContent.emotionalCallToAction}
+                        onChange={(e) => setParsedContent({...parsedContent, emotionalCallToAction: e.target.value})}
+                        rows={2}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Emotionally compelling call-to-action"
+                      />
+                    </div>
+                  )}
+
+                  {/* Hero Headline */}
+                  {parsedContent.heroHeadline && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Hero Headline</label>
+                      <input
+                        type="text"
+                        value={parsedContent.heroHeadline}
+                        onChange={(e) => setParsedContent({...parsedContent, heroHeadline: e.target.value})}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Primary headline for hero section"
+                      />
+                    </div>
+                  )}
+
+                  {/* Hero Subheadline */}
+                  {parsedContent.heroSubheadline && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Hero Subheadline</label>
+                      <input
+                        type="text"
+                        value={parsedContent.heroSubheadline}
+                        onChange={(e) => setParsedContent({...parsedContent, heroSubheadline: e.target.value})}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Supporting subheadline for hero section"
+                      />
+                    </div>
+                  )}
+
+                  {/* Registration Form CTA */}
+                  {parsedContent.registrationFormCTA && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Registration Form Button Text</label>
+                      <input
+                        type="text"
+                        value={parsedContent.registrationFormCTA}
+                        onChange={(e) => setParsedContent({...parsedContent, registrationFormCTA: e.target.value})}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="Registration button text (e.g., 'Save My Spot')"
+                      />
+                    </div>
+                  )}
+
+                  {/* Display any other fields dynamically */}
+                  {Object.keys(parsedContent).filter(key => !['headlines', 'subheadlines', 'description', 'socialMedia', 'emailCopy', 'keyBenefits', 'callToAction', 'whoIsThisFor', 'whyAttend', 'topicsAndBenefits', 'emotionalCallToAction', 'heroHeadline', 'heroSubheadline', 'registrationFormCTA'].includes(key)).map(key => (
+                    <div key={key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                      </label>
+                      <textarea
+                        value={parsedContent[key]}
+                        onChange={(e) => setParsedContent({...parsedContent, [key]: e.target.value})}
+                        rows={3}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder={`Enter ${key}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Show message when no parsed content */}
+            {activeTab === 'review' && !parsedContent && (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Please complete the previous steps to review and edit content.</p>
               </div>
             )}
           </div>
 
           {/* Footer */}
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Cancel
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Cancel
+              </button>
+
+              {/* Previous Button - show on all tabs except select */}
+              {activeTab !== 'select' && (
+                <button
+                  onClick={() => {
+                    if (activeTab === 'generate') setActiveTab('select');
+                    else if (activeTab === 'paste') setActiveTab('generate');
+                    else if (activeTab === 'review') setActiveTab('paste');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Previous
+                </button>
+              )}
+            </div>
 
             <div className="flex space-x-3">
+              {/* Select Template Tab */}
               {activeTab === 'select' && selectedTemplate && (
                 <button
-                  onClick={() => setActiveTab('preview')}
+                  onClick={() => setActiveTab('generate')}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  Preview Prompt
+                  Next: Generate Prompt
                 </button>
               )}
 
-              {activeTab === 'preview' && (
+              {/* Generate Prompt Tab */}
+              {activeTab === 'generate' && generatedPrompt && (
                 <button
-                  onClick={handleGeneratePrompt}
-                  disabled={isGenerating}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  onClick={() => setActiveTab('paste')}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  Generate Prompt
+                  Next: Paste Response
                 </button>
               )}
 
-              {activeTab === 'review' && generatedPrompt && !isGenerating && (
-                <>
-                  <button
-                    onClick={handleGenerateContent}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    Generate Content
-                  </button>
-                  <button
-                    onClick={handleAcceptPrompt}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                  >
-                    Use This Prompt
-                  </button>
-                </>
+              {/* Paste JSON Tab - handled by Parse & Continue button in the tab content */}
+
+              {/* Review & Edit Tab */}
+              {activeTab === 'review' && parsedContent && (
+                <button
+                  onClick={handleAcceptPrompt}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  Save to Session
+                </button>
               )}
             </div>
           </div>

@@ -49,10 +49,10 @@ export interface PromptGenerationRequest {
 export const PROMPT_TEMPLATES: PromptTemplate[] = [
   {
     id: 'session-marketing-copy',
-    name: 'Session Marketing Copy',
-    description: 'Generate compelling marketing copy for session promotion',
+    name: 'Complete Marketing Campaign',
+    description: 'Generate comprehensive promotional content for session marketing and landing pages',
     category: 'marketing_copy',
-    template: `You are an expert marketing copywriter specializing in leadership training and professional development. Create compelling marketing copy for the following training session:
+    template: `You are an expert marketing copywriter specializing in leadership training and professional development. Create a complete marketing campaign for the following training session using AIDA/PAS principles:
 
 **Session Details:**
 - Title: {title}
@@ -66,26 +66,57 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
 - Target Tone: {tone}
 - Category: {category}
 
-**Requirements:**
-1. Create an engaging session title (if the current one needs improvement)
-2. Write a compelling 2-3 paragraph description that:
-   - Highlights key benefits and learning outcomes
-   - Appeals to the target audience
-   - Uses the specified tone
-   - Creates urgency and desire to attend
-3. Generate 3-5 key bullet points of what attendees will learn
-4. Create a clear call-to-action
-5. Suggest relevant hashtags for social media promotion
+**CRITICAL: Return your response as valid JSON only. No markdown formatting, no extra text.**
 
-**Output Format:**
-Please structure your response as:
-- **Enhanced Title:** [title]
-- **Description:** [2-3 paragraphs]
-- **Key Learning Outcomes:** [bullet points]
-- **Call to Action:** [single compelling sentence]
-- **Hashtags:** [3-5 relevant hashtags]
+Generate comprehensive promotional content in this exact JSON structure:
 
-Focus on benefits over features, use active voice, and make it irresistible to the target audience.`,
+{
+  "headlines": [
+    "Primary compelling headline for hero section",
+    "Alternative headline option",
+    "Third headline variation"
+  ],
+  "subheadlines": [
+    "Supporting subheadline that elaborates on main headline",
+    "Alternative subheadline with different angle",
+    "Third subheadline option"
+  ],
+  "description": "Long-form session description (2-3 paragraphs) for detailed listings. Comprehensive overview of what attendees will learn and experience.",
+  "socialMedia": [
+    "Twitter/LinkedIn post 1 - engaging and shareable with hashtags",
+    "Professional LinkedIn post with business focus and call-to-action",
+    "Twitter post with excitement and registration urgency"
+  ],
+  "emailCopy": "Complete email marketing content including subject line concepts and full email body text that encourages registration and shares session value.",
+  "keyBenefits": [
+    "Specific benefit #1 - tangible outcome attendees will achieve",
+    "Specific benefit #2 - skill they will develop",
+    "Specific benefit #3 - problem they will solve",
+    "Specific benefit #4 - competitive advantage they will gain"
+  ],
+  "callToAction": "Compelling registration prompt that creates urgency and motivates immediate action",
+  "whoIsThisFor": "Clear description of the target audience - who should attend this session and why it's perfect for them. Be specific about roles, challenges, or goals.",
+  "whyAttend": "Compelling reasons why someone should prioritize attending this session over other activities. Focus on unique value proposition and outcomes.",
+  "topicsAndBenefits": [
+    "Topic 1: Specific topic with clear benefit explanation",
+    "Topic 2: Specific topic with clear benefit explanation",
+    "Topic 3: Specific topic with clear benefit explanation",
+    "Topic 4: Specific topic with clear benefit explanation"
+  ],
+  "emotionalCallToAction": "Emotionally compelling call-to-action that connects with attendees' aspirations, fears, or desires. Should inspire action beyond just logical benefits.",
+  "heroHeadline": "Primary headline optimized specifically for the hero section of the landing page",
+  "heroSubheadline": "Supporting subheadline for the hero section that works with the main headline",
+  "registrationFormCTA": "Specific text for the registration form button (e.g., 'Save My Spot', 'Reserve My Seat', 'Join This Session')"
+}
+
+**Content Requirements:**
+- Use AIDA (Attention, Interest, Desire, Action) and PAS (Problem, Agitation, Solution) structure
+- Professional tone appropriate for business training
+- Focus on benefits over features, use active voice
+- Create urgency and desire to attend
+- Make it irresistible to the target audience
+- Ensure all content is compelling and action-oriented
+- Content should be optimized for both landing pages and social sharing`,
     variables: ['title', 'description', 'duration', 'audience', 'tone', 'category', 'topics', 'maxRegistrations']
   },
   {

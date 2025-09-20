@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { AuthContextType, User, LoginCredentials } from '../types/auth.types';
 import authService from '../services/auth.service';
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -130,3 +130,5 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+export default AuthProvider;

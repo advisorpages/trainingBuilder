@@ -66,45 +66,25 @@ const SessionTimeoutWarning: React.FC<SessionTimeoutWarningProps> = ({
   }
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 9999
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        padding: '2rem',
-        borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-        maxWidth: '400px',
-        textAlign: 'center'
-      }}>
-        <h3 style={{ color: '#dc3545', marginBottom: '1rem' }}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+      <div className="bg-white p-8 rounded-lg shadow-xl max-w-sm text-center">
+        <h3 className="text-red-600 text-xl font-semibold mb-4">
           ⚠️ Session Expiring Soon
         </h3>
-        <p style={{ marginBottom: '1.5rem' }}>
+        <p className="text-gray-700 mb-6">
           Your session will expire in <strong>{timeRemaining} minute{timeRemaining !== 1 ? 's' : ''}</strong>.
           Would you like to extend your session?
         </p>
-        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+        <div className="flex gap-4 justify-center">
           <button
             onClick={handleExtendSession}
-            className="btn"
-            style={{ backgroundColor: '#28a745' }}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
           >
             Extend Session
           </button>
           <button
             onClick={handleLogout}
-            className="btn"
-            style={{ backgroundColor: '#dc3545' }}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
           >
             Logout
           </button>

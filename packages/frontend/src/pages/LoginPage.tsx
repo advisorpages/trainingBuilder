@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -14,7 +14,14 @@ const LoginPage = () => {
   // Get the redirect path from location state or default to dashboard
   const from = (location.state as any)?.from?.pathname || '/dashboard'
 
-  // Wait for auth loading to complete before checking authentication
+  // Handle redirect when already authenticated - use useEffect to avoid calling navigate during render
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate(from, { replace: true })
+    }
+  }, [isLoading, isAuthenticated, navigate, from])
+
+  // Wait for auth loading to complete before showing login form
   if (isLoading) {
     return (
       <div className="page">
@@ -26,9 +33,8 @@ const LoginPage = () => {
     )
   }
 
-  // Redirect if already authenticated
+  // Don't render login form if already authenticated (redirect will happen via useEffect)
   if (isAuthenticated) {
-    navigate(from, { replace: true })
     return null
   }
 
