@@ -4,6 +4,7 @@ import { CreateSessionRequest, UpdateSessionRequest, sessionService } from '../.
 import { trainerService } from '../../services/trainer.service';
 import { locationService } from '../../services/location.service';
 import { attributesService } from '../../services/attributes.service';
+import { topicService } from '../../services/topic.service';
 import { useDraftRecovery } from '../../hooks/useDraftRecovery';
 import { DraftRecoveryModal } from './DraftRecoveryModal';
 import { AIContentSection } from './AIContentSection';
@@ -92,7 +93,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           attributesService.getAudiences(),
           attributesService.getTones(),
           attributesService.getCategories(),
-          attributesService.getTopics()
+          topicService.getActiveTopics()
         ]);
 
         setTrainers(trainersResponse);
@@ -706,39 +707,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
             </div>
           )}
 
-          {/* Old implementation - to be completely removed */}
-          {false && topics.length > 0 ? (
-              <div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {topics.map((topic) => (
-                      <label key={`topic-${topic.id}`} className="relative flex items-start">
-                        <div className="flex items-center h-5">
-                          <input
-                            type="checkbox"
-                            checked={formData.topicIds.includes(topic.id.toString())}
-                            onChange={(e) => handleTopicChange(topic.id.toString(), e.target.checked)}
-                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                          />
-                        </div>
-                        <div className="ml-3 text-sm">
-                          <span className="text-gray-700">{topic.name}</span>
-                        </div>
-                      </label>
-                  ))}
-                </div>
-                <p className="mt-2 text-sm text-gray-500">
-                  Select relevant topics to help with AI content generation
-                </p>
-              </div>
-            ) : isLoadingData ? (
-              <div>
-                <div className="flex items-center space-x-2 text-gray-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                  <span className="text-sm">Loading topics...</span>
-                </div>
-              </div>
-            ) : (
-              <div>
+              <div style={{display: 'none'}}>
                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                   <div className="flex">
                     <div className="flex-shrink-0">
@@ -747,15 +716,14 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-800">Topics Not Available</h3>
-                      <p className="mt-1 text-sm text-yellow-700">
-                        Unable to load topic options. Please refresh the page or contact support if this persists.
+                      <h3 className="text-sm font-medium text-red-800">ERROR: DUPLICATE SECTION</h3>
+                      <p className="mt-1 text-sm text-red-700">
+                        This section should not be visible. Contact support if you see this message.
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
-            )}
 
           {/* AI Content Enhancement Section */}
           <div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Topic, Trainer } from '../../../../shared/src/types';
 import { EnhancedTopicCard, SessionTopicDetail } from './EnhancedTopicCard';
+import { DraggableSessionFlow } from './DraggableSessionFlow';
 
 interface EnhancedTopicSelectionProps {
   topics: Topic[];
@@ -17,6 +18,9 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
 }) => {
   const [selectedTopicDetails, setSelectedTopicDetails] = useState<SessionTopicDetail[]>([]);
   const [totalDuration, setTotalDuration] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'usage' | 'recent'>('name');
+  const [showActiveOnly, setShowActiveOnly] = useState(true);
 
   // Initialize selected topics (only once)
   useEffect(() => {
@@ -79,6 +83,10 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
     );
   };
 
+  const handleReorder = (reorderedDetails: SessionTopicDetail[]) => {
+    setSelectedTopicDetails(reorderedDetails);
+  };
+
   const formatTotalDuration = (minutes: number) => {
     if (minutes === 0) return '0 minutes';
     if (minutes < 60) return `${minutes} minutes`;
@@ -93,6 +101,43 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
     return detail ? detail.sequenceOrder : selectedTopicDetails.length + 1;
   };
 
+  // Filter and sort topics
+  const filteredAndSortedTopics = React.useMemo(() => {
+    let filtered = topics.filter(topic => {
+      // Filter by active status
+      if (showActiveOnly && !topic.isActive) return false;
+
+      // Filter by search term
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          topic.name.toLowerCase().includes(searchLower) ||
+          (topic.description && topic.description.toLowerCase().includes(searchLower))
+        );
+      }
+
+      return true;
+    });
+
+    // Sort topics
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'recent':
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case 'usage':
+          // For now, sort by name as we don't have usage data yet
+          // TODO: Implement usage-based sorting when backend provides usage stats
+          return a.name.localeCompare(b.name);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [topics, searchTerm, sortBy, showActiveOnly]);
+
   return (
     <div className="space-y-6">
       {/* Header with summary */}
@@ -106,17 +151,104 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
         )}
       </div>
 
+      {/* Search and Filter Controls */}
+      <div className="space-y-4">
+        {/* Search Bar */}
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Search topics by name or description..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            >
+              <svg className="h-4 w-4 text-gray-400 hover:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Filter Controls */}
+        <div className="flex flex-wrap gap-4 items-center">
+          {/* Sort Dropdown */}
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium text-gray-700">Sort by:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name' | 'usage' | 'recent')}
+              className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            >
+              <option value="name">Name (A-Z)</option>
+              <option value="recent">Recently Updated</option>
+              <option value="usage">Most Used</option>
+            </select>
+          </div>
+
+          {/* Active Filter Toggle */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="showActiveOnly"
+              checked={showActiveOnly}
+              onChange={(e) => setShowActiveOnly(e.target.checked)}
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label htmlFor="showActiveOnly" className="text-sm font-medium text-gray-700">
+              Active topics only
+            </label>
+          </div>
+
+          {/* Results count */}
+          <div className="text-sm text-gray-500 ml-auto">
+            {filteredAndSortedTopics.length} topic{filteredAndSortedTopics.length !== 1 ? 's' : ''} available
+          </div>
+        </div>
+      </div>
+
       {/* Instructions */}
       <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
         <p className="text-sm text-blue-800">
           Select topics for your session. For each selected topic, you can specify the duration,
-          assign a trainer, and add notes. Topics will be arranged in the order you select them.
+          assign a trainer, and add notes. Once selected, you can drag and drop items in the Session Flow Summary to reorder them.
         </p>
       </div>
 
       {/* Topic Cards Grid */}
       <div className="grid grid-cols-1 gap-4">
-        {topics.map((topic) => (
+        {filteredAndSortedTopics.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.5-1.294-5.647-3.379m-.353-1.621A7.963 7.963 0 014 12c0-4.418 3.582-8 8-8s8 3.582 8 8c0 2.152-.851 4.12-2.264 5.621m-7.736 2.379A7.962 7.962 0 0112 21c2.34 0 4.5-1.294 5.647-3.379" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No topics found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {searchTerm
+                ? `No topics match "${searchTerm}". Try adjusting your search terms.`
+                : 'No topics available with the current filters.'
+              }
+            </p>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="mt-3 text-sm text-blue-600 hover:text-blue-500"
+              >
+                Clear search
+              </button>
+            )}
+          </div>
+        ) : (
+          filteredAndSortedTopics.map((topic) => (
           <EnhancedTopicCard
             key={topic.id}
             topic={topic}
@@ -127,42 +259,17 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
             onDetailChange={handleTopicDetailChange}
             sequenceOrder={getSequenceOrder(topic.id)}
           />
-        ))}
+          ))
+        )}
       </div>
 
-      {/* Selected Topics Summary */}
-      {selectedTopicDetails.length > 0 && (
-        <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Session Flow Summary</h4>
-          <div className="space-y-2">
-            {selectedTopicDetails
-              .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
-              .map((detail, index) => {
-                const topic = topics.find(t => t.id === detail.topicId);
-                const trainer = detail.assignedTrainerId
-                  ? trainers.find(t => t.id === detail.assignedTrainerId)
-                  : null;
-
-                return (
-                  <div key={detail.topicId} className="flex items-center text-sm">
-                    <span className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium mr-3">
-                      {index + 1}
-                    </span>
-                    <span className="font-medium text-gray-900">{topic?.name}</span>
-                    <span className="mx-2 text-gray-400">•</span>
-                    <span className="text-gray-600">{formatTotalDuration(detail.durationMinutes)}</span>
-                    {trainer && (
-                      <>
-                        <span className="mx-2 text-gray-400">•</span>
-                        <span className="text-gray-600">{trainer.firstName} {trainer.lastName}</span>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
+      {/* Draggable Session Flow Summary */}
+      <DraggableSessionFlow
+        selectedTopicDetails={selectedTopicDetails}
+        topics={topics}
+        trainers={trainers}
+        onReorder={handleReorder}
+      />
 
       {/* Validation warnings */}
       {totalDuration > 480 && (

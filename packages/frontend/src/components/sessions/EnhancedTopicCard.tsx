@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Topic, Trainer } from '../../../../shared/src/types';
 
 export interface SessionTopicDetail {
@@ -109,12 +109,36 @@ export const EnhancedTopicCard: React.FC<EnhancedTopicCardProps> = ({
         </div>
         <div className="flex-1">
           <label htmlFor={`topic-${topic.id}`} className="block">
-            <h4 className="text-sm font-medium text-gray-900 cursor-pointer">
-              {topic.name}
-            </h4>
+            <div className="flex items-start justify-between">
+              <h4 className="text-sm font-medium text-gray-900 cursor-pointer">
+                {topic.name}
+              </h4>
+              {!topic.isActive && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                  Inactive
+                </span>
+              )}
+            </div>
             {topic.description && (
               <p className="text-sm text-gray-600 mt-1">{topic.description}</p>
             )}
+
+            {/* Topic metadata */}
+            <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+              <span>ID: {topic.id}</span>
+              <span>•</span>
+              <span title={new Date(topic.createdAt).toLocaleString()}>
+                Created: {new Date(topic.createdAt).toLocaleDateString()}
+              </span>
+              {topic.updatedAt !== topic.createdAt && (
+                <>
+                  <span>•</span>
+                  <span title={new Date(topic.updatedAt).toLocaleString()}>
+                    Updated: {new Date(topic.updatedAt).toLocaleDateString()}
+                  </span>
+                </>
+              )}
+            </div>
           </label>
         </div>
       </div>
