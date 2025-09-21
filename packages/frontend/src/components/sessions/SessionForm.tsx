@@ -6,7 +6,9 @@ import { locationService } from '../../services/location.service';
 import { attributesService } from '../../services/attributes.service';
 import { useDraftRecovery } from '../../hooks/useDraftRecovery';
 import { DraftRecoveryModal } from './DraftRecoveryModal';
-import { AIPromptGenerator } from './AIPromptGenerator';
+import { AIContentSection } from './AIContentSection';
+import { EnhancedTopicSelection } from './EnhancedTopicSelection';
+import { SessionTopicDetail } from './EnhancedTopicCard';
 
 interface SessionFormProps {
   session?: Session;
@@ -45,6 +47,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const [categories, setCategories] = useState<Category[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [sessionTopicDetails, setSessionTopicDetails] = useState<SessionTopicDetail[]>([]);
 
   // Auto-save and draft management state
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -67,10 +70,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
 
-  // AI prompt generation state
-  const [showAIPromptGenerator, setShowAIPromptGenerator] = useState(false);
-  const [currentAIPrompt, setCurrentAIPrompt] = useState<string>('');
-  const [selectedPromptTemplate, setSelectedPromptTemplate] = useState<string>('');
+  // AI content section state
+  const [isAIContentExpanded, setIsAIContentExpanded] = useState(false);
 
   useEffect(() => {
     const loadFormData = async () => {
@@ -100,8 +101,13 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         setTones(tonesResponse);
         setCategories(categoriesResponse);
         setTopics(topicsResponse);
+
+        // Debug logging for topics
+        console.log('Topics loaded:', topicsResponse);
+        console.log('Topics count:', topicsResponse.length);
       } catch (error) {
         console.error('Failed to load form data:', error);
+        console.error('Error details:', error.response?.data || error.message);
         // Keep loading false to show form even if data fails to load
       } finally {
         setIsLoadingData(false);
@@ -118,14 +124,9 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     }
   }, [hasRecoverableDraft, session]);
 
-  // Set initial form data for comparison and initialize AI prompt
+  // Set initial form data for comparison
   useEffect(() => {
     initialFormDataRef.current = { ...formData };
-
-    // Initialize AI prompt if it exists
-    if (session?.aiPrompt) {
-      setCurrentAIPrompt(session.aiPrompt);
-    }
   }, [session]);
 
   // Save form data locally on changes (for crash recovery)
@@ -219,7 +220,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     };
   }, []);
 
-  const validateForm = () => {
+  const validateForm = (isDraft = false) => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.title.trim()) {
@@ -230,7 +231,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({
       newErrors.startTime = 'Start time is required';
     }
 
-    if (!formData.endTime) {
+    // Only require endTime for final submissions (when not saving as draft)
+    if (!isDraft && !formData.endTime) {
       newErrors.endTime = 'End time is required';
     }
 
@@ -249,7 +251,10 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    // Determine if this is a draft save (new session) or final submission (existing session)
+    const isDraft = !session?.id;
+
+    if (!validateForm(isDraft)) {
       return;
     }
 
@@ -261,8 +266,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     const submissionData = {
       title: formData.title.trim(),
       description: formData.description.trim() || undefined,
-      startTime: new Date(formData.startTime),
-      endTime: new Date(formData.endTime),
+      startTime: formData.startTime ? new Date(formData.startTime) : undefined,
+      endTime: formData.endTime ? new Date(formData.endTime) : undefined,
       locationId: formData.locationId ? Number(formData.locationId) : undefined,
       trainerId: formData.trainerId ? Number(formData.trainerId) : undefined,
       audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
@@ -294,27 +299,19 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     setShowRecoveryModal(false);
   };
 
-  // AI prompt handlers
-  const handleOpenAIPromptGenerator = () => {
-    setShowAIPromptGenerator(true);
+  // AI content handlers
+  const handleToggleAIContent = () => {
+    setIsAIContentExpanded(!isAIContentExpanded);
   };
 
-  const handlePromptGenerated = (prompt: string, templateId: string) => {
-    setCurrentAIPrompt(prompt);
-    setSelectedPromptTemplate(templateId);
-
-    // Save the prompt to the session
-    handleInputChange('aiPrompt', prompt);
-  };
-
-  const handleCloseAIPromptGenerator = () => {
-    setShowAIPromptGenerator(false);
-  };
-
-  const handleClearPrompt = () => {
-    setCurrentAIPrompt('');
-    setSelectedPromptTemplate('');
-    handleInputChange('aiPrompt', '');
+  const handleAIContentGenerated = (content: any) => {
+    // Apply AI-generated content to form fields
+    if (content.title) {
+      handleInputChange('title', content.title);
+    }
+    if (content.description) {
+      handleInputChange('description', content.description);
+    }
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -332,6 +329,19 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         : prev.topicIds.filter((id: string) => id !== topicId)
     }));
   };
+
+  const handleSessionTopicDetailsChange = useCallback((details: SessionTopicDetail[]) => {
+    setSessionTopicDetails(details);
+    // Update form data with topic IDs in the correct order
+    const orderedTopicIds = details
+      .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
+      .map(detail => detail.topicId.toString());
+
+    setFormData(prev => ({
+      ...prev,
+      topicIds: orderedTopicIds
+    }));
+  }, []);
 
   if (isLoadingData) {
     return (
@@ -659,120 +669,102 @@ export const SessionForm: React.FC<SessionFormProps> = ({
             </div>
           </div>
 
-          {/* Topics Section */}
-          {topics.length > 0 && (
+          {/* Enhanced Topics Section */}
+          {topics.length > 0 ? (
+            <EnhancedTopicSelection
+              topics={topics}
+              trainers={trainers}
+              initialSelectedTopics={formData.topicIds.map(id => Number(id))}
+              onSelectionChange={handleSessionTopicDetailsChange}
+            />
+          ) : isLoadingData ? (
             <div>
-              <h3 className="text-md font-medium text-gray-900 mb-4">Topics</h3>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {topics.map((topic) => (
-                  <label key={topic.id} className="relative flex items-start">
-                    <div className="flex items-center h-5">
-                      <input
-                        type="checkbox"
-                        checked={formData.topicIds.includes(topic.id.toString())}
-                        onChange={(e) => handleTopicChange(topic.id.toString(), e.target.checked)}
-                        className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
-                      />
-                    </div>
-                    <div className="ml-3 text-sm">
-                      <span className="text-gray-700">{topic.name}</span>
-                    </div>
-                  </label>
-                ))}
+              <h3 className="text-md font-medium text-gray-900 mb-4">Session Topics</h3>
+              <div className="flex items-center space-x-2 text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                <span className="text-sm">Loading topics...</span>
               </div>
-              <p className="mt-2 text-sm text-gray-500">
-                Select relevant topics to help with AI content generation
-              </p>
+            </div>
+          ) : (
+            <div>
+              <h3 className="text-md font-medium text-gray-900 mb-4">Session Topics</h3>
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">Topics Not Available</h3>
+                    <p className="mt-1 text-sm text-yellow-700">
+                      Unable to load topic options. Please refresh the page or contact support if this persists.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* AI Content Generation Section */}
-          <div>
-            <h3 className="text-md font-medium text-gray-900 mb-4 flex items-center">
-              <span className="mr-2">🤖</span>
-              AI Content Generation
-            </h3>
-
-            {currentAIPrompt ? (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-blue-900 mb-2">Generated AI Prompt</h4>
-                      <div className="text-sm text-blue-800 bg-white rounded border p-3 max-h-32 overflow-y-auto font-mono">
-                        {currentAIPrompt.length > 200
-                          ? `${currentAIPrompt.substring(0, 200)}...`
-                          : currentAIPrompt}
-                      </div>
-                      {selectedPromptTemplate && (
-                        <p className="mt-2 text-xs text-blue-600">
-                          Template: {selectedPromptTemplate.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </p>
-                      )}
-                    </div>
-                    <div className="ml-4 flex flex-col space-y-2">
-                      <button
-                        type="button"
-                        onClick={handleOpenAIPromptGenerator}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                      >
-                        Edit Prompt
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleClearPrompt}
-                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                      >
-                        Clear Prompt
-                      </button>
-                    </div>
-                  </div>
+          {/* Old implementation - to be completely removed */}
+          {false && topics.length > 0 ? (
+              <div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {topics.map((topic) => (
+                      <label key={`topic-${topic.id}`} className="relative flex items-start">
+                        <div className="flex items-center h-5">
+                          <input
+                            type="checkbox"
+                            checked={formData.topicIds.includes(topic.id.toString())}
+                            onChange={(e) => handleTopicChange(topic.id.toString(), e.target.checked)}
+                            className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                          />
+                        </div>
+                        <div className="ml-3 text-sm">
+                          <span className="text-gray-700">{topic.name}</span>
+                        </div>
+                      </label>
+                  ))}
                 </div>
-
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-800">Ready for AI Generation</h3>
-                      <div className="mt-1 text-sm text-yellow-700">
-                        <p>Your AI prompt is ready! You can now proceed to the next step to generate marketing copy, trainer guides, or session content using this prompt.</p>
-                      </div>
-                    </div>
-                  </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Select relevant topics to help with AI content generation
+                </p>
+              </div>
+            ) : isLoadingData ? (
+              <div>
+                <div className="flex items-center space-x-2 text-gray-500">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                  <span className="text-sm">Loading topics...</span>
                 </div>
               </div>
             ) : (
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                <div className="text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <h3 className="mt-2 text-sm font-medium text-gray-900">Generate AI Prompt</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Create an AI prompt based on your session details to generate compelling content
-                  </p>
-                  <div className="mt-6">
-                    <button
-                      type="button"
-                      onClick={handleOpenAIPromptGenerator}
-                      className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              <div>
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      Generate AI Prompt
-                    </button>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-800">Topics Not Available</h3>
+                      <p className="mt-1 text-sm text-yellow-700">
+                        Unable to load topic options. Please refresh the page or contact support if this persists.
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-3 text-xs text-gray-500">
-                    Fill in the session details above for better AI prompt generation
-                  </p>
                 </div>
               </div>
             )}
+
+          {/* AI Content Enhancement Section */}
+          <div>
+            <AIContentSection
+              sessionData={formData}
+              isExpanded={isAIContentExpanded}
+              onToggle={handleToggleAIContent}
+              onContentGenerated={handleAIContentGenerated}
+            />
           </div>
         </div>
 
@@ -816,15 +808,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         onDiscard={handleDiscardDraft}
       />
 
-      {/* AI Prompt Generator Modal */}
-      {showAIPromptGenerator && (
-        <AIPromptGenerator
-          session={session}
-          sessionData={formData}
-          onPromptGenerated={handlePromptGenerated}
-          onClose={handleCloseAIPromptGenerator}
-        />
-      )}
     </form>
   );
 };
