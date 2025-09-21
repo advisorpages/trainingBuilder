@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { aiPromptService, PromptTemplate } from '../../services/ai-prompt.service';
+import { aiContentService, AIContentResponse } from '../../services/ai-content.service';
 
 interface AIContentSectionProps {
   sessionData: any;
@@ -17,12 +18,15 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
   const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate | null>(null);
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'select' | 'prompt' | 'content'>('select');
+  const [currentStep, setCurrentStep] = useState<'select' | 'prompt' | 'mode-select' | 'content'>('select');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState<string>('');
   const [generatedContent, setGeneratedContent] = useState<any>(null);
   const [error, setError] = useState<string>('');
+  const [generationMode, setGenerationMode] = useState<'manual' | 'automated'>('manual');
+  const [jsonResponse, setJsonResponse] = useState<string>('');
+  const [parseError, setParseError] = useState<string>('');
 
   // Load templates when component mounts or expands
   useEffect(() => {
@@ -83,7 +87,7 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
       });
 
       setGeneratedPrompt(prompt);
-      setCurrentStep('prompt');
+      setCurrentStep('mode-select');
 
     } catch (error: any) {
       setError(error.message || 'Failed to generate prompt');
@@ -103,20 +107,42 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
       setIsGeneratingContent(true);
       setError('');
 
-      let contentResponse;
+      if (generationMode === 'automated') {
+        // Real AI content generation
+        const contentRequest = {
+          prompt: generatedPrompt,
+          sessionData: {
+            title: sessionData.title || 'Untitled Session',
+            description: sessionData.description || 'No description provided',
+            startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
+            endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000),
+            maxRegistrations: sessionData.maxRegistrations || 50,
+            audience: sessionData.audienceId ? { name: 'Target Audience' } : undefined,
+            tone: sessionData.toneId ? { name: 'Professional' } : undefined,
+            category: sessionData.categoryId ? { name: 'Leadership' } : undefined,
+            topics: sessionData.topicIds?.length > 0 ? [{ name: 'Communication Skills' }] : undefined,
+          }
+        };
 
-      // For marketing copy template, generate comprehensive content
-      if (selectedTemplate?.id === 'session-marketing-copy') {
-        contentResponse = generateMarketingContent(sessionData);
+        const aiContentResponse = await aiContentService.generateContent(contentRequest);
+
+        // Convert AI response to display format
+        const contentResponse: any = {};
+        if (aiContentResponse?.contents) {
+          aiContentResponse.contents.forEach((item: any) => {
+            contentResponse[item.type] = item.content;
+          });
+        }
+
+        setGeneratedContent(contentResponse);
+        setCurrentStep('content');
+
+        if (onContentGenerated && contentResponse) {
+          onContentGenerated(contentResponse);
+        }
       } else {
-        contentResponse = generateMockContent(sessionData);
-      }
-
-      setGeneratedContent(contentResponse);
-      setCurrentStep('content');
-
-      if (onContentGenerated && contentResponse) {
-        onContentGenerated(contentResponse);
+        // Manual mode - just proceed to show the prompt for copy/paste
+        setCurrentStep('prompt');
       }
 
     } catch (error: any) {
@@ -126,104 +152,36 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
     }
   };
 
-  const generateMarketingContent = (data: any) => {
-    const title = data.title || 'Leadership Training Session';
-    const description = data.description || 'Professional development session';
+  // Handle manual JSON parsing
+  const handleParseJSON = () => {
+    setParseError('');
+    try {
+      // Clean up common JSON formatting issues from ChatGPT
+      let cleanedJson = jsonResponse
+        .replace(/\\\[/g, '[')  // Replace \[ with [
+        .replace(/\\\]/g, ']')  // Replace \] with ]
+        .replace(/\\\"/g, '"')  // Replace \" with " (if outside strings)
+        .trim();
 
-    // Simulate a comprehensive marketing campaign response
-    return {
-      headlines: [
-        `Transform Your Impact: ${title}`,
-        `Master Excellence Through ${title}`,
-        `Elevate Your Leadership with ${title}`,
-        `Unlock Your Potential: ${title}`
-      ],
-      subheadlines: [
-        `Join ${data.maxRegistrations || 50} professionals transforming their leadership approach`,
-        `Proven strategies that deliver measurable results in your organization`,
-        `From insights to action - practical tools you can implement immediately`
-      ],
-      description: `${description} This comprehensive session combines cutting-edge leadership research with practical application. You'll walk away with proven frameworks, actionable strategies, and the confidence to drive meaningful change in your organization. Perfect for leaders at all levels who are ready to amplify their impact and create lasting results.`,
-      socialMedia: [
-        `🚀 Transform your leadership impact! Join our ${title} and discover the frameworks that separate great leaders from the rest. Limited to ${data.maxRegistrations || 50} participants. #Leadership #ProfessionalGrowth`,
-        `Ready to elevate your leadership game? 📈 Our ${title} delivers practical tools you can use immediately. Reserve your spot today! #LeadershipDevelopment`,
-        `Leadership isn't just about managing—it's about inspiring excellence. Join ${title} and learn how to unlock your team's full potential! 💪 #Leadership #Management`
-      ],
-      emailCopy: `Subject: Transform Your Leadership Impact - ${title}
+      // Remove any markdown formatting that might be present
+      if (cleanedJson.startsWith('```json')) {
+        cleanedJson = cleanedJson.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedJson.startsWith('```')) {
+        cleanedJson = cleanedJson.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
 
-Dear [Name],
+      const parsed = JSON.parse(cleanedJson);
+      setGeneratedContent(parsed);
+      setCurrentStep('content');
 
-Are you ready to take your leadership to the next level?
-
-Our upcoming ${title} is designed for ambitious professionals like you who want to make a real difference in their organizations.
-
-What makes this session different:
-✓ Practical frameworks you can implement immediately
-✓ Interactive exercises with real workplace scenarios
-✓ Proven strategies from successful leaders
-✓ Small group format (max ${data.maxRegistrations || 50} participants) for personalized attention
-
-You'll leave with:
-- A clear action plan for your leadership development
-- Tools to enhance team performance and engagement
-- Strategies for navigating difficult conversations and decisions
-- A network of like-minded professionals
-
-This session fills up quickly. Reserve your spot today.
-
-[Register Now Button]
-
-Looking forward to supporting your leadership journey,
-[Your Name]`,
-      keyBenefits: [
-        'Develop authentic leadership presence that inspires confidence and respect',
-        'Master strategic communication techniques for influencing stakeholders',
-        'Learn evidence-based frameworks for making tough decisions under pressure',
-        'Build high-performing teams that consistently exceed expectations',
-        'Navigate organizational change with clarity and confidence'
-      ],
-      callToAction: `Reserve your seat for ${title} - limited to ${data.maxRegistrations || 50} participants`,
-      whoIsThisFor: `This session is ideal for mid-level managers, emerging leaders, department heads, and ambitious professionals who want to amplify their leadership impact. Whether you're leading a small team or preparing for executive roles, you'll gain practical tools to enhance your effectiveness and drive results.`,
-      whyAttend: `This isn't theory-heavy training that you'll forget in a week. Every strategy and framework is immediately actionable and battle-tested by successful leaders. You'll leave with a clear roadmap for transformation and the confidence to implement changes that deliver measurable results in your organization.`,
-      topicsAndBenefits: [
-        'Authentic Leadership Presence: Build the gravitas and influence that commands respect',
-        'Strategic Communication: Master the art of persuasion and stakeholder engagement',
-        'Decision-Making Frameworks: Make tough calls with confidence and clarity',
-        'Team Performance Optimization: Unlock your team\'s potential for exceptional results',
-        'Change Leadership: Navigate uncertainty and drive transformation effectively'
-      ],
-      emotionalCallToAction: `Don't let another quarter pass wondering "what if?" Your team, your organization, and your career deserve the investment. Transform your leadership impact starting today.`,
-      heroHeadline: `Master Leadership Excellence: ${title}`,
-      heroSubheadline: `Join ${data.maxRegistrations || 50} ambitious professionals who are elevating their leadership game with proven frameworks and actionable strategies`,
-      registrationFormCTA: 'Secure My Spot'
-    };
+      if (onContentGenerated && parsed) {
+        onContentGenerated(parsed);
+      }
+    } catch (error) {
+      setParseError('Invalid JSON format. Please check your input and try again. Common issues: escaped brackets (\\[ \\]) should be [ ], and remove any ```json formatting.');
+    }
   };
 
-  const generateMockContent = (data: any) => {
-    const title = data.title || 'Leadership Training Session';
-    return {
-      headlines: [
-        `Transform Your Leadership Impact: ${title}`,
-        `Master Professional Excellence in ${title}`,
-        `Unlock Your Potential: ${title}`
-      ],
-      description: `Join us for this comprehensive ${title.toLowerCase()} that will transform how you lead and inspire others. This hands-on session combines proven leadership frameworks with practical exercises to deliver immediate, actionable results.`,
-      socialMedia: [
-        `🚀 Ready to transform your leadership style? Join our ${title} and discover the tools that set great leaders apart! #Leadership #ProfessionalDevelopment`,
-        `Leadership isn't just about managing people—it's about inspiring excellence. Reserve your spot for ${title} today! 📈`,
-        `Want to unlock your leadership potential? Our ${title} delivers the frameworks and strategies you need to succeed. Register now! 💪`
-      ],
-      keyBenefits: [
-        'Develop authentic leadership presence that commands respect',
-        'Master the art of influential communication and delegation',
-        'Learn proven frameworks for making tough decisions under pressure',
-        'Build high-performing teams that deliver exceptional results'
-      ],
-      callToAction: 'Reserve your spot today - transform your leadership impact!',
-      heroHeadline: `Master Leadership Excellence: ${title}`,
-      heroSubheadline: 'Join top professionals who are elevating their leadership game with proven strategies and frameworks'
-    };
-  };
 
   const handleApplyToSession = (field: string, value: string) => {
     // This would update the parent form fields
@@ -316,18 +274,26 @@ Looking forward to supporting your leadership journey,
         <div className="flex items-center space-x-2 mb-4">
           <div className={`flex items-center px-3 py-1 rounded-full text-xs font-medium ${
             currentStep === 'select' ? 'bg-blue-100 text-blue-700' :
-            currentStep === 'prompt' || currentStep === 'content' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+            ['mode-select', 'prompt', 'content'].includes(currentStep) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
           }`}>
             <span className="w-4 h-4 mr-1">1</span>
             Generate Prompt
           </div>
           <div className="w-4 h-px bg-gray-300"></div>
           <div className={`flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-            currentStep === 'content' ? 'bg-green-100 text-green-700' :
-            currentStep === 'prompt' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+            currentStep === 'mode-select' ? 'bg-blue-100 text-blue-700' :
+            ['prompt', 'content'].includes(currentStep) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
           }`}>
             <span className="w-4 h-4 mr-1">2</span>
-            Generate Content
+            Choose Mode
+          </div>
+          <div className="w-4 h-px bg-gray-300"></div>
+          <div className={`flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+            currentStep === 'content' ? 'bg-green-100 text-green-700' :
+            currentStep === 'prompt' && generationMode === 'manual' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+          }`}>
+            <span className="w-4 h-4 mr-1">3</span>
+            {generationMode === 'manual' ? 'Paste & Review' : 'Generate Content'}
           </div>
         </div>
 
@@ -363,58 +329,161 @@ Looking forward to supporting your leadership journey,
           </div>
         )}
 
-        {/* Step 2: Generate Content (after prompt is generated) */}
-        {currentStep === 'prompt' && (
-          <div className="flex items-center space-x-3">
-            <button
-              type="button"
-              onClick={handleGenerateContent}
-              disabled={!generatedPrompt || isGeneratingContent}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGeneratingContent ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Generating Content...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Step 2: Generate Marketing Content
-                </>
-              )}
-            </button>
+        {/* Step 2: Mode Selection */}
+        {currentStep === 'mode-select' && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <h5 className="text-sm font-medium text-gray-900 mb-3">Choose Generation Mode</h5>
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <input
+                    id="manual-mode-section"
+                    name="generation-mode-section"
+                    type="radio"
+                    checked={generationMode === 'manual'}
+                    onChange={() => setGenerationMode('manual')}
+                    className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="manual-mode-section" className="ml-3 block text-sm font-medium text-gray-700">
+                    Manual Generation (Recommended)
+                  </label>
+                </div>
+                <p className="ml-7 text-xs text-gray-500">
+                  Copy the prompt and paste it into ChatGPT manually, then paste the JSON response back here.
+                </p>
+                <div className="flex items-center">
+                  <input
+                    id="automated-mode-section"
+                    name="generation-mode-section"
+                    type="radio"
+                    checked={generationMode === 'automated'}
+                    onChange={() => setGenerationMode('automated')}
+                    className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label htmlFor="automated-mode-section" className="ml-3 block text-sm font-medium text-gray-700">
+                    Automated Generation
+                  </label>
+                </div>
+                <p className="ml-7 text-xs text-gray-500">
+                  Generate content automatically using the system's AI integration.
+                </p>
+              </div>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setCurrentStep('select')}
-              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
-            >
-              ← Back to Template Selection
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={handleGenerateContent}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                {generationMode === 'automated' ? 'Generate Content Automatically' : 'Continue with Manual Mode'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurrentStep('select')}
+                className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
+                ← Back to Template Selection
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3a: Manual Mode - Copy Prompt and Paste JSON */}
+        {currentStep === 'prompt' && generationMode === 'manual' && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h5 className="text-sm font-medium text-blue-900 mb-2">Manual Generation Instructions</h5>
+              <ol className="text-sm text-blue-800 space-y-1">
+                <li>1. Copy the enhanced prompt below using the "Copy to Clipboard" button</li>
+                <li>2. Paste it into ChatGPT or your preferred AI assistant</li>
+                <li>3. The AI will generate comprehensive promotional content in JSON format</li>
+                <li>4. Copy the complete JSON response and paste it below</li>
+              </ol>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">
+                ChatGPT JSON Response
+              </label>
+              <textarea
+                value={jsonResponse}
+                onChange={(e) => setJsonResponse(e.target.value)}
+                rows={8}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono"
+                placeholder='Paste the complete JSON response here, e.g.:
+{
+  "headlines": ["Transform Your Leadership Impact", "Unlock Executive Presence"],
+  "description": "Join us for this comprehensive leadership workshop...",
+  "socialMedia": ["🚀 Ready to elevate your leadership?"],
+  "keyBenefits": ["Develop authentic leadership presence"],
+  ...
+}'
+              />
+              {parseError && (
+                <p className="text-sm text-red-600">{parseError}</p>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={handleParseJSON}
+                disabled={!jsonResponse.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Parse & Continue
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCurrentStep('mode-select')}
+                className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
+                ← Back to Mode Selection
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3b: Automated Mode - Show loading state when generating */}
+        {currentStep === 'content' && isGeneratingContent && generationMode === 'automated' && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+              <span className="text-sm font-medium text-green-900">Generating content automatically...</span>
+            </div>
           </div>
         )}
 
         {/* Content Generated - Show Regeneration Options */}
-        {currentStep === 'content' && (
+        {currentStep === 'content' && !isGeneratingContent && (
           <div className="flex items-center space-x-3">
             <button
               type="button"
-              onClick={handleGenerateContent}
+              onClick={() => {
+                if (generationMode === 'automated') {
+                  handleGenerateContent();
+                } else {
+                  setCurrentStep('prompt');
+                }
+              }}
               disabled={isGeneratingContent}
               className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              🔄 Regenerate Content
+              🔄 {generationMode === 'automated' ? 'Regenerate Content' : 'Enter New JSON Response'}
             </button>
 
             <button
               type="button"
-              onClick={() => setCurrentStep('prompt')}
+              onClick={() => setCurrentStep('mode-select')}
               className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
             >
-              ← Edit Prompt
+              ← Change Mode
             </button>
 
             <button
@@ -428,7 +497,7 @@ Looking forward to supporting your leadership journey,
         )}
 
         {/* Generated Prompt Display (Step 1 Complete) */}
-        {generatedPrompt && (currentStep === 'prompt' || currentStep === 'content') && (
+        {generatedPrompt && ['mode-select', 'prompt', 'content'].includes(currentStep) && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-blue-900 mb-3">📝 Generated AI Prompt (AIDA/PAS Framework)</h4>
             <div className="bg-white rounded border p-3 max-h-96 overflow-y-auto">
@@ -450,6 +519,11 @@ Looking forward to supporting your leadership journey,
                   {generatedPrompt.length} characters
                 </span>
               </div>
+              {currentStep === 'mode-select' && (
+                <span className="text-xs text-orange-600 font-medium">
+                  📋 Choose generation mode above
+                </span>
+              )}
               {currentStep === 'prompt' && (
                 <span className="text-xs text-green-600 font-medium">
                   ✅ Ready for AI content generation

@@ -1,6 +1,9 @@
 import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { Session } from '../../entities/session.entity';
 import { Incentive } from '../../entities/incentive.entity';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
 
 export interface AIPromptRequest {
   templateId: string;
@@ -62,6 +65,19 @@ export interface AIContentResponse {
   previousVersions?: AIContentResponse[];
 }
 
+export interface TemplateMetadata {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  variables: string[];
+}
+
+export interface LoadedTemplate {
+  metadata: TemplateMetadata;
+  template: string;
+}
+
 export interface ContentRegenerationRequest {
   prompt: string;
   sessionData: {
@@ -120,6 +136,10 @@ export interface AIIncentiveContentResponse {
 
 @Injectable()
 export class AIService {
+  private templatesCache: Map<string, LoadedTemplate> = new Map();
+  private readonly templatesPath = path.join(process.cwd(), 'config', 'ai-prompts');
+
+  // Fallback templates for backward compatibility
   private readonly templates = {
     'session-marketing-copy': {
       name: 'Session Marketing Copy',
@@ -231,8 +251,81 @@ Each piece should be tailored to the platform's audience and format, emphasizing
     }
   };
 
+  /**
+   * Load template from external file with YAML frontmatter
+   */
+  private async loadTemplateFromFile(templateId: string): Promise<LoadedTemplate | null> {
+    try {
+      const filePath = path.join(this.templatesPath, `${templateId}.md`);
+
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
+
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+
+      // Parse YAML frontmatter
+      const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
+      const match = fileContent.match(frontmatterRegex);
+
+      if (!match) {
+        console.warn(`Template file ${templateId}.md does not have valid YAML frontmatter`);
+        return null;
+      }
+
+      const [, frontmatter, template] = match;
+      const metadata = yaml.load(frontmatter) as TemplateMetadata;
+
+      return {
+        metadata,
+        template: template.trim()
+      };
+    } catch (error) {
+      console.error(`Error loading template ${templateId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get template with caching - tries external file first, falls back to hardcoded
+   */
+  private async getTemplate(templateId: string): Promise<{ name: string; description: string; template: string } | null> {
+    // Check cache first
+    if (this.templatesCache.has(templateId)) {
+      const cached = this.templatesCache.get(templateId)!;
+      return {
+        name: cached.metadata.name,
+        description: cached.metadata.description,
+        template: cached.template
+      };
+    }
+
+    // Try to load from external file
+    const loadedTemplate = await this.loadTemplateFromFile(templateId);
+    if (loadedTemplate) {
+      this.templatesCache.set(templateId, loadedTemplate);
+      return {
+        name: loadedTemplate.metadata.name,
+        description: loadedTemplate.metadata.description,
+        template: loadedTemplate.template
+      };
+    }
+
+    // Fall back to hardcoded template
+    const fallbackTemplate = this.templates[templateId as keyof typeof this.templates];
+    if (fallbackTemplate) {
+      return {
+        name: fallbackTemplate.name,
+        description: fallbackTemplate.description,
+        template: fallbackTemplate.template
+      };
+    }
+
+    return null;
+  }
+
   async generatePrompt(request: AIPromptRequest): Promise<AIPromptResponse> {
-    const template = this.templates[request.templateId as keyof typeof this.templates];
+    const template = await this.getTemplate(request.templateId);
     if (!template) {
       throw new BadRequestException(`Template not found: ${request.templateId}`);
     }
@@ -263,7 +356,7 @@ Each piece should be tailored to the platform's audience and format, emphasizing
 
       // For now, return the structured prompt
       // In a real implementation, this would call OpenAI API
-      const enhancedPrompt = `${template.systemPrompt}\n\n${prompt}`;
+      const enhancedPrompt = prompt;
 
       return {
         prompt: enhancedPrompt,
@@ -279,15 +372,53 @@ Each piece should be tailored to the platform's audience and format, emphasizing
   }
 
   async getAvailableTemplates() {
-    return Object.entries(this.templates).map(([id, template]) => ({
-      id,
-      name: template.name,
-      description: template.description
-    }));
+    const templateList = [];
+
+    try {
+      // Try to read from external files first
+      if (fs.existsSync(this.templatesPath)) {
+        const files = fs.readdirSync(this.templatesPath).filter(f => f.endsWith('.md'));
+        for (const file of files) {
+          const templateId = file.replace('.md', '');
+          const template = await this.getTemplate(templateId);
+          if (template) {
+            templateList.push({
+              id: templateId,
+              name: template.name,
+              description: template.description
+            });
+          }
+        }
+      }
+
+      // Add any hardcoded templates that aren't in external files
+      for (const [id, template] of Object.entries(this.templates)) {
+        if (!templateList.find(t => t.id === id)) {
+          templateList.push({
+            id,
+            name: template.name,
+            description: template.description
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading templates list:', error);
+      // Fall back to hardcoded templates
+      return Object.entries(this.templates).map(([id, template]) => ({
+        id,
+        name: template.name,
+        description: template.description
+      }));
+    }
+
+    return templateList;
   }
 
-  private calculateDuration(startTime: Date, endTime: Date): string {
-    const diffMs = endTime.getTime() - startTime.getTime();
+  private calculateDuration(startTime: Date | string, endTime: Date | string): string {
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    const diffMs = end.getTime() - start.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const hours = Math.floor(diffMins / 60);
     const minutes = diffMins % 60;

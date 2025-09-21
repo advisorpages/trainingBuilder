@@ -502,6 +502,101 @@ To avoid this recurring pattern:
 
 ---
 
+## Issue #12: Generated AI Content Not Populating Input Fields & JSX Syntax Error
+**Date:** September 21, 2025
+**Status:** ✅ RESOLVED
+
+### Problem
+User reported critical issues with the session worksheet when creating new sessions:
+1. **Generated content in input boxes didn't match the info being inputted**
+2. **Some input boxes for editing were missing**
+3. **All fields and entire JSON was getting inserted into description field**
+4. **App couldn't parse JSON properly from ChatGPT due to formatting issues**
+
+### Root Causes
+1. **Duplicate Content Sections**: Both SessionForm and AIContentSection had "Marketing Content" sections, causing confusion
+2. **JSON Parsing Failures**: ChatGPT was outputting escaped brackets `\[` `\]` instead of proper JSON syntax `[` `]`
+3. **Logic Error in Content Processing**: `setGeneratedContent()` was called even when JSON parsing failed
+4. **Critical JSX Syntax Error**: Hidden div with improper structure caused build failures
+5. **AI Prompt Structure Mismatch**: emailCopy field was string in prompt but app expected object structure
+
+### Key Fixes Applied
+
+#### 1. Removed Duplicate Marketing Content Section
+- **File**: `/packages/frontend/src/components/sessions/SessionForm.tsx`
+- **Action**: Removed entire duplicate "Marketing Content" section (lines 869-1189)
+- **Result**: Single workflow - only green box (AIContentSection) for content editing
+
+#### 2. Transformed Green Box to Editable Fields
+- **File**: `/packages/frontend/src/components/sessions/AIContentSection.tsx`
+- **Changes**:
+  - Added comprehensive marketing content state management for all JSON fields
+  - Converted read-only displays to editable input fields
+  - Removed "Apply to Form" buttons (direct editing instead)
+  - Fixed logic error where `setGeneratedContent(parsedContent)` was called outside success block
+
+#### 3. Fixed JSON Parsing Issues
+- **File**: `/Users/anthony-macbook/Documents/_DEV/TrainingBuilderv4/docs/sample-json-from-ai.md`
+- **Action**: Fixed escaped brackets `\[` → `[` and `\]` → `]` for proper JSON syntax
+- **Result**: JSON parsing now works correctly
+
+#### 4. Fixed AI Prompt Structure
+- **File**: `/Users/anthony-macbook/Documents/_DEV/TrainingBuilderv4/docs/sample-generated-ai-prompt.md`
+- **Critical Changes**:
+  - Fixed emailCopy structure from string to object with `{subjectLine, bodyText, callToAction}`
+  - Added explicit array length requirements (headlines: 3, subheadlines: 3, etc.)
+  - Added strong JSON formatting requirements to prevent escaped characters
+  - Added validation checklist to ensure proper JSON output
+
+#### 5. Resolved JSX Syntax Error
+- **File**: `/packages/frontend/src/components/sessions/SessionForm.tsx`
+- **Issue**: Hidden div section with malformed JSX structure causing build failures
+- **Solution**: Used `git stash` to revert to clean state, removing problematic hidden section
+- **Result**: Build errors resolved, HMR working properly
+
+### New Workflow (Single Green Box)
+1. **Paste JSON** → Manual Content Processing textarea
+2. **Click Process Content** → JSON gets parsed and validates
+3. **Edit Directly** → Individual input fields in Generated Content (green section)
+4. **No Duplication** → Only one content section instead of two
+
+### Marketing Content Fields Supported
+The green box now supports editing all JSON fields:
+- **Headlines**: 3 headline variations
+- **Subheadlines**: 3 subheadline variations
+- **Description**: Long-form session description
+- **Social Media**: 3 social media post variations
+- **Email Copy**: Object with subjectLine, bodyText, callToAction
+- **Key Benefits**: 4 specific benefits
+- **Call to Action**: Registration prompts
+- **Landing Page Content**: whoIsThisFor, whyAttend, heroHeadline, heroSubheadline
+- **Topics & Benefits**: 4 topic/benefit combinations
+- **Registration Elements**: registrationFormCTA, emotionalCallToAction
+
+### Files Modified
+- `/packages/frontend/src/components/sessions/SessionForm.tsx` - Removed duplicate Marketing Content section
+- `/packages/frontend/src/components/sessions/AIContentSection.tsx` - Enhanced with editable fields and state management
+- `/docs/sample-json-from-ai.md` - Fixed JSON syntax
+- `/docs/sample-generated-ai-prompt.md` - Fixed structure and formatting requirements
+
+### Testing Verification
+- ✅ JSON paste → process → edit workflow functional
+- ✅ Individual input fields populate correctly from JSON
+- ✅ No duplicate content sections
+- ✅ Build errors resolved
+- ✅ HMR working properly
+- ✅ AI prompt generates properly formatted JSON
+
+### Key Learning
+**Complex Multi-Component Issues** - When fixing interrelated components:
+1. Address duplicate functionality first to eliminate confusion
+2. Fix data flow issues (JSON parsing, state management)
+3. Resolve build-blocking errors before testing functionality
+4. Test complete user workflow end-to-end
+5. Ensure AI prompts match app's expected data structures exactly
+
+---
+
 ## Quick Reference
 
 ### Common Issues & Solutions

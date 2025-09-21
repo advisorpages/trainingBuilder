@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Session } from '../../../../shared/src/types';
-import { aiPromptService, PromptTemplate, PromptGenerationRequest } from '../../services/ai-prompt.service';
+import { aiPromptService, PromptTemplate } from '../../services/ai-prompt.service';
 import { aiContentService, AIContentResponse } from '../../services/ai-content.service';
 import { AIContentDisplay } from './AIContentDisplay';
 
@@ -34,6 +34,9 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
   const [jsonResponse, setJsonResponse] = useState<string>('');
   const [parsedContent, setParsedContent] = useState<any>(null);
   const [parseError, setParseError] = useState<string>('');
+
+  // Generation mode selection
+  const [generationMode, setGenerationMode] = useState<'manual' | 'automated'>('manual');
 
   // Load templates on component mount
   useEffect(() => {
@@ -105,11 +108,25 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
   const handleParseJSON = () => {
     setParseError('');
     try {
-      const parsed = JSON.parse(jsonResponse);
+      // Clean up common JSON formatting issues from ChatGPT
+      let cleanedJson = jsonResponse
+        .replace(/\\\[/g, '[')  // Replace \[ with [
+        .replace(/\\\]/g, ']')  // Replace \] with ]
+        .replace(/\\\"/g, '"')  // Replace \" with " (if outside strings)
+        .trim();
+
+      // Remove any markdown formatting that might be present
+      if (cleanedJson.startsWith('```json')) {
+        cleanedJson = cleanedJson.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedJson.startsWith('```')) {
+        cleanedJson = cleanedJson.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+
+      const parsed = JSON.parse(cleanedJson);
       setParsedContent(parsed);
       setActiveTab('review');
     } catch (error) {
-      setParseError('Invalid JSON format. Please check your input and try again.');
+      setParseError('Invalid JSON format. Please check your input and try again. Common issues: escaped brackets (\\[ \\]) should be [ ], and remove any ```json formatting.');
     }
   };
 
@@ -126,7 +143,11 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
     if (!generatedPrompt) return;
 
     setIsGeneratingContent(true);
-    setShowContentDisplay(true);
+
+    // Only show content display modal for manual mode (legacy support)
+    if (generationMode === 'manual') {
+      setShowContentDisplay(true);
+    }
 
     try {
       const contentRequest = {
@@ -146,6 +167,16 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
 
       const content = await aiContentService.generateContent(contentRequest);
       setGeneratedContent(content);
+
+      // For automated mode, convert content to parsedContent format and go to review tab
+      if (generationMode === 'automated' && content?.contents) {
+        const contentObj: any = {};
+        content.contents.forEach((item: any) => {
+          contentObj[item.type] = item.content;
+        });
+        setParsedContent(contentObj);
+        setActiveTab('review');
+      }
     } catch (error) {
       console.error('Error generating content:', error);
       // Could show error notification here
@@ -283,7 +314,7 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
                 {[
                   { id: 'select', name: 'Select Template', icon: '📝' },
                   { id: 'generate', name: 'Generate Prompt', icon: '⚡' },
-                  { id: 'paste', name: 'Paste JSON Response', icon: '📋' },
+                  ...(generationMode === 'manual' ? [{ id: 'paste', name: 'Paste JSON Response', icon: '📋' }] : []),
                   { id: 'review', name: 'Review & Edit', icon: '✏️' }
                 ].map((tab) => (
                   <button
@@ -413,35 +444,122 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
                   </div>
                 )}
 
-                {/* Instructions */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h5 className="text-sm font-medium text-blue-900 mb-2">Instructions</h5>
-                  <ol className="text-sm text-blue-800 space-y-1">
-                    <li>1. Copy the enhanced prompt below using the "Copy to Clipboard" button</li>
-                    <li>2. Paste it into ChatGPT or your preferred AI assistant</li>
-                    <li>3. The AI will generate comprehensive promotional content in JSON format</li>
-                    <li>4. Copy the complete JSON response and paste it in the next tab for editing</li>
-                  </ol>
-                  <div className="mt-3 p-3 bg-blue-100 rounded">
-                    <p className="text-xs text-blue-900 font-medium">
-                      💡 This enhanced prompt generates complete marketing campaigns including headlines, landing page content, social media posts, email copy, and more!
+                {/* Generation Mode Selection */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <h5 className="text-sm font-medium text-gray-900 mb-3">Generation Mode</h5>
+                  <div className="space-y-3">
+                    <div className="flex items-center">
+                      <input
+                        id="manual-mode"
+                        name="generation-mode"
+                        type="radio"
+                        checked={generationMode === 'manual'}
+                        onChange={() => setGenerationMode('manual')}
+                        className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <label htmlFor="manual-mode" className="ml-3 block text-sm font-medium text-gray-700">
+                        Manual Generation (Recommended)
+                      </label>
+                    </div>
+                    <p className="ml-7 text-xs text-gray-500">
+                      Copy the prompt and paste it into ChatGPT manually, then paste the JSON response back here.
+                    </p>
+                    <div className="flex items-center">
+                      <input
+                        id="automated-mode"
+                        name="generation-mode"
+                        type="radio"
+                        checked={generationMode === 'automated'}
+                        onChange={() => setGenerationMode('automated')}
+                        className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <label htmlFor="automated-mode" className="ml-3 block text-sm font-medium text-gray-700">
+                        Automated Generation
+                      </label>
+                    </div>
+                    <p className="ml-7 text-xs text-gray-500">
+                      Generate content automatically using the system's AI integration.
                     </p>
                   </div>
+                </div>
+
+                {/* Instructions */}
+                <div className={`border border-gray-200 rounded-lg p-4 ${generationMode === 'manual' ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'}`}>
+                  <h5 className={`text-sm font-medium mb-2 ${generationMode === 'manual' ? 'text-blue-900' : 'text-green-900'}`}>Instructions</h5>
+                  {generationMode === 'manual' ? (
+                    <>
+                      <ol className="text-sm text-blue-800 space-y-1">
+                        <li>1. Copy the enhanced prompt below using the "Copy to Clipboard" button</li>
+                        <li>2. Paste it into ChatGPT or your preferred AI assistant</li>
+                        <li>3. The AI will generate comprehensive promotional content in JSON format</li>
+                        <li>4. Copy the complete JSON response and paste it in the next tab for editing</li>
+                      </ol>
+                      <div className="mt-3 p-3 bg-blue-100 rounded">
+                        <p className="text-xs text-blue-900 font-medium">
+                          💡 This enhanced prompt generates complete marketing campaigns including headlines, landing page content, social media posts, email copy, and more!
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <ol className="text-sm text-green-800 space-y-1">
+                        <li>1. Review the generated prompt below</li>
+                        <li>2. Click "Generate Content Automatically" to create promotional content</li>
+                        <li>3. The system will automatically generate comprehensive promotional content</li>
+                        <li>4. Review and edit the generated content as needed</li>
+                      </ol>
+                      <div className="mt-3 p-3 bg-green-100 rounded">
+                        <p className="text-xs text-green-900 font-medium">
+                          ⚡ Automated generation uses the system's AI integration to instantly create your marketing content!
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Generated Prompt */}
                 <div className="border rounded-lg p-4 bg-gray-50">
                   <div className="flex items-center justify-between mb-2">
-                    <h5 className="text-sm font-medium text-gray-900">AI Prompt for ChatGPT</h5>
-                    <button
-                      onClick={handleCopyPrompt}
-                      className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                    >
-                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                      Copy to Clipboard
-                    </button>
+                    <h5 className="text-sm font-medium text-gray-900">
+                      {generationMode === 'manual' ? 'AI Prompt for ChatGPT' : 'AI Prompt (Review)'}
+                    </h5>
+                    <div className="flex space-x-2">
+                      {generationMode === 'manual' && (
+                        <button
+                          onClick={handleCopyPrompt}
+                          className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        >
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copy to Clipboard
+                        </button>
+                      )}
+                      {generationMode === 'automated' && (
+                        <button
+                          onClick={handleGenerateContent}
+                          disabled={isGeneratingContent}
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isGeneratingContent ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              Generate Content Automatically
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="text-sm text-gray-700 whitespace-pre-wrap font-mono bg-white rounded border p-3 max-h-64 overflow-y-auto">
                     {generatedPrompt || 'Loading prompt...'}
@@ -516,8 +634,15 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
             {activeTab === 'review' && parsedContent && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-gray-900">Review and Edit Content</h4>
-                  <span className="text-sm text-gray-500">Edit individual fields before saving</span>
+                  <h4 className="font-medium text-gray-900">
+                    {generationMode === 'automated' ? 'Review Generated Content' : 'Review and Edit Content'}
+                  </h4>
+                  <span className="text-sm text-gray-500">
+                    {generationMode === 'automated'
+                      ? 'Content generated automatically - edit as needed'
+                      : 'Edit individual fields before saving'
+                    }
+                  </span>
                 </div>
 
                 <div className="space-y-4">
@@ -840,7 +965,14 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
                   onClick={() => {
                     if (activeTab === 'generate') setActiveTab('select');
                     else if (activeTab === 'paste') setActiveTab('generate');
-                    else if (activeTab === 'review') setActiveTab('paste');
+                    else if (activeTab === 'review') {
+                      // Go back based on generation mode
+                      if (generationMode === 'automated') {
+                        setActiveTab('generate');
+                      } else {
+                        setActiveTab('paste');
+                      }
+                    }
                   }}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
@@ -861,12 +993,22 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
               )}
 
               {/* Generate Prompt Tab */}
-              {activeTab === 'generate' && generatedPrompt && (
+              {activeTab === 'generate' && generatedPrompt && generationMode === 'manual' && (
                 <button
                   onClick={() => setActiveTab('paste')}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Next: Paste Response
+                </button>
+              )}
+
+              {/* Show review button for automated mode if content has been generated */}
+              {activeTab === 'generate' && generationMode === 'automated' && generatedContent && (
+                <button
+                  onClick={() => setActiveTab('review')}
+                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  Review Generated Content
                 </button>
               )}
 

@@ -46,77 +46,14 @@ export interface PromptGenerationRequest {
 }
 
 // Built-in prompt templates
-export const PROMPT_TEMPLATES: PromptTemplate[] = [
+// Templates are now loaded from backend - this is kept for fallback only
+const FALLBACK_TEMPLATES: PromptTemplate[] = [
   {
     id: 'session-marketing-copy',
     name: 'Complete Marketing Campaign',
     description: 'Generate comprehensive promotional content for session marketing and landing pages',
     category: 'marketing_copy',
-    template: `You are an expert marketing copywriter specializing in leadership training and professional development. Create a complete marketing campaign for the following training session using AIDA/PAS principles:
-
-**Session Details:**
-- Title: {title}
-- Description: {description}
-- Duration: {duration}
-- Audience: {audience}
-- Topics: {topics}
-- Maximum Participants: {maxRegistrations}
-
-**Tone & Style:**
-- Target Tone: {tone}
-- Category: {category}
-
-**CRITICAL: Return your response as valid JSON only. No markdown formatting, no extra text.**
-
-Generate comprehensive promotional content in this exact JSON structure:
-
-{
-  "headlines": [
-    "Primary compelling headline for hero section",
-    "Alternative headline option",
-    "Third headline variation"
-  ],
-  "subheadlines": [
-    "Supporting subheadline that elaborates on main headline",
-    "Alternative subheadline with different angle",
-    "Third subheadline option"
-  ],
-  "description": "Long-form session description (2-3 paragraphs) for detailed listings. Comprehensive overview of what attendees will learn and experience.",
-  "socialMedia": [
-    "Twitter/LinkedIn post 1 - engaging and shareable with hashtags",
-    "Professional LinkedIn post with business focus and call-to-action",
-    "Twitter post with excitement and registration urgency"
-  ],
-  "emailCopy": "Complete email marketing content including subject line concepts and full email body text that encourages registration and shares session value.",
-  "keyBenefits": [
-    "Specific benefit #1 - tangible outcome attendees will achieve",
-    "Specific benefit #2 - skill they will develop",
-    "Specific benefit #3 - problem they will solve",
-    "Specific benefit #4 - competitive advantage they will gain"
-  ],
-  "callToAction": "Compelling registration prompt that creates urgency and motivates immediate action",
-  "whoIsThisFor": "Clear description of the target audience - who should attend this session and why it's perfect for them. Be specific about roles, challenges, or goals.",
-  "whyAttend": "Compelling reasons why someone should prioritize attending this session over other activities. Focus on unique value proposition and outcomes.",
-  "topicsAndBenefits": [
-    "Topic 1: Specific topic with clear benefit explanation",
-    "Topic 2: Specific topic with clear benefit explanation",
-    "Topic 3: Specific topic with clear benefit explanation",
-    "Topic 4: Specific topic with clear benefit explanation"
-  ],
-  "emotionalCallToAction": "Emotionally compelling call-to-action that connects with attendees' aspirations, fears, or desires. Should inspire action beyond just logical benefits.",
-  "heroHeadline": "Primary headline optimized specifically for the hero section of the landing page",
-  "heroSubheadline": "Supporting subheadline for the hero section that works with the main headline",
-  "registrationFormCTA": "Specific text for the registration form button (e.g., 'Save My Spot', 'Reserve My Seat', 'Join This Session')"
-}
-
-**Content Requirements:**
-- Use AIDA (Attention, Interest, Desire, Action) and PAS (Problem, Agitation, Solution) structure
-- Professional tone appropriate for business training
-- Focus on benefits over features, use active voice
-- Create urgency and desire to attend
-- Make it irresistible to the target audience
-- Ensure all content is compelling and action-oriented
-- Content should be optimized for both landing pages and social sharing`,
+    template: 'Fallback template - please check backend connection',
     variables: ['title', 'description', 'duration', 'audience', 'tone', 'category', 'topics', 'maxRegistrations']
   },
   {
@@ -124,53 +61,7 @@ Generate comprehensive promotional content in this exact JSON structure:
     name: 'Trainer Preparation Guide',
     description: 'Generate a comprehensive preparation guide for trainers',
     category: 'trainer_guide',
-    template: `You are an expert trainer development specialist. Create a comprehensive preparation guide for a trainer delivering the following leadership training session:
-
-**Session Information:**
-- Title: {title}
-- Description: {description}
-- Duration: {duration}
-- Audience: {audience}
-- Topics: {topics}
-- Maximum Participants: {maxRegistrations}
-- Tone: {tone}
-
-**Create a trainer preparation guide that includes:**
-
-1. **Session Overview & Objectives**
-   - Clear learning objectives
-   - Success metrics for the session
-
-2. **Audience Analysis**
-   - Key characteristics of {audience}
-   - Common challenges they face
-   - Motivations and goals
-   - Preferred learning styles
-
-3. **Content Preparation**
-   - Key concepts to emphasize for each topic: {topics}
-   - Real-world examples and case studies relevant to {audience}
-   - Interactive elements and engagement strategies
-   - Potential discussion questions
-
-4. **Facilitation Tips**
-   - How to maintain {tone} throughout the session
-   - Techniques for managing group dynamics with {maxRegistrations} participants
-   - Handling difficult questions or resistant participants
-   - Energy management for {duration} session
-
-5. **Materials & Setup**
-   - Required materials and handouts
-   - Room setup recommendations
-   - Technology requirements
-   - Backup plans for technical issues
-
-6. **Timing & Flow**
-   - Suggested agenda breakdown
-   - Key transition points
-   - Time buffers for discussions
-
-Provide practical, actionable advice that will help the trainer deliver an exceptional experience.`,
+    template: 'Fallback template - please check backend connection',
     variables: ['title', 'description', 'duration', 'audience', 'tone', 'topics', 'maxRegistrations']
   },
   {
@@ -178,53 +69,7 @@ Provide practical, actionable advice that will help the trainer deliver an excep
     name: 'Session Content Outline',
     description: 'Generate a detailed content outline and structure',
     category: 'session_content',
-    template: `You are an expert instructional designer specializing in leadership development. Create a comprehensive content outline for the following training session:
-
-**Session Parameters:**
-- Title: {title}
-- Description: {description}
-- Duration: {duration}
-- Target Audience: {audience}
-- Focus Areas: {topics}
-- Tone: {tone}
-- Participant Limit: {maxRegistrations}
-
-**Deliverables Needed:**
-
-1. **Learning Objectives** (3-5 SMART objectives)
-   - What participants will be able to DO after the session
-   - Measurable outcomes aligned with {topics}
-
-2. **Session Structure** (detailed timeline)
-   - Opening (engagement hook, introductions)
-   - Main content blocks for each topic
-   - Interactive elements and activities
-   - Breaks and transitions
-   - Closing and next steps
-
-3. **Content Modules** for each topic in {topics}:
-   - Key concepts and frameworks
-   - Real-world applications
-   - Interactive exercises or discussions
-   - Assessment or reflection opportunities
-
-4. **Engagement Strategies**
-   - Activities suitable for {maxRegistrations} participants
-   - Methods to maintain {tone}
-   - Techniques to address {audience} needs
-   - Technology integration opportunities
-
-5. **Materials & Resources**
-   - Handouts and worksheets
-   - Visual aids and presentations
-   - Reference materials for follow-up
-
-6. **Assessment & Follow-up**
-   - Methods to measure learning achievement
-   - Action planning templates
-   - Resources for continued development
-
-Design this as a complete facilitation guide that any qualified trainer could use to deliver an impactful {duration} session.`,
+    template: 'Fallback template - please check backend connection',
     variables: ['title', 'description', 'duration', 'audience', 'tone', 'topics', 'maxRegistrations']
   }
 ];
@@ -274,7 +119,7 @@ class AIPromptService {
 
   // Local fallback prompt generation
   private generatePromptLocally(request: PromptGenerationRequest): string {
-    const template = PROMPT_TEMPLATES.find(t => t.id === request.templateId);
+    const template = FALLBACK_TEMPLATES.find(t => t.id === request.templateId);
     if (!template) {
       throw new Error(`Template not found: ${request.templateId}`);
     }
@@ -315,34 +160,48 @@ class AIPromptService {
       return response.data.map((template: any) => ({
         ...template,
         template: '', // Template content not needed on frontend
-        variables: this.getTemplateVariables(template.id),
-        category: this.getTemplateCategory(template.id)
+        variables: template.variables || this.getTemplateVariables(template.id),
+        category: template.category || this.getTemplateCategory(template.id)
       }));
     } catch (error) {
       console.error('Error fetching templates:', error);
       // Fallback to local templates
-      return PROMPT_TEMPLATES;
+      return FALLBACK_TEMPLATES;
     }
   }
 
   // Get local templates (synchronous fallback)
   getLocalTemplates(): PromptTemplate[] {
-    return PROMPT_TEMPLATES;
+    return FALLBACK_TEMPLATES;
+  }
+
+  // Helper method to get template variables (fallback)
+  private getTemplateVariables(templateId: string): string[] {
+    const fallbackTemplate = FALLBACK_TEMPLATES.find(t => t.id === templateId);
+    return fallbackTemplate?.variables || [];
+  }
+
+  // Helper method to get template category (fallback)
+  private getTemplateCategory(templateId: string): PromptTemplate['category'] {
+    const fallbackTemplate = FALLBACK_TEMPLATES.find(t => t.id === templateId);
+    return fallbackTemplate?.category || 'session_content';
   }
 
   // Get templates by category
-  getTemplatesByCategory(category: PromptTemplate['category']): PromptTemplate[] {
-    return PROMPT_TEMPLATES.filter(t => t.category === category);
+  async getTemplatesByCategory(category: PromptTemplate['category']): Promise<PromptTemplate[]> {
+    const templates = await this.getAvailableTemplates();
+    return templates.filter(t => t.category === category);
   }
 
   // Get a specific template
-  getTemplate(id: string): PromptTemplate | undefined {
-    return PROMPT_TEMPLATES.find(t => t.id === id);
+  async getTemplate(id: string): Promise<PromptTemplate | undefined> {
+    const templates = await this.getAvailableTemplates();
+    return templates.find(t => t.id === id);
   }
 
   // Validate prompt variables
-  validatePromptVariables(templateId: string, variables: Record<string, any>): string[] {
-    const template = this.getTemplate(templateId);
+  async validatePromptVariables(templateId: string, variables: Record<string, any>): Promise<string[]> {
+    const template = await this.getTemplate(templateId);
     if (!template) {
       return ['Template not found'];
     }
@@ -389,17 +248,6 @@ class AIPromptService {
     } catch (error) {
       return `Error generating preview: ${(error as Error).message}`;
     }
-  }
-
-  // Helper methods for template metadata
-  private getTemplateVariables(templateId: string): string[] {
-    const template = PROMPT_TEMPLATES.find(t => t.id === templateId);
-    return template?.variables || [];
-  }
-
-  private getTemplateCategory(templateId: string): PromptTemplate['category'] {
-    const template = PROMPT_TEMPLATES.find(t => t.id === templateId);
-    return template?.category || 'session_content';
   }
 }
 
