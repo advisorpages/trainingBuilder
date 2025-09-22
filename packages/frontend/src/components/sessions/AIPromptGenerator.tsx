@@ -7,12 +7,20 @@ import { AIContentDisplay } from './AIContentDisplay';
 interface AIPromptGeneratorProps {
   session?: Session;
   sessionData: any; // Form data from SessionForm
+  audiences: any[]; // Loaded audiences data
+  tones: any[]; // Loaded tones data
+  categories: any[]; // Loaded categories data
+  topics: any[]; // Loaded topics data
   onPromptGenerated: (prompt: string, templateId: string) => void;
   onClose: () => void;
 }
 
 export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
   sessionData,
+  audiences,
+  tones,
+  categories,
+  topics,
   onPromptGenerated,
   onClose
 }) => {
@@ -72,12 +80,18 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
     if (!selectedTemplate) return;
 
     try {
+      // Look up actual names from loaded dropdown data
+      const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
+      const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+      const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
+      const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
+
       const preview = aiPromptService.previewPrompt(selectedTemplate.id, {
         ...sessionData,
-        audience: sessionData.audienceId ? { id: 1, name: 'Selected Audience', isActive: true, createdAt: new Date(), updatedAt: new Date() } : undefined,
-        tone: sessionData.toneId ? { id: 1, name: 'Selected Tone', isActive: true, createdAt: new Date(), updatedAt: new Date() } : undefined,
-        category: sessionData.categoryId ? { id: 1, name: 'Selected Category', isActive: true, createdAt: new Date(), updatedAt: new Date() } : undefined,
-        topics: sessionData.topicIds?.length > 0 ? [{ id: 1, name: 'Selected Topics', isActive: true, createdAt: new Date(), updatedAt: new Date() }] : undefined,
+        audience: selectedAudience,
+        tone: selectedTone,
+        category: selectedCategory,
+        topics: selectedTopics,
       });
       setGeneratedPrompt(preview);
     } catch (error) {
@@ -150,6 +164,12 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
     }
 
     try {
+      // Look up actual names from loaded dropdown data
+      const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
+      const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+      const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
+      const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
+
       const contentRequest = {
         prompt: generatedPrompt,
         sessionData: {
@@ -158,10 +178,10 @@ export const AIPromptGenerator: React.FC<AIPromptGeneratorProps> = ({
           startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
           endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
           maxRegistrations: sessionData.maxRegistrations || 50,
-          audience: sessionData.audienceId ? { name: 'Target Audience' } : undefined,
-          tone: sessionData.toneId ? { name: 'Professional' } : undefined,
-          category: sessionData.categoryId ? { name: 'Leadership' } : undefined,
-          topics: sessionData.topicIds?.length > 0 ? [{ name: 'Communication Skills' }] : undefined,
+          audience: selectedAudience,
+          tone: selectedTone,
+          category: selectedCategory,
+          topics: selectedTopics,
         }
       };
 

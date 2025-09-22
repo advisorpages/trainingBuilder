@@ -4,6 +4,10 @@ import { aiContentService, AIContentResponse } from '../../services/ai-content.s
 
 interface AIContentSectionProps {
   sessionData: any;
+  audiences: any[]; // Loaded audiences data
+  tones: any[]; // Loaded tones data
+  categories: any[]; // Loaded categories data
+  topics: any[]; // Loaded topics data
   isExpanded: boolean;
   onToggle: () => void;
   onContentGenerated?: (content: any) => void;
@@ -11,6 +15,10 @@ interface AIContentSectionProps {
 
 export const AIContentSection: React.FC<AIContentSectionProps> = ({
   sessionData,
+  audiences,
+  tones,
+  categories,
+  topics,
   isExpanded,
   onToggle,
   onContentGenerated
@@ -39,6 +47,12 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
       setIsGeneratingPrompt(true);
       setError('');
 
+      // Look up actual names from loaded dropdown data
+      const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
+      const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+      const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
+      const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
+
       // Generate prompt using the unified template
       const prompt = await aiPromptService.generatePrompt({
         templateId: UNIFIED_TEMPLATE_ID,
@@ -47,10 +61,10 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
           description: sessionData.description || '',
           startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
           endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000),
-          audience: sessionData.audienceId ? { name: 'Target Audience' } : undefined,
-          tone: sessionData.toneId ? { name: 'Professional' } : undefined,
-          category: sessionData.categoryId ? { name: 'Leadership' } : undefined,
-          topics: sessionData.topicIds?.length > 0 ? [{ name: 'Communication Skills' }] : undefined,
+          audience: selectedAudience,
+          tone: selectedTone,
+          category: selectedCategory,
+          topics: selectedTopics,
           maxRegistrations: sessionData.maxRegistrations || 50,
         }
       });
@@ -77,6 +91,12 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
       setError('');
 
       if (generationMode === 'automated') {
+        // Look up actual names from loaded dropdown data
+        const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
+        const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+        const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
+        const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
+
         // Real AI content generation
         const contentRequest = {
           prompt: generatedPrompt,
@@ -86,10 +106,10 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
             startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
             endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000),
             maxRegistrations: sessionData.maxRegistrations || 50,
-            audience: sessionData.audienceId ? { name: 'Target Audience' } : undefined,
-            tone: sessionData.toneId ? { name: 'Professional' } : undefined,
-            category: sessionData.categoryId ? { name: 'Leadership' } : undefined,
-            topics: sessionData.topicIds?.length > 0 ? [{ name: 'Communication Skills' }] : undefined,
+            audience: selectedAudience,
+            tone: selectedTone,
+            category: selectedCategory,
+            topics: selectedTopics,
           }
         };
 

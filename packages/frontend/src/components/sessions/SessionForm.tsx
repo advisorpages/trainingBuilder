@@ -579,28 +579,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                 </p>
               </div>
 
-              {/* Trainer */}
-              <div>
-                <label htmlFor="trainerId" className="block text-sm font-medium text-gray-700">
-                  Trainer
-                </label>
-                <select
-                  id="trainerId"
-                  value={formData.trainerId}
-                  onChange={(e) => handleInputChange('trainerId', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">Select a trainer...</option>
-                  {trainers.map((trainer) => (
-                    <option key={trainer.id} value={trainer.id}>
-                      {trainer.firstName} {trainer.lastName} - {trainer.expertise}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-sm text-gray-500">
-                  {trainers.length === 0 ? 'Loading trainers...' : 'Choose from available trainers'}
-                </p>
-              </div>
             </div>
           </div>
 
@@ -729,6 +707,10 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           <div>
             <AIContentSection
               sessionData={formData}
+              audiences={audiences}
+              tones={tones}
+              categories={categories}
+              topics={topics}
               isExpanded={isAIContentExpanded}
               onToggle={handleToggleAIContent}
               onContentGenerated={handleAIContentGenerated}
