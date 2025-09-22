@@ -5,7 +5,7 @@ import { visualizer } from 'rollup-plugin-visualizer'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    react(),
+    react({ fastRefresh: false }),
     visualizer({
       filename: 'dist/stats.html',
       open: false,
@@ -55,8 +55,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': '/src',
-      '@shared': '/shared/src',
+      '@': './src',
+      '@shared': '../shared/src',
     },
   },
 })

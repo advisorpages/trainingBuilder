@@ -16,8 +16,8 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/Card"
-import { cn } from "@/lib/utils"
+} from "../components/ui/Card"
+import { cn } from "../lib/utils"
 
 const DashboardPage = () => {
   const { user, logout } = useAuth()
