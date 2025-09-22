@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
+import { AuthProvider, AuthContext } from './contexts/AuthContext'
 import './index.css'
 
 // Phase 3: FOUND THE CULPRIT! ManageSettingsPage breaks React
@@ -10,6 +10,8 @@ import { SessionWorksheetPage } from './pages/SessionWorksheetPage'
 import { ManageSessionsPage } from './pages/ManageSessionsPage'
 import { ManageTrainersPage } from './pages/ManageTrainersPage'
 import { ManageLocationsPage } from './pages/ManageLocationsPage'
+import ProtectedRoute from './components/auth/ProtectedRoute'
+import { UserRole } from './types/auth.types'
 // ❌ BROKEN: ManageSettingsPage (removed - causes blank page)
 
 // Minimal SimplePage component with the design from original PublicHomepage
@@ -157,12 +159,14 @@ const SimplePage = () => {
   )
 }
 
-// Simple Login component with working auth
+// Real Login component with AuthContext integration
 const SimpleLogin = () => {
-  const [email, setEmail] = React.useState('broker1@company.com')
+  const [email, setEmail] = React.useState('sarah.content@company.com')
   const [password, setPassword] = React.useState('Password123!')
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState('')
+  const { login } = React.useContext(AuthContext)!
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -170,14 +174,12 @@ const SimpleLogin = () => {
     setError('')
 
     try {
-      // Simulate login process
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await login({ email, password })
 
-      // For now, just redirect to a success message
-      alert('Login functionality restored! Redirecting to dashboard...')
-      window.location.href = '/dashboard'
-    } catch (err) {
-      setError('Invalid email or password')
+      // Redirect to dashboard using React Router
+      navigate('/dashboard')
+    } catch (err: any) {
+      setError(err.message || 'Invalid email or password')
     } finally {
       setLoading(false)
     }
@@ -499,13 +501,33 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<SimplePage />} />
           <Route path="/login" element={<SimpleLogin />} />
-          <Route path="/dashboard" element={<SimpleDashboard />} />
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <SimpleDashboard />
+            </ProtectedRoute>
+          } />
 
           {/* Working routes (ManageSettingsPage removed) */}
-          <Route path="/sessions/worksheet" element={<SessionWorksheetPage />} />
-          <Route path="/sessions/manage" element={<ManageSessionsPage />} />
-          <Route path="/admin/trainers" element={<ManageTrainersPage />} />
-          <Route path="/admin/locations" element={<ManageLocationsPage />} />
+          <Route path="/sessions/worksheet" element={
+            <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER]}>
+              <SessionWorksheetPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/sessions/manage" element={
+            <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER]}>
+              <ManageSessionsPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/trainers" element={
+            <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER]}>
+              <ManageTrainersPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/locations" element={
+            <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER]}>
+              <ManageLocationsPage />
+            </ProtectedRoute>
+          } />
           
           {/* ManageSettingsPage route disabled until fixed */}
           <Route path="/admin/settings" element={

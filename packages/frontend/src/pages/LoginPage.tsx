@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const LoginPage = () => {
+  console.log('=== LOGIN PAGE LOADING ===')
+
   const [email, setEmail] = useState('broker1@company.com')
   const [password, setPassword] = useState('Password123!')
   const [loading, setLoading] = useState(false)
@@ -11,15 +13,23 @@ const LoginPage = () => {
   const location = useLocation()
   const { login, isAuthenticated, isLoading } = useAuth()
 
+  console.log('=== LOGIN PAGE STATE ===', {
+    isLoading,
+    isAuthenticated,
+    email,
+    hasLoginFunction: typeof login === 'function'
+  })
+
   // Get the redirect path from location state or default to dashboard
   const from = (location.state as any)?.from?.pathname || '/dashboard'
 
   // Handle redirect when already authenticated - use useEffect to avoid calling navigate during render
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      navigate(from, { replace: true })
-    }
-  }, [isLoading, isAuthenticated, navigate, from])
+  // TEMPORARILY DISABLED: This was causing race condition with login process
+  // useEffect(() => {
+  //   if (!isLoading && isAuthenticated) {
+  //     navigate(from, { replace: true })
+  //   }
+  // }, [isLoading, isAuthenticated, navigate, from])
 
   // Wait for auth loading to complete before showing login form
   if (isLoading) {
@@ -34,19 +44,24 @@ const LoginPage = () => {
   }
 
   // Don't render login form if already authenticated (redirect will happen via useEffect)
-  if (isAuthenticated) {
-    return null
-  }
+  // TEMPORARILY DISABLED: Allowing login form to show even if authenticated for debugging
+  // if (isAuthenticated) {
+  //   return null
+  // }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('=== LOGIN FORM SUBMIT ===', { email, password: '***' })
     setLoading(true)
     setError('')
 
     try {
+      console.log('=== CALLING LOGIN ===')
       await login({ email, password })
+      console.log('=== LOGIN SUCCESS ===')
       navigate(from, { replace: true })
     } catch (err) {
+      console.log('=== LOGIN ERROR ===', err)
       setError('Invalid email or password')
     } finally {
       setLoading(false)
@@ -57,7 +72,10 @@ const LoginPage = () => {
     <div className="page">
       <h2>Login</h2>
 
-      <form onSubmit={handleSubmit} className="form">
+      <form onSubmit={(e) => {
+        console.log('=== FORM ONSUBMIT CALLED ===');
+        handleSubmit(e);
+      }} className="form">
         <div className="form-group">
           <label htmlFor="email">Email:</label>
           <input
@@ -92,6 +110,9 @@ const LoginPage = () => {
           type="submit"
           className="btn w-full"
           disabled={loading}
+          onClick={(e) => {
+            console.log('=== BUTTON CLICKED ===', e.type);
+          }}
         >
           {loading ? 'Logging in...' : 'Login'}
         </button>

@@ -56,10 +56,23 @@ class AuthService {
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
+      console.log('=== LOGIN DEBUG ===', {
+        url: `${this.baseURL}/auth/login`,
+        credentials: { email: credentials.email, password: '***' }
+      });
+
       const response: AxiosResponse<AuthResponse> = await axios.post(
         `${this.baseURL}/auth/login`,
         credentials
       );
+
+      console.log('=== LOGIN RESPONSE DEBUG ===', {
+        status: response.status,
+        data: response.data,
+        hasAccessToken: !!response.data.accessToken,
+        hasRefreshToken: !!response.data.refreshToken,
+        hasUser: !!response.data.user
+      });
 
       const { accessToken, refreshToken } = response.data;
 

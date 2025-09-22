@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Session } from '../../../shared/src/types';
 import { sessionService } from '../services/session.service';
 import { DraftsList } from '../components/sessions/DraftsList';
@@ -8,6 +8,7 @@ import { UserRole } from '../types/auth.types';
 
 export const ManageSessionsPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Check if user is Content Developer
@@ -15,7 +16,7 @@ export const ManageSessionsPage: React.FC = () => {
 
   const handleEditSession = (session: Session) => {
     // Navigate to session worksheet for editing
-    window.location.href = `/sessions/worksheet?edit=${session.id}`;
+    navigate(`/sessions/worksheet?edit=${session.id}`);
   };
 
   const handleDeleteSession = async (session: Session) => {
