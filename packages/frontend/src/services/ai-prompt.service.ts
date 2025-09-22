@@ -149,6 +149,17 @@ class AIPromptService {
     }
   }
 
+  // Clear templates cache on backend
+  async clearTemplatesCache(): Promise<{ message: string; clearedCount: number }> {
+    try {
+      const response = await this.api.post(`${API_ENDPOINTS.AI}/clear-cache`);
+      return response.data;
+    } catch (error) {
+      console.error('Error clearing templates cache:', error);
+      throw new Error('Unable to clear templates cache. Please check backend connection.');
+    }
+  }
+
   // Get local templates (synchronous fallback)
   getLocalTemplates(): PromptTemplate[] {
     return FALLBACK_TEMPLATES;
@@ -168,14 +179,14 @@ class AIPromptService {
 
   // Get templates by category
   async getTemplatesByCategory(category: PromptTemplate['category']): Promise<PromptTemplate[]> {
-    const templates = await this.getAvailableTemplates();
-    return templates.filter(t => t.category === category);
+    const templates = await this.getTemplates();
+    return templates.filter((t: PromptTemplate) => t.category === category);
   }
 
   // Get a specific template
   async getTemplate(id: string): Promise<PromptTemplate | undefined> {
-    const templates = await this.getAvailableTemplates();
-    return templates.find(t => t.id === id);
+    const templates = await this.getTemplates();
+    return templates.find((t: PromptTemplate) => t.id === id);
   }
 
   // Validate prompt variables

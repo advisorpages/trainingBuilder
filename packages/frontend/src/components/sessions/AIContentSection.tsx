@@ -32,6 +32,8 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
   const [generationMode, setGenerationMode] = useState<'manual' | 'automated'>('manual');
   const [jsonResponse, setJsonResponse] = useState<string>('');
   const [parseError, setParseError] = useState<string>('');
+  const [isClearingCache, setIsClearingCache] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState<string>('');
 
   // Hardcoded template for unified content generation
   const UNIFIED_TEMPLATE_ID = 'session-marketing-copy';
@@ -141,33 +143,127 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
     }
   };
 
-  // Handle manual JSON parsing
+  // Enhanced JSON cleaning function
+  const cleanJSONString = (jsonStr: string): string => {
+    let cleaned = jsonStr.trim();
+
+    // Remove markdown formatting
+    if (cleaned.startsWith('```json')) {
+      cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+
+    // Remove any leading/trailing text that isn't JSON
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+    }
+
+    // Fix common JSON issues
+    cleaned = cleaned
+      // Fix escaped brackets
+      .replace(/\\\[/g, '[')
+      .replace(/\\\]/g, ']')
+      // Fix escaped forward slashes (unless needed)
+      .replace(/\\\//g, '/')
+      // Remove comments (// style)
+      .replace(/\/\/.*$/gm, '')
+      // Remove comments (/* */ style)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      // Fix trailing commas in objects and arrays
+      .replace(/,(\s*[}\]])/g, '$1')
+      // Fix multiple consecutive quotes
+      .replace(/""/g, '"')
+      // Normalize line endings
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      // Remove invisible characters
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim();
+
+    return cleaned;
+  };
+
+  // Get specific error location and message
+  const getDetailedJSONError = (error: any, jsonStr: string): string => {
+    let errorMsg = 'Invalid JSON format.';
+
+    if (error.message.includes('position')) {
+      const match = error.message.match(/position (\d+)/);
+      if (match) {
+        const pos = parseInt(match[1]);
+        const lines = jsonStr.substring(0, pos).split('\n');
+        const line = lines.length;
+        const column = lines[lines.length - 1].length + 1;
+        errorMsg += ` Error at line ${line}, column ${column}.`;
+
+        // Show context around error
+        const contextLines = jsonStr.split('\n');
+        if (contextLines[line - 1]) {
+          errorMsg += `\n\nProblematic line: ${contextLines[line - 1]}`;
+          errorMsg += `\n${' '.repeat(column - 1)}^`;
+        }
+      }
+    }
+
+    // Add specific suggestions based on error type
+    if (error.message.includes('comma') || jsonStr.includes(',}') || jsonStr.includes(',]')) {
+      errorMsg += '\n\n💡 Suggestion: Remove trailing commas before } or ]';
+    } else if (error.message.includes('quote') || jsonStr.includes("'")) {
+      errorMsg += '\n\n💡 Suggestion: Use double quotes (") for all strings, not single quotes (\')';
+    } else if (jsonStr.includes('//') || jsonStr.includes('/*')) {
+      errorMsg += '\n\n💡 Suggestion: Remove comments - JSON does not support // or /* */ comments';
+    } else if (jsonStr.includes('```')) {
+      errorMsg += '\n\n💡 Suggestion: Remove markdown formatting (```json blocks)';
+    }
+
+    return errorMsg;
+  };
+
+  // Handle manual JSON parsing with multiple cleaning attempts
   const handleParseJSON = () => {
     setParseError('');
-    try {
-      // Clean up common JSON formatting issues from ChatGPT
-      let cleanedJson = jsonResponse
-        .replace(/\\\[/g, '[')  // Replace \[ with [
-        .replace(/\\\]/g, ']')  // Replace \] with ]
-        .replace(/\\\"/g, '"')  // Replace \" with " (if outside strings)
-        .trim();
 
-      // Remove any markdown formatting that might be present
-      if (cleanedJson.startsWith('```json')) {
-        cleanedJson = cleanedJson.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (cleanedJson.startsWith('```')) {
-        cleanedJson = cleanedJson.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    if (!jsonResponse.trim()) {
+      setParseError('Please paste the JSON response from ChatGPT or your AI assistant.');
+      return;
+    }
+
+    // Try multiple cleaning strategies
+    const cleaningStrategies = [
+      (str: string) => cleanJSONString(str), // Enhanced cleaning
+      (str: string) => str.trim(), // Just trim
+      (str: string) => cleanJSONString(str).replace(/'/g, '"'), // Replace single quotes
+    ];
+
+    for (let i = 0; i < cleaningStrategies.length; i++) {
+      try {
+        const cleanedJson = cleaningStrategies[i](jsonResponse);
+        const parsed = JSON.parse(cleanedJson);
+
+        // Validate that we have the expected structure
+        if (typeof parsed !== 'object' || parsed === null) {
+          throw new Error('Response must be a JSON object');
+        }
+
+        setGeneratedContent(parsed);
+        setCurrentStep('content');
+
+        if (onContentGenerated && parsed) {
+          onContentGenerated(parsed);
+        }
+        return; // Success!
+
+      } catch (error: any) {
+        // If this is the last strategy, show detailed error
+        if (i === cleaningStrategies.length - 1) {
+          const cleanedJson = cleaningStrategies[0](jsonResponse);
+          setParseError(getDetailedJSONError(error, cleanedJson));
+        }
+        // Otherwise, try next strategy
       }
-
-      const parsed = JSON.parse(cleanedJson);
-      setGeneratedContent(parsed);
-      setCurrentStep('content');
-
-      if (onContentGenerated && parsed) {
-        onContentGenerated(parsed);
-      }
-    } catch (error) {
-      setParseError('Invalid JSON format. Please check your input and try again. Common issues: escaped brackets (\\[ \\]) should be [ ], and remove any ```json formatting.');
     }
   };
 
@@ -176,6 +272,68 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
     // This would update the parent form fields
     if (onContentGenerated) {
       onContentGenerated({ [field]: value });
+    }
+  };
+
+  const handleContentChange = (field: string, value: any) => {
+    setGeneratedContent(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleClearCache = async () => {
+    try {
+      setIsClearingCache(true);
+      setCacheMessage('');
+      setError('');
+
+      // Step 1: Clear the cache
+      const result = await aiPromptService.clearTemplatesCache();
+
+      // Step 2: Auto-regenerate prompt with fresh template (if session data is valid)
+      if (sessionData?.title?.trim()) {
+        try {
+          // Look up actual names from loaded dropdown data
+          const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
+          const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+          const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
+          const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
+
+          // Generate prompt using the refreshed template
+          const prompt = await aiPromptService.generatePrompt({
+            templateId: UNIFIED_TEMPLATE_ID,
+            sessionData: {
+              title: sessionData.title,
+              description: sessionData.description || '',
+              startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
+              endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000),
+              audience: selectedAudience,
+              tone: selectedTone,
+              category: selectedCategory,
+              topics: selectedTopics,
+              maxRegistrations: sessionData.maxRegistrations || 50,
+            }
+          });
+
+          setGeneratedPrompt(prompt);
+          setCacheMessage(`✅ Templates refreshed and prompt reloaded successfully! (${result.clearedCount} templates cleared)`);
+        } catch (promptError: any) {
+          setCacheMessage(`✅ ${result.message} (${result.clearedCount} templates cleared) - Warning: ${promptError.message}`);
+        }
+      } else {
+        setCacheMessage(`✅ ${result.message} (${result.clearedCount} templates cleared)`);
+      }
+
+      // Clear the message after 7 seconds (longer due to more content)
+      setTimeout(() => {
+        setCacheMessage('');
+      }, 7000);
+
+    } catch (error: any) {
+      setError(`Failed to clear cache: ${error.message}`);
+    } finally {
+      setIsClearingCache(false);
     }
   };
 
@@ -217,16 +375,46 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
             <span className="text-xl mr-2">🤖</span>
             <h3 className="text-md font-medium text-gray-900">AI Content Enhancement</h3>
           </div>
-          <button
-            type="button"
-            onClick={onToggle}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={handleClearCache}
+              disabled={isClearingCache}
+              className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 border border-blue-200 rounded hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Clear AI templates cache to reload from file system"
+            >
+              {isClearingCache ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-700 mr-1"></div>
+                  Clearing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh Templates
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onToggle}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {/* Cache Message */}
+        {cacheMessage && (
+          <div className="mt-2 text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded">
+            {cacheMessage}
+          </div>
+        )}
       </div>
 
       <div className="p-4 space-y-4">
@@ -375,6 +563,10 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                 <li>3. The AI will generate comprehensive promotional content in JSON format</li>
                 <li>4. Copy the complete JSON response and paste it below</li>
               </ol>
+              <div className="mt-3 text-xs text-blue-700 bg-blue-100 rounded p-2">
+                <strong>💡 JSON Tips:</strong> The parser will automatically clean common issues like trailing commas,
+                escaped brackets, and markdown formatting. Just paste the raw response!
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -396,7 +588,10 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
 }'
               />
               {parseError && (
-                <p className="text-sm text-red-600">{parseError}</p>
+                <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">
+                  <div className="font-medium mb-1">JSON Parsing Error</div>
+                  <pre className="whitespace-pre-wrap text-xs font-mono">{parseError}</pre>
+                </div>
               )}
             </div>
 
@@ -534,23 +729,58 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Headlines</label>
                   <div className="space-y-2">
-                    {generatedContent.headlines.map((headline: string, index: number) => (
-                      <div key={index} className="flex items-center space-x-2">
+                    {Array.isArray(generatedContent.headlines) ?
+                      generatedContent.headlines.map((headline: string, index: number) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            value={headline}
+                            onChange={(e) => {
+                              const newHeadlines = [...generatedContent.headlines];
+                              newHeadlines[index] = e.target.value;
+                              handleContentChange('headlines', newHeadlines);
+                            }}
+                            className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleApplyToSession('title', headline)}
+                            className="px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                          >
+                            Use as Title
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(headline)}
+                            className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )) :
+                      <div className="flex items-center space-x-2">
                         <input
                           type="text"
-                          value={headline}
-                          readOnly
-                          className="flex-1 text-sm bg-white border border-gray-200 rounded px-3 py-2"
+                          value={generatedContent.headlines}
+                          onChange={(e) => handleContentChange('headlines', e.target.value)}
+                          className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                         <button
                           type="button"
-                          onClick={() => handleApplyToSession('title', headline)}
+                          onClick={() => handleApplyToSession('title', generatedContent.headlines)}
                           className="px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
                         >
                           Use as Title
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(generatedContent.headlines)}
+                          className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                        >
+                          Copy
+                        </button>
                       </div>
-                    ))}
+                    }
                   </div>
                 </div>
               )}
@@ -562,9 +792,9 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                   <div className="flex items-start space-x-2">
                     <textarea
                       value={generatedContent.description}
-                      readOnly
+                      onChange={(e) => handleContentChange('description', e.target.value)}
                       rows={3}
-                      className="flex-1 text-sm bg-white border border-gray-200 rounded px-3 py-2"
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                     />
                     <button
                       type="button"
@@ -572,6 +802,13 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                       className="px-3 py-2 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 whitespace-nowrap"
                     >
                       Use Description
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedContent.description)}
+                      className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                    >
+                      Copy
                     </button>
                   </div>
                 </div>
@@ -582,23 +819,44 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Social Media Posts</label>
                   <div className="space-y-2">
-                    {generatedContent.socialMedia.map((post: string, index: number) => (
-                      <div key={index} className="flex items-start space-x-2">
+                    {Array.isArray(generatedContent.socialMedia) ?
+                      generatedContent.socialMedia.map((post: string, index: number) => (
+                        <div key={index} className="flex items-start space-x-2">
+                          <textarea
+                            value={post}
+                            onChange={(e) => {
+                              const newPosts = [...generatedContent.socialMedia];
+                              newPosts[index] = e.target.value;
+                              handleContentChange('socialMedia', newPosts);
+                            }}
+                            rows={2}
+                            className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(post)}
+                            className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )) :
+                      <div className="flex items-start space-x-2">
                         <textarea
-                          value={post}
-                          readOnly
+                          value={generatedContent.socialMedia}
+                          onChange={(e) => handleContentChange('socialMedia', e.target.value)}
                           rows={2}
-                          className="flex-1 text-sm bg-white border border-gray-200 rounded px-3 py-2"
+                          className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
                         />
                         <button
                           type="button"
-                          onClick={() => navigator.clipboard.writeText(post)}
+                          onClick={() => navigator.clipboard.writeText(generatedContent.socialMedia)}
                           className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
                         >
                           Copy
                         </button>
                       </div>
-                    ))}
+                    }
                   </div>
                 </div>
               )}
@@ -608,20 +866,46 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Key Benefits</label>
                   <div className="space-y-1">
-                    {generatedContent.keyBenefits.map((benefit: string, index: number) => (
-                      <div key={index} className="flex items-start space-x-2">
-                        <div className="flex-1 text-sm bg-white border border-gray-200 rounded px-3 py-2">
-                          ✓ {benefit}
+                    {Array.isArray(generatedContent.keyBenefits) ?
+                      generatedContent.keyBenefits.map((benefit: string, index: number) => (
+                        <div key={index} className="flex items-start space-x-2">
+                          <input
+                            type="text"
+                            value={benefit}
+                            onChange={(e) => {
+                              const newBenefits = [...generatedContent.keyBenefits];
+                              newBenefits[index] = e.target.value;
+                              handleContentChange('keyBenefits', newBenefits);
+                            }}
+                            className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            placeholder={`Key benefit ${index + 1}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(benefit)}
+                            className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                          >
+                            Copy
+                          </button>
                         </div>
+                      )) :
+                      <div className="flex items-start space-x-2">
+                        <textarea
+                          value={generatedContent.keyBenefits}
+                          onChange={(e) => handleContentChange('keyBenefits', e.target.value)}
+                          rows={3}
+                          className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                          placeholder="Key benefits"
+                        />
                         <button
                           type="button"
-                          onClick={() => navigator.clipboard.writeText(benefit)}
+                          onClick={() => navigator.clipboard.writeText(generatedContent.keyBenefits)}
                           className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
                         >
                           Copy
                         </button>
                       </div>
-                    ))}
+                    }
                   </div>
                 </div>
               )}
@@ -633,9 +917,9 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                   <div className="flex items-start space-x-2">
                     <textarea
                       value={generatedContent.emailCopy}
-                      readOnly
+                      onChange={(e) => handleContentChange('emailCopy', e.target.value)}
                       rows={6}
-                      className="flex-1 text-xs bg-white border border-gray-200 rounded px-3 py-2 font-mono"
+                      className="flex-1 text-xs bg-white border border-gray-300 rounded px-3 py-2 font-mono focus:border-blue-500 focus:ring-blue-500"
                     />
                     <button
                       type="button"
@@ -656,12 +940,248 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
                     <input
                       type="text"
                       value={generatedContent.callToAction}
-                      readOnly
-                      className="flex-1 text-sm bg-white border border-gray-200 rounded px-3 py-2 font-medium"
+                      onChange={(e) => handleContentChange('callToAction', e.target.value)}
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 font-medium focus:border-blue-500 focus:ring-blue-500"
                     />
                     <button
                       type="button"
                       onClick={() => navigator.clipboard.writeText(generatedContent.callToAction)}
+                      className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Subheadlines */}
+              {generatedContent.subheadlines && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Subheadlines</label>
+                  <div className="space-y-2">
+                    {Array.isArray(generatedContent.subheadlines) ?
+                      generatedContent.subheadlines.map((subheadline: string, index: number) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            value={subheadline}
+                            onChange={(e) => {
+                              const newSubheadlines = [...generatedContent.subheadlines];
+                              newSubheadlines[index] = e.target.value;
+                              handleContentChange('subheadlines', newSubheadlines);
+                            }}
+                            className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            placeholder={`Subheadline ${index + 1}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(subheadline)}
+                            className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )) :
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          value={generatedContent.subheadlines}
+                          onChange={(e) => handleContentChange('subheadlines', e.target.value)}
+                          className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                          placeholder="Subheadline"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(generatedContent.subheadlines)}
+                          className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* Who Is This For */}
+              {generatedContent.whoIsThisFor && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Who Is This For</label>
+                  <div className="flex items-start space-x-2">
+                    <textarea
+                      value={generatedContent.whoIsThisFor}
+                      onChange={(e) => handleContentChange('whoIsThisFor', e.target.value)}
+                      rows={3}
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Target audience description"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedContent.whoIsThisFor)}
+                      className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Why Attend */}
+              {generatedContent.whyAttend && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Why Attend</label>
+                  <div className="flex items-start space-x-2">
+                    <textarea
+                      value={generatedContent.whyAttend}
+                      onChange={(e) => handleContentChange('whyAttend', e.target.value)}
+                      rows={3}
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Compelling reasons to attend"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedContent.whyAttend)}
+                      className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Topics and Benefits */}
+              {generatedContent.topicsAndBenefits && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Topics and Benefits</label>
+                  <div className="space-y-2">
+                    {Array.isArray(generatedContent.topicsAndBenefits) ?
+                      generatedContent.topicsAndBenefits.map((item: string, index: number) => (
+                        <div key={index} className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            value={item}
+                            onChange={(e) => {
+                              const newItems = [...generatedContent.topicsAndBenefits];
+                              newItems[index] = e.target.value;
+                              handleContentChange('topicsAndBenefits', newItems);
+                            }}
+                            className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                            placeholder={`Topic and benefit ${index + 1}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => navigator.clipboard.writeText(item)}
+                            className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )) :
+                      <div className="flex items-start space-x-2">
+                        <textarea
+                          value={generatedContent.topicsAndBenefits}
+                          onChange={(e) => handleContentChange('topicsAndBenefits', e.target.value)}
+                          rows={4}
+                          className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                          placeholder="Topics and benefits"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(generatedContent.topicsAndBenefits)}
+                          className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </div>
+              )}
+
+              {/* Emotional Call to Action */}
+              {generatedContent.emotionalCallToAction && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Emotional Call to Action</label>
+                  <div className="flex items-start space-x-2">
+                    <textarea
+                      value={generatedContent.emotionalCallToAction}
+                      onChange={(e) => handleContentChange('emotionalCallToAction', e.target.value)}
+                      rows={2}
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Emotionally compelling call-to-action"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedContent.emotionalCallToAction)}
+                      className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Hero Headline */}
+              {generatedContent.heroHeadline && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hero Headline</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={generatedContent.heroHeadline}
+                      onChange={(e) => handleContentChange('heroHeadline', e.target.value)}
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Primary headline for hero section"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedContent.heroHeadline)}
+                      className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Hero Subheadline */}
+              {generatedContent.heroSubheadline && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Hero Subheadline</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={generatedContent.heroSubheadline}
+                      onChange={(e) => handleContentChange('heroSubheadline', e.target.value)}
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Supporting subheadline for hero section"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedContent.heroSubheadline)}
+                      className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Registration Form CTA */}
+              {generatedContent.registrationFormCTA && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Registration Form Button Text</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={generatedContent.registrationFormCTA}
+                      onChange={(e) => handleContentChange('registrationFormCTA', e.target.value)}
+                      className="flex-1 text-sm bg-white border border-gray-300 rounded px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Registration button text (e.g., 'Save My Spot')"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(generatedContent.registrationFormCTA)}
                       className="px-3 py-2 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 whitespace-nowrap"
                     >
                       Copy

@@ -36,6 +36,11 @@ export class AIController {
     return this.aiService.getAvailableTemplates();
   }
 
+  @Post('clear-cache')
+  async clearTemplatesCache(@Request() _req) {
+    return this.aiService.clearTemplatesCache();
+  }
+
   @Post('generate-incentive-content')
   async generateIncentiveContent(
     @Body() request: AIIncentiveContentRequest,

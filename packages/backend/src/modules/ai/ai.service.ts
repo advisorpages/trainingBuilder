@@ -203,6 +203,18 @@ export class AIService {
     return null;
   }
 
+  /**
+   * Clear the templates cache to force reload from file system
+   */
+  async clearTemplatesCache(): Promise<{ message: string; clearedCount: number }> {
+    const clearedCount = this.templatesCache.size;
+    this.templatesCache.clear();
+    return {
+      message: 'Templates cache cleared successfully',
+      clearedCount
+    };
+  }
+
   async generatePrompt(request: AIPromptRequest): Promise<AIPromptResponse> {
     const template = await this.getTemplate(request.templateId);
     if (!template) {
