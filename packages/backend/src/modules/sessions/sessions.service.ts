@@ -15,6 +15,19 @@ export class SessionsService {
     private registrationRepository: Repository<Registration>,
   ) {}
 
+  // Helper method to extract user information from JWT payload
+  private extractUserInfo(userContext: any): { id: string; roleName: string } {
+    // Handle both JWT payload format and User entity format
+    const userId = userContext.userId || userContext.user?.id || userContext.id;
+    const roleName = userContext.roleName || userContext.user?.role?.name || userContext.role?.name;
+
+    if (!userId) {
+      throw new BadRequestException('Unable to determine user ID from context');
+    }
+
+    return { id: userId, roleName: roleName || 'Unknown' };
+  }
+
   getStatus(): object {
     return {
       module: 'Sessions',
@@ -28,7 +41,7 @@ export class SessionsService {
     };
   }
 
-  async create(createSessionDto: CreateSessionDto, author: User): Promise<Session> {
+  async create(createSessionDto: CreateSessionDto, author: any): Promise<Session> {
     // Validate start and end times
     if (createSessionDto.endTime <= createSessionDto.startTime) {
       throw new BadRequestException('End time must be after start time');
@@ -39,9 +52,12 @@ export class SessionsService {
       throw new BadRequestException('Maximum registrations must be at least 1');
     }
 
+    // Extract user info using helper method
+    const { id: authorId } = this.extractUserInfo(author);
+
     const session = this.sessionRepository.create({
       ...createSessionDto,
-      authorId: author.id,
+      authorId: authorId,
       status: SessionStatus.DRAFT,
       isActive: true,
     });
@@ -78,11 +94,14 @@ export class SessionsService {
     return session;
   }
 
-  async update(id: string, updateSessionDto: UpdateSessionDto, user: User): Promise<Session> {
+  async update(id: string, updateSessionDto: UpdateSessionDto, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -103,11 +122,14 @@ export class SessionsService {
     return this.sessionRepository.save(session);
   }
 
-  async remove(id: string, user: User): Promise<void> {
+  async remove(id: string, user: any): Promise<void> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to delete this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only delete sessions you created');
     }
 
@@ -117,11 +139,14 @@ export class SessionsService {
   }
 
   // Draft-specific operations for Story 2.2
-  async saveDraft(id: string, updateSessionDto: UpdateSessionDto, user: User): Promise<Session> {
+  async saveDraft(id: string, updateSessionDto: UpdateSessionDto, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -149,12 +174,15 @@ export class SessionsService {
     });
   }
 
-  async autoSaveDraft(id: string, partialData: Partial<UpdateSessionDto>, user: User): Promise<{ success: boolean; lastSaved: Date }> {
+  async autoSaveDraft(id: string, partialData: Partial<UpdateSessionDto>, user: any): Promise<{ success: boolean; lastSaved: Date }> {
     try {
       const session = await this.findOne(id);
 
+      // Extract user info using helper method
+      const { id: userId, roleName } = this.extractUserInfo(user);
+
       // Check if user is authorized
-      if (session.authorId !== user.id && user.role.name !== 'Broker') {
+      if (session.authorId !== userId && roleName !== 'Broker') {
         throw new ForbiddenException('You can only update sessions you created');
       }
 
@@ -185,21 +213,25 @@ export class SessionsService {
     }
   }
 
-  async isDraftSaveable(id: string, user: User): Promise<boolean> {
+  async isDraftSaveable(id: string, user: any): Promise<boolean> {
     try {
       const session = await this.findOne(id);
-      return session.authorId === user.id || user.role.name === 'Broker';
+      const { id: userId, roleName } = this.extractUserInfo(user);
+      return session.authorId === userId || roleName === 'Broker';
     } catch {
       return false;
     }
   }
 
   // AI Prompt-specific operations for Story 2.3
-  async savePrompt(id: string, savePromptDto: SavePromptDto, user: User): Promise<Session> {
+  async savePrompt(id: string, savePromptDto: SavePromptDto, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -212,11 +244,14 @@ export class SessionsService {
     return this.sessionRepository.save(session);
   }
 
-  async getPrompt(id: string, user: User): Promise<{ prompt: string | null; hasPrompt: boolean }> {
+  async getPrompt(id: string, user: any): Promise<{ prompt: string | null; hasPrompt: boolean }> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to view this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only view sessions you created');
     }
 
@@ -226,11 +261,14 @@ export class SessionsService {
     };
   }
 
-  async clearPrompt(id: string, user: User): Promise<Session> {
+  async clearPrompt(id: string, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -254,11 +292,14 @@ export class SessionsService {
   }
 
   // AI Generated Content methods for Story 2.4
-  async saveGeneratedContent(id: string, content: string, user: User): Promise<Session> {
+  async saveGeneratedContent(id: string, content: string, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -291,11 +332,14 @@ export class SessionsService {
     return this.sessionRepository.save(session);
   }
 
-  async getGeneratedContent(id: string, user: User): Promise<{ content: string | null; hasContent: boolean }> {
+  async getGeneratedContent(id: string, user: any): Promise<{ content: string | null; hasContent: boolean }> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to view this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only view sessions you created');
     }
 
@@ -305,11 +349,14 @@ export class SessionsService {
     };
   }
 
-  async clearGeneratedContent(id: string, user: User): Promise<Session> {
+  async clearGeneratedContent(id: string, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -330,11 +377,14 @@ export class SessionsService {
   }
 
   // Content versioning methods for Story 2.5
-  async getContentVersions(id: string, user: User): Promise<{ versions: any[]; hasVersions: boolean }> {
+  async getContentVersions(id: string, user: any): Promise<{ versions: any[]; hasVersions: boolean }> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to view this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only view sessions you created');
     }
 
@@ -360,11 +410,14 @@ export class SessionsService {
     }
   }
 
-  async restoreContentVersion(id: string, versionIndex: number, user: User): Promise<Session> {
+  async restoreContentVersion(id: string, versionIndex: number, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -406,11 +459,14 @@ export class SessionsService {
   }
 
   // AI Content Integration methods for Story 2.6
-  async integrateAIContentToDraft(id: string, integrateDto: IntegrateAIContentDto, user: User): Promise<Session> {
+  async integrateAIContentToDraft(id: string, integrateDto: IntegrateAIContentDto, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 
@@ -473,7 +529,7 @@ export class SessionsService {
     }
   }
 
-  async previewSessionWithAIContent(id: string, user: User): Promise<{
+  async previewSessionWithAIContent(id: string, user: any): Promise<{
     session: Session;
     aiContent: any;
     previewData: {
@@ -489,8 +545,11 @@ export class SessionsService {
   }> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to view this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only view sessions you created');
     }
 
@@ -536,11 +595,14 @@ export class SessionsService {
     };
   }
 
-  async finalizeSessionDraft(id: string, user: User): Promise<Session> {
+  async finalizeSessionDraft(id: string, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
+    // Extract user info using helper method
+    const { id: userId, roleName } = this.extractUserInfo(user);
+
     // Check if user is authorized to update this session
-    if (session.authorId !== user.id && user.role.name !== 'Broker') {
+    if (session.authorId !== userId && roleName !== 'Broker') {
       throw new ForbiddenException('You can only update sessions you created');
     }
 

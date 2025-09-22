@@ -24,11 +24,48 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   onCancel,
   isSubmitting
 }) => {
+  // Toronto timezone helper functions
+  const getTorontoTime = (date?: Date): Date => {
+    const targetDate = date || new Date();
+    // Toronto is in America/Toronto timezone (EST/EDT)
+    return new Date(targetDate.toLocaleString("en-US", {timeZone: "America/Toronto"}));
+  };
+
+  const formatDateForInput = (date: Date): string => {
+    // Format for datetime-local input in local timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  const getDefaultStartTime = (): string => {
+    if (session?.startTime) {
+      return new Date(session.startTime).toISOString().slice(0, 16);
+    }
+    // Default to today at 7:00 PM Toronto time
+    const today = getTorontoTime();
+    today.setHours(19, 0, 0, 0); // 7:00 PM
+    return formatDateForInput(today);
+  };
+
+  const getDefaultEndTime = (): string => {
+    if (session?.endTime) {
+      return new Date(session.endTime).toISOString().slice(0, 16);
+    }
+    // Default to today at 8:30 PM Toronto time
+    const today = getTorontoTime();
+    today.setHours(20, 30, 0, 0); // 8:30 PM
+    return formatDateForInput(today);
+  };
+
   const [formData, setFormData] = useState({
     title: session?.title || '',
     description: session?.description || '',
-    startTime: session?.startTime ? new Date(session.startTime).toISOString().slice(0, 16) : '',
-    endTime: session?.endTime ? new Date(session.endTime).toISOString().slice(0, 16) : '',
+    startTime: getDefaultStartTime(),
+    endTime: getDefaultEndTime(),
     locationId: session?.locationId || '',
     trainerId: session?.trainerId || '',
     audienceId: session?.audienceId || '',
@@ -221,6 +258,68 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     };
   }, []);
 
+  // Date validation helper functions
+  const isValidDate = (date: Date): boolean => {
+    return date instanceof Date && !isNaN(date.getTime());
+  };
+
+  const parseDateTime = (dateTimeString: string): Date | null => {
+    if (!dateTimeString || dateTimeString.trim() === '') {
+      return null;
+    }
+
+    try {
+      // For datetime-local inputs, ensure we have the right format
+      // Expected format: YYYY-MM-DDTHH:mm
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateTimeString)) {
+        console.warn('Invalid datetime-local format:', dateTimeString);
+        return null;
+      }
+
+      const date = new Date(dateTimeString);
+      return isValidDate(date) ? date : null;
+    } catch (error) {
+      console.error('Error parsing datetime:', error, dateTimeString);
+      return null;
+    }
+  };
+
+  const validateDateTimeRange = (startTimeStr: string, endTimeStr: string): string | null => {
+    // If either is empty, we handle that in the main validation
+    if (!startTimeStr || !endTimeStr) {
+      return null;
+    }
+
+    const startDate = parseDateTime(startTimeStr);
+    const endDate = parseDateTime(endTimeStr);
+
+    // Check for invalid date formats
+    if (startTimeStr && !startDate) {
+      return 'Start time has an invalid format';
+    }
+
+    if (endTimeStr && !endDate) {
+      return 'End time has an invalid format';
+    }
+
+    // Both dates are valid, check the logical relationship
+    if (startDate && endDate) {
+      if (startDate >= endDate) {
+        return 'End time must be after start time';
+      }
+
+      // Optional: Check if dates are reasonable (not too far in the past)
+      const now = new Date();
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      if (startDate < oneMonthAgo) {
+        return 'Start time seems too far in the past';
+      }
+    }
+
+    return null;
+  };
+
   const validateForm = (isDraft = false) => {
     const newErrors: Record<string, string> = {};
 
@@ -230,15 +329,29 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
     if (!formData.startTime) {
       newErrors.startTime = 'Start time is required';
+    } else {
+      // Validate start time format
+      const startDate = parseDateTime(formData.startTime);
+      if (!startDate) {
+        newErrors.startTime = 'Start time has an invalid format';
+      }
     }
 
     // Only require endTime for final submissions (when not saving as draft)
     if (!isDraft && !formData.endTime) {
       newErrors.endTime = 'End time is required';
+    } else if (formData.endTime) {
+      // Validate end time format
+      const endDate = parseDateTime(formData.endTime);
+      if (!endDate) {
+        newErrors.endTime = 'End time has an invalid format';
+      }
     }
 
-    if (formData.startTime && formData.endTime && formData.startTime >= formData.endTime) {
-      newErrors.endTime = 'End time must be after start time';
+    // Validate date range relationship
+    const dateRangeError = validateDateTimeRange(formData.startTime, formData.endTime);
+    if (dateRangeError) {
+      newErrors.endTime = dateRangeError;
     }
 
     if (formData.maxRegistrations < 1) {
@@ -509,6 +622,9 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                 {errors.startTime && (
                   <p className="mt-1 text-sm text-red-600">{errors.startTime}</p>
                 )}
+                {!errors.startTime && (
+                  <p className="mt-1 text-xs text-gray-500">Select the session start date and time</p>
+                )}
               </div>
 
               {/* End Time */}
@@ -527,6 +643,11 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                 />
                 {errors.endTime && (
                   <p className="mt-1 text-sm text-red-600">{errors.endTime}</p>
+                )}
+                {!errors.endTime && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Select the session end date and time (must be after start time)
+                  </p>
                 )}
               </div>
 
@@ -685,23 +806,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
             </div>
           )}
 
-              <div style={{display: 'none'}}>
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-red-800">ERROR: DUPLICATE SECTION</h3>
-                      <p className="mt-1 text-sm text-red-700">
-                        This section should not be visible. Contact support if you see this message.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
           {/* AI Content Enhancement Section */}
           <div>
