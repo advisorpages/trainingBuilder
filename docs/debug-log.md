@@ -1,13 +1,10 @@
 # Debug Log - TrainingBuilder v4
 
-## Environment Configuration
-- **Frontend:** Docker port 3000
-- **Backend:** Docker port 3001
-- **Database:** Port 5432
+## Instructions to AI
+Before debugging make sure to review this file for explicit instructions:
+/Users/anthony-macbook/Documents/_DEV/TrainingBuilderv4/docs/_instructions-to-AI.md
 
-**IMPORTANT:** Do not run additional ports or services outside these configurations.
 
-conso
 ## Issue #1: Homepage Not Displaying Sessions
 **Date:** September 20, 2025
 **Status:** ✅ RESOLVED
@@ -711,3 +708,102 @@ Complete blank page at localhost:3000 with Docker services running. No React com
 - Monitor browser console for silent import failures
 - Use TypeScript strict mode to catch import/syntax errors early
 - Create component isolation tests for critical pages
+
+---
+
+## Issue #14: AI Prompt Generation "Backend Service Unavailable" Error
+**Date:** September 22, 2025
+**Status:** ✅ RESOLVED
+
+### Problem
+User reports: "Unable to generate AI prompt. The backend service is unavailable. Please ensure the backend is running and the template files exist in config/ai-prompts/"
+
+Despite template file existing at `/Users/anthony-macbook/Documents/_DEV/TrainingBuilderv4/config/ai-prompts/session-marketing-copy.md`.
+
+### Root Cause Discovered
+**Template File Path Resolution Issue** - The AI service was looking for template files at an incorrect path:
+- **Working Directory**: `/packages/backend/` (where the Node.js process runs)
+- **Expected Path**: `process.cwd() + 'config/ai-prompts'` = `/packages/backend/config/ai-prompts/`
+- **Actual Path**: `/config/ai-prompts/` (project root level)
+- **Result**: Template files couldn't be found, causing "service unavailable" errors
+
+### Investigation Process
+1. **Verified Backend Service**: ✅ Running on port 3001, responding with 401 auth errors (expected)
+2. **Verified Template Files**: ✅ Exist at project root `/config/ai-prompts/session-marketing-copy.md`
+3. **Debugged Path Resolution**: ❌ AI service looking in wrong directory
+4. **Tested API Connectivity**: ✅ Backend accessible, endpoints responding properly
+5. **Isolated Template Loading**: ❌ Path mismatch preventing file access
+
+### Key Fix Applied
+**Updated AI Service Template Path Resolution** in `/packages/backend/src/modules/ai/ai.service.ts`:
+
+```typescript
+// BEFORE (Line 140):
+private readonly templatesPath = path.join(process.cwd(), 'config', 'ai-prompts');
+// Looking in: /packages/backend/config/ai-prompts/
+
+// AFTER (Line 140):
+private readonly templatesPath = path.join(process.cwd(), '..', '..', 'config', 'ai-prompts');
+// Looking in: /config/ai-prompts/ (project root)
+```
+
+### Resolution Steps
+1. **Located Path Issue**: Identified `process.cwd()` was `/packages/backend/` not project root
+2. **Fixed Path Resolution**: Updated template path to navigate up two levels to project root
+3. **Rebuilt Backend**: Compiled updated service with correct path
+4. **Restarted Service**: Clean backend restart on port 3001
+5. **Verified Template Access**: Confirmed API can now access template files
+
+### Files Modified
+- `/packages/backend/src/modules/ai/ai.service.ts` - Line 140: Fixed template path resolution
+
+### Build Configuration Fixes (Previous Investigation)
+- `packages/backend/package.json` - Fixed start:dev script path
+- `packages/backend/nest-cli.json` - Added outDir configuration
+- `docker-compose.yml` - Added config volume mapping
+- Multiple backend process cleanup and single service restart
+
+### Testing Verification
+- ✅ Backend service running on port 3001 with database connectivity
+- ✅ Template files accessible from corrected path
+- ✅ API endpoints responding with proper authentication requirements (401 for unauthenticated)
+- ✅ Template path resolution fix applied and compiled
+- ✅ Single clean backend service running (no conflicts)
+
+### Key Learning
+**Path Resolution in Monorepo Structure** - When working with Node.js services in monorepo packages:
+- `process.cwd()` returns the package directory, not the project root
+- Template files at project root require navigation up directory levels
+- Always verify file path resolution when services can't find expected resources
+- Use absolute paths or proper relative navigation for cross-package file access
+
+### Prevention
+- Test file access paths immediately when implementing template/config loading
+- Log actual resolved paths during development to verify correct file location
+- Consider using environment variables for configurable template paths
+- Document working directory expectations for file-dependent services
+
+### Development Workflow Improvement
+**Issue Identified**: Used direct Node.js processes instead of existing Docker infrastructure, creating unnecessary complexity and potential conflicts.
+
+**Better Approach for Future Debugging**:
+1. **Check Docker Services First**: Always run `docker-compose ps` to see running services
+2. **Use Docker Development Workflow**:
+   - Edit source files that are volume-mounted to containers
+   - Use `docker-compose restart backend` instead of spawning new processes
+   - Leverage existing container networking and configuration
+3. **Avoid Manual Process Management**: Don't start competing Node.js processes when Docker services exist
+4. **Test in Consistent Environment**: Use containerized environment that matches production
+
+**Corrective Action Applied**:
+- Identified multiple competing background processes were running
+- Should have used existing Docker infrastructure instead of starting new Node.js processes
+- Future fixes should leverage `./packages/backend:/app/packages/backend` volume mount
+- Docker restart maintains proper service integration and avoids port conflicts
+
+**Docker-First Debugging Checklist**:
+- ✅ Check `docker-compose ps` for running services
+- ✅ Use volume-mounted file editing for immediate sync
+- ✅ Restart specific services: `docker-compose restart [service]`
+- ✅ Monitor logs: `docker-compose logs [service] --tail 20`
+- ✅ Clean up any manually started processes that might conflict

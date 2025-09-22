@@ -47,6 +47,7 @@ services:
     volumes:
       - ./packages/backend:/app/packages/backend
       - ./packages/shared:/app/packages/shared
+      - ./config:/app/config
       - /app/node_modules
     networks:
       - app-network

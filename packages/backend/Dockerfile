@@ -29,8 +29,11 @@ COPY ./packages/backend ./packages/backend
 # Switch to backend directory
 WORKDIR /app/packages/backend
 
+# Build the project and create symlink to fix path issue
+RUN npm run build && ln -sf /app/packages/backend/dist/backend/src/main.js /app/packages/backend/dist/main.js
+
 # Expose port
 EXPOSE 3001
 
 # Start development server
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start:dev"]

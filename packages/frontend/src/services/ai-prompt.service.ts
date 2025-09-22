@@ -45,34 +45,9 @@ export interface PromptGenerationRequest {
   customVariables?: Record<string, any>;
 }
 
-// Built-in prompt templates
-// Templates are now loaded from backend - this is kept for fallback only
-const FALLBACK_TEMPLATES: PromptTemplate[] = [
-  {
-    id: 'session-marketing-copy',
-    name: 'Complete Marketing Campaign',
-    description: 'Generate comprehensive promotional content for session marketing and landing pages',
-    category: 'marketing_copy',
-    template: 'Fallback template - please check backend connection',
-    variables: ['title', 'description', 'duration', 'audience', 'tone', 'category', 'topics', 'maxRegistrations']
-  },
-  {
-    id: 'trainer-preparation-guide',
-    name: 'Trainer Preparation Guide',
-    description: 'Generate a comprehensive preparation guide for trainers',
-    category: 'trainer_guide',
-    template: 'Fallback template - please check backend connection',
-    variables: ['title', 'description', 'duration', 'audience', 'tone', 'topics', 'maxRegistrations']
-  },
-  {
-    id: 'session-content-outline',
-    name: 'Session Content Outline',
-    description: 'Generate a detailed content outline and structure',
-    category: 'session_content',
-    template: 'Fallback template - please check backend connection',
-    variables: ['title', 'description', 'duration', 'audience', 'tone', 'topics', 'maxRegistrations']
-  }
-];
+// Templates are loaded from backend only
+// No fallback templates - if backend is unavailable, show proper error
+const FALLBACK_TEMPLATES: PromptTemplate[] = [];
 
 class AIPromptService {
   private api = api;
@@ -112,8 +87,10 @@ class AIPromptService {
       return response.data.prompt;
     } catch (error) {
       console.error('Error generating prompt:', error);
-      // Fallback to local generation
-      return this.generatePromptLocally(request);
+      throw new Error(
+        'Unable to generate AI prompt. The backend service is unavailable. ' +
+        'Please ensure the backend is running and the template files exist in config/ai-prompts/'
+      );
     }
   }
 
@@ -165,8 +142,10 @@ class AIPromptService {
       }));
     } catch (error) {
       console.error('Error fetching templates:', error);
-      // Fallback to local templates
-      return FALLBACK_TEMPLATES;
+      throw new Error(
+        'Unable to load AI templates. The backend service is unavailable. ' +
+        'Please ensure the backend is running on port 3001 and the template files exist.'
+      );
     }
   }
 

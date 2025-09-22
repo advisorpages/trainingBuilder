@@ -15,10 +15,7 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
   onToggle,
   onContentGenerated
 }) => {
-  const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate | null>(null);
-  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
-  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'select' | 'prompt' | 'mode-select' | 'content'>('select');
+  const [currentStep, setCurrentStep] = useState<'generate' | 'prompt' | 'mode-select' | 'content'>('generate');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [generatedPrompt, setGeneratedPrompt] = useState<string>('');
@@ -28,41 +25,13 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
   const [jsonResponse, setJsonResponse] = useState<string>('');
   const [parseError, setParseError] = useState<string>('');
 
-  // Load templates when component mounts or expands
-  useEffect(() => {
-    if (isExpanded && templates.length === 0) {
-      loadTemplates();
-    }
-  }, [isExpanded]);
+  // Hardcoded template for unified content generation
+  const UNIFIED_TEMPLATE_ID = 'session-marketing-copy';
 
-  // Auto-select marketing template when session data is sufficient
-  useEffect(() => {
-    if (templates.length > 0 && !selectedTemplate && sessionData.title && sessionData.startTime) {
-      const marketingTemplate = templates.find(t => t.id === 'session-marketing-copy');
-      if (marketingTemplate) {
-        setSelectedTemplate(marketingTemplate);
-      }
-    }
-  }, [templates, sessionData, selectedTemplate]);
-
-  const loadTemplates = async () => {
-    try {
-      setIsLoadingTemplates(true);
-      const loadedTemplates = await aiPromptService.getTemplates();
-      setTemplates(loadedTemplates);
-    } catch (error) {
-      console.error('Failed to load templates:', error);
-      // Fallback to local templates
-      setTemplates(aiPromptService.getLocalTemplates());
-    } finally {
-      setIsLoadingTemplates(false);
-    }
-  };
-
-  // Step 1: Generate AI Prompt
+  // Generate AI Prompt for unified content
   const handleGeneratePrompt = async () => {
-    if (!selectedTemplate || !sessionData.title) {
-      setError('Please ensure you have a session title and template selected');
+    if (!sessionData.title) {
+      setError('Please ensure you have a session title');
       return;
     }
 
@@ -70,9 +39,9 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
       setIsGeneratingPrompt(true);
       setError('');
 
-      // Generate prompt using the AI prompt service
+      // Generate prompt using the unified template
       const prompt = await aiPromptService.generatePrompt({
-        templateId: selectedTemplate.id,
+        templateId: UNIFIED_TEMPLATE_ID,
         sessionData: {
           title: sessionData.title,
           description: sessionData.description || '',
@@ -241,39 +210,21 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Template Selection */}
+        {/* Content Type - Fixed to Marketing Copy */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Content Type
           </label>
-          {isLoadingTemplates ? (
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="text-sm text-gray-600">Loading templates...</span>
-            </div>
-          ) : (
-            <select
-              value={selectedTemplate?.id || ''}
-              onChange={(e) => {
-                const template = templates.find(t => t.id === e.target.value);
-                setSelectedTemplate(template || null);
-              }}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            >
-              <option value="">Select content type...</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name} - {template.description}
-                </option>
-              ))}
-            </select>
-          )}
+          <div className="flex items-center space-x-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
+            <span className="text-sm font-medium text-blue-900">Complete Marketing Campaign</span>
+            <span className="text-xs text-blue-600">• Promotional content for session marketing and landing pages</span>
+          </div>
         </div>
 
         {/* Step Progress Indicator */}
         <div className="flex items-center space-x-2 mb-4">
           <div className={`flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-            currentStep === 'select' ? 'bg-blue-100 text-blue-700' :
+            currentStep === 'generate' ? 'bg-blue-100 text-blue-700' :
             ['mode-select', 'prompt', 'content'].includes(currentStep) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
           }`}>
             <span className="w-4 h-4 mr-1">1</span>
@@ -298,12 +249,12 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
         </div>
 
         {/* Step 1: Generate Prompt */}
-        {currentStep === 'select' && (
+        {currentStep === 'generate' && (
           <div className="flex items-center space-x-3">
             <button
               type="button"
               onClick={handleGeneratePrompt}
-              disabled={!selectedTemplate || isGeneratingPrompt || !sessionData.title}
+              disabled={isGeneratingPrompt || !sessionData.title}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGeneratingPrompt ? (
@@ -384,10 +335,10 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
 
               <button
                 type="button"
-                onClick={() => setCurrentStep('select')}
+                onClick={() => setCurrentStep('generate')}
                 className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
               >
-                ← Back to Template Selection
+                ← Back to Generate Prompt
               </button>
             </div>
           </div>
@@ -488,10 +439,10 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
 
             <button
               type="button"
-              onClick={() => setCurrentStep('select')}
+              onClick={() => setCurrentStep('generate')}
               className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800"
             >
-              ← Change Template
+              ← Start Over
             </button>
           </div>
         )}

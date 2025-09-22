@@ -137,119 +137,8 @@ export interface AIIncentiveContentResponse {
 @Injectable()
 export class AIService {
   private templatesCache: Map<string, LoadedTemplate> = new Map();
-  private readonly templatesPath = path.join(process.cwd(), 'config', 'ai-prompts');
+  private readonly templatesPath = path.join(process.cwd(), '..', '..', 'config', 'ai-prompts');
 
-  // Fallback templates for backward compatibility
-  private readonly templates = {
-    'session-marketing-copy': {
-      name: 'Session Marketing Copy',
-      description: 'Generate compelling marketing copy for session promotion',
-      systemPrompt: 'You are an expert marketing copywriter specializing in leadership training and professional development.',
-      template: `Create compelling marketing copy for the following training session:
-
-**Session Details:**
-- Title: {title}
-- Description: {description}
-- Duration: {duration}
-- Audience: {audience}
-- Topics: {topics}
-- Maximum Participants: {maxRegistrations}
-
-**Tone & Style:**
-- Target Tone: {tone}
-- Category: {category}
-
-**Requirements:**
-1. Create an engaging session title (if the current one needs improvement)
-2. Write a compelling 2-3 paragraph description that:
-   - Highlights key benefits and learning outcomes
-   - Appeals to the target audience
-   - Uses the specified tone
-   - Creates urgency and desire to attend
-3. Generate 3-5 key bullet points of what attendees will learn
-4. Create a clear call-to-action
-5. Suggest relevant hashtags for social media promotion
-
-**Output Format:**
-Please structure your response as:
-- **Enhanced Title:** [title]
-- **Description:** [2-3 paragraphs]
-- **Key Learning Outcomes:** [bullet points]
-- **Call to Action:** [single compelling sentence]
-- **Hashtags:** [3-5 relevant hashtags]
-
-Focus on benefits over features, use active voice, and make it irresistible to the target audience.`
-    },
-    'trainer-preparation-guide': {
-      name: 'Trainer Preparation Guide',
-      description: 'Generate a comprehensive preparation guide for trainers',
-      systemPrompt: 'You are an expert trainer development specialist.',
-      template: `Create a comprehensive preparation guide for a trainer delivering the following leadership training session:
-
-**Session Information:**
-- Title: {title}
-- Description: {description}
-- Duration: {duration}
-- Audience: {audience}
-- Topics: {topics}
-- Maximum Participants: {maxRegistrations}
-- Tone: {tone}
-
-**Create a trainer preparation guide that includes:**
-
-1. **Session Overview & Objectives**
-   - Clear learning objectives
-   - Key concepts to cover
-   - Expected outcomes
-
-2. **Pre-Session Preparation**
-   - Materials needed
-   - Room setup requirements
-   - Technology checks
-
-3. **Session Structure & Timing**
-   - Detailed agenda with time allocations
-   - Break points and transitions
-   - Interactive elements
-
-4. **Content Delivery Tips**
-   - Key points to emphasize
-   - Common questions and answers
-   - Engagement strategies for this audience
-
-5. **Assessment & Follow-up**
-   - How to measure learning success
-   - Post-session actions
-   - Resource recommendations
-
-Focus on practical, actionable guidance that ensures session success.`
-    },
-    'social-media-campaign': {
-      name: 'Social Media Campaign',
-      description: 'Generate social media content for session promotion',
-      systemPrompt: 'You are a social media marketing expert specializing in professional development content.',
-      template: `Create a comprehensive social media campaign for promoting the following training session:
-
-**Session Details:**
-- Title: {title}
-- Description: {description}
-- Duration: {duration}
-- Audience: {audience}
-- Topics: {topics}
-- Tone: {tone}
-
-**Create the following content:**
-
-1. **LinkedIn Post** (Professional tone, 150-200 words)
-2. **Twitter/X Thread** (3-5 tweets with relevant hashtags)
-3. **Instagram Caption** (Engaging and visual-friendly)
-4. **Facebook Event Description** (Detailed and informative)
-5. **Email Subject Lines** (5 compelling options)
-6. **Hashtag Strategy** (10-15 relevant hashtags)
-
-Each piece should be tailored to the platform's audience and format, emphasizing the value proposition and learning outcomes.`
-    }
-  };
 
   /**
    * Load template from external file with YAML frontmatter
@@ -287,7 +176,7 @@ Each piece should be tailored to the platform's audience and format, emphasizing
   }
 
   /**
-   * Get template with caching - tries external file first, falls back to hardcoded
+   * Get template with caching - loads from external file only
    */
   private async getTemplate(templateId: string): Promise<{ name: string; description: string; template: string } | null> {
     // Check cache first
@@ -311,23 +200,16 @@ Each piece should be tailored to the platform's audience and format, emphasizing
       };
     }
 
-    // Fall back to hardcoded template
-    const fallbackTemplate = this.templates[templateId as keyof typeof this.templates];
-    if (fallbackTemplate) {
-      return {
-        name: fallbackTemplate.name,
-        description: fallbackTemplate.description,
-        template: fallbackTemplate.template
-      };
-    }
-
     return null;
   }
 
   async generatePrompt(request: AIPromptRequest): Promise<AIPromptResponse> {
     const template = await this.getTemplate(request.templateId);
     if (!template) {
-      throw new BadRequestException(`Template not found: ${request.templateId}`);
+      throw new BadRequestException(
+        `Template not found: ${request.templateId}. ` +
+        `Please ensure the template file exists at: ${this.templatesPath}/${request.templateId}.md`
+      );
     }
 
     try {
@@ -375,7 +257,6 @@ Each piece should be tailored to the platform's audience and format, emphasizing
     const templateList = [];
 
     try {
-      // Try to read from external files first
       if (fs.existsSync(this.templatesPath)) {
         const files = fs.readdirSync(this.templatesPath).filter(f => f.endsWith('.md'));
         for (const file of files) {
@@ -389,26 +270,14 @@ Each piece should be tailored to the platform's audience and format, emphasizing
             });
           }
         }
-      }
-
-      // Add any hardcoded templates that aren't in external files
-      for (const [id, template] of Object.entries(this.templates)) {
-        if (!templateList.find(t => t.id === id)) {
-          templateList.push({
-            id,
-            name: template.name,
-            description: template.description
-          });
-        }
+      } else {
+        console.warn(`Templates directory not found: ${this.templatesPath}`);
       }
     } catch (error) {
       console.error('Error loading templates list:', error);
-      // Fall back to hardcoded templates
-      return Object.entries(this.templates).map(([id, template]) => ({
-        id,
-        name: template.name,
-        description: template.description
-      }));
+      throw new InternalServerErrorException(
+        `Failed to load AI templates from ${this.templatesPath}. Please ensure the templates directory exists and contains valid .md files.`
+      );
     }
 
     return templateList;
