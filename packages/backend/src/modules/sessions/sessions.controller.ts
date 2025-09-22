@@ -141,14 +141,14 @@ export class SessionsController {
   @Post(':id/content')
   saveGeneratedContent(
     @Param('id') id: string,
-    @Body() contentData: { content: string },
+    @Body() contentData: { content: object },
     @Request() req
   ): Promise<Session> {
     return this.sessionsService.saveGeneratedContent(id, contentData.content, req.user);
   }
 
   @Get(':id/content')
-  getGeneratedContent(@Param('id') id: string, @Request() req): Promise<{ content: string | null; hasContent: boolean }> {
+  getGeneratedContent(@Param('id') id: string, @Request() req): Promise<{ content: object | null; hasContent: boolean }> {
     return this.sessionsService.getGeneratedContent(id, req.user);
   }
 

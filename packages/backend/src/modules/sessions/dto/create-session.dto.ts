@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength, IsDateString, IsOptional, IsInt, Min, IsArray } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength, IsDateString, IsOptional, IsInt, Min, IsArray, IsObject } from 'class-validator';
 
 export class CreateSessionDto {
   @IsNotEmpty()
@@ -47,4 +47,32 @@ export class CreateSessionDto {
   @IsInt()
   @Min(1)
   maxRegistrations = 50;
+
+  @IsOptional()
+  @IsObject()
+  aiGeneratedContent?: object;
+
+  @IsOptional()
+  @IsString()
+  promotionalHeadline?: string;
+
+  @IsOptional()
+  @IsString()
+  promotionalSummary?: string;
+
+  @IsOptional()
+  @IsString()
+  keyBenefits?: string;
+
+  @IsOptional()
+  @IsString()
+  callToAction?: string;
+
+  @IsOptional()
+  @IsString()
+  socialMediaContent?: string;
+
+  @IsOptional()
+  @IsString()
+  emailMarketingContent?: string;
 }

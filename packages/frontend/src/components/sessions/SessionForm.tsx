@@ -73,9 +73,17 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     categoryId: session?.categoryId || '',
     topicIds: session?.topics?.map(t => t.id.toString()) || [] as string[],
     maxRegistrations: session?.maxRegistrations || 50,
+    aiGeneratedContent: session?.aiGeneratedContent || null,
+    promotionalHeadline: session?.promotionalHeadline || null,
+    promotionalSummary: session?.promotionalSummary || null,
+    keyBenefits: session?.keyBenefits || null,
+    callToAction: session?.callToAction || null,
+    socialMediaContent: session?.socialMediaContent || null,
+    emailMarketingContent: session?.emailMarketingContent || null,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [jsonError, setJsonError] = useState<string>('');
 
   // Loading states for dropdown data
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -202,6 +210,13 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         categoryId: formData.categoryId ? Number(formData.categoryId) : undefined,
         topicIds: formData.topicIds.length > 0 ? formData.topicIds.map((id: string) => Number(id)) : undefined,
         maxRegistrations: formData.maxRegistrations,
+        ...(formData.aiGeneratedContent && { aiGeneratedContent: formData.aiGeneratedContent }),
+        ...(formData.promotionalHeadline && { promotionalHeadline: formData.promotionalHeadline }),
+        ...(formData.promotionalSummary && { promotionalSummary: formData.promotionalSummary }),
+        ...(formData.keyBenefits && { keyBenefits: formData.keyBenefits }),
+        ...(formData.callToAction && { callToAction: formData.callToAction }),
+        ...(formData.socialMediaContent && { socialMediaContent: formData.socialMediaContent }),
+        ...(formData.emailMarketingContent && { emailMarketingContent: formData.emailMarketingContent }),
       };
 
       const result = await sessionService.autoSaveDraft(session.id, submissionData);
@@ -378,17 +393,24 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     }
 
     const submissionData = {
-      title: formData.title.trim(),
-      description: formData.description.trim() || undefined,
-      startTime: formData.startTime ? new Date(formData.startTime) : undefined,
-      endTime: formData.endTime ? new Date(formData.endTime) : undefined,
-      locationId: formData.locationId ? Number(formData.locationId) : undefined,
-      trainerId: formData.trainerId ? Number(formData.trainerId) : undefined,
-      audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
-      toneId: formData.toneId ? Number(formData.toneId) : undefined,
-      categoryId: formData.categoryId ? Number(formData.categoryId) : undefined,
-      topicIds: formData.topicIds.length > 0 ? formData.topicIds.map((id: string) => Number(id)) : undefined,
-      maxRegistrations: formData.maxRegistrations,
+        title: formData.title.trim(),
+        description: formData.description.trim() || undefined,
+        startTime: formData.startTime ? new Date(formData.startTime) : undefined,
+        endTime: formData.endTime ? new Date(formData.endTime) : undefined,
+        locationId: formData.locationId ? Number(formData.locationId) : undefined,
+        trainerId: formData.trainerId ? Number(formData.trainerId) : undefined,
+        audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
+        toneId: formData.toneId ? Number(formData.toneId) : undefined,
+        categoryId: formData.categoryId ? Number(formData.categoryId) : undefined,
+        topicIds: formData.topicIds.length > 0 ? formData.topicIds.map((id: string) => Number(id)) : undefined,
+        maxRegistrations: formData.maxRegistrations,
+        ...(formData.aiGeneratedContent && { aiGeneratedContent: formData.aiGeneratedContent }),
+        ...(formData.promotionalHeadline && { promotionalHeadline: formData.promotionalHeadline }),
+        ...(formData.promotionalSummary && { promotionalSummary: formData.promotionalSummary }),
+        ...(formData.keyBenefits && { keyBenefits: formData.keyBenefits }),
+        ...(formData.callToAction && { callToAction: formData.callToAction }),
+        ...(formData.socialMediaContent && { socialMediaContent: formData.socialMediaContent }),
+        ...(formData.emailMarketingContent && { emailMarketingContent: formData.emailMarketingContent }),
     };
 
     // Clear local draft on successful submission
@@ -419,17 +441,130 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   };
 
   const handleAIContentGenerated = (content: any) => {
-    // Apply AI-generated content to form fields
-    if (content.title) {
-      handleInputChange('title', content.title);
+    // Validate content structure before processing
+    const validationError = validateAIContentStructure(content);
+    if (validationError) {
+      setJsonError(validationError);
+      setFormData(prev => ({ ...prev, aiGeneratedContent: content }));
+      return;
     }
-    if (content.description) {
-      handleInputChange('description', content.description);
+
+    // Clear any previous JSON errors
+    setJsonError('');
+
+    const newFormData = {
+      ...formData,
+      aiGeneratedContent: content,
+      promotionalHeadline: content.headlines?.[0] || content.heroHeadline || '',
+      promotionalSummary: content.description || '',
+      keyBenefits: Array.isArray(content.keyBenefits)
+        ? JSON.stringify(content.keyBenefits, null, 2)
+        : (content.keyBenefits || ''),
+      callToAction: content.callToAction || content.registrationFormCTA || '',
+      socialMediaContent: content.socialMedia?.[0] || '',
+      emailMarketingContent: content.emailCopy || '',
+      // Also update title and description as before
+      title: content.title || content.heroHeadline || formData.title,
+      description: content.description || formData.description,
+    };
+    setFormData(newFormData);
+  };
+
+  const validateAIContentStructure = (content: any): string | null => {
+    if (typeof content !== 'object' || content === null) {
+      return 'AI content must be a valid JSON object';
+    }
+
+    // Check for common AI content fields to ensure it's structured correctly
+    const expectedFields = ['headlines', 'description', 'keyBenefits', 'callToAction', 'socialMedia', 'emailCopy'];
+    const hasAnyExpectedField = expectedFields.some(field => content.hasOwnProperty(field));
+
+    if (!hasAnyExpectedField) {
+      return 'AI content does not contain expected fields. Please ensure it includes at least one of: headlines, description, keyBenefits, callToAction, socialMedia, or emailCopy';
+    }
+
+    return null;
+  };
+
+  const handleRawJsonChange = (jsonString: string) => {
+    if (!jsonString.trim()) {
+      setJsonError('');
+      setFormData(prev => ({ ...prev, aiGeneratedContent: null }));
+      return;
+    }
+
+    try {
+      const newAiContent = JSON.parse(jsonString);
+
+      // Validate the structure
+      const validationError = validateAIContentStructure(newAiContent);
+      if (validationError) {
+        setJsonError(validationError);
+        // Still allow the update to let user see the parsed content
+        setFormData(prev => ({ ...prev, aiGeneratedContent: newAiContent }));
+        return;
+      }
+
+      setJsonError('');
+      handleAIContentGenerated(newAiContent);
+    } catch (e) {
+      const error = e as Error;
+      let errorMessage = 'Invalid JSON format';
+
+      // Provide more specific error messages for common JSON issues
+      if (error.message.includes('Unexpected token')) {
+        errorMessage += ': Check for missing quotes, commas, or brackets';
+      } else if (error.message.includes('Unexpected end')) {
+        errorMessage += ': JSON appears to be incomplete';
+      } else if (error.message.includes('position')) {
+        errorMessage += ': ' + error.message;
+      }
+
+      setJsonError(errorMessage);
+      // To allow user to fix the error, we update the form with the invalid string
+      setFormData(prev => ({ ...prev, aiGeneratedContent: jsonString as any }));
     }
   };
 
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const newFormData = { ...prev, [field]: value };
+
+      const promoFieldsMap: { [key: string]: string[] } = {
+        promotionalHeadline: ['headlines', '0'],
+        promotionalSummary: ['description'],
+        keyBenefits: ['keyBenefits'],
+        callToAction: ['callToAction'],
+        socialMediaContent: ['socialMedia', '0'],
+        emailMarketingContent: ['emailCopy'],
+      };
+
+      if (promoFieldsMap[field]) {
+        const aiContentCopy = { ...(newFormData.aiGeneratedContent as object) };
+        let current: any = aiContentCopy;
+        const path = promoFieldsMap[field];
+        
+        for (let i = 0; i < path.length - 1; i++) {
+          if (current[path[i]] === undefined) {
+            current[path[i]] = {};
+          }
+          current = current[path[i]];
+        }
+        
+        let finalValue = value;
+        if (field === 'keyBenefits') {
+          try {
+            finalValue = JSON.parse(value);
+          } catch (e) { /* Ignore parse error, keep as string */ }
+        }
+
+        current[path[path.length - 1]] = finalValue;
+        newFormData.aiGeneratedContent = aiContentCopy;
+      }
+
+      return newFormData;
+    });
+
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -700,6 +835,29 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                 </p>
               </div>
 
+              {/* Trainer */}
+              <div>
+                <label htmlFor="trainerId" className="block text-sm font-medium text-gray-700">
+                  Trainer
+                </label>
+                <select
+                  id="trainerId"
+                  value={formData.trainerId}
+                  onChange={(e) => handleInputChange('trainerId', e.target.value)}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="">Select a trainer...</option>
+                  {trainers.map((trainer) => (
+                    <option key={trainer.id} value={trainer.id}>
+                      {trainer.name} - {trainer.specialization}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-sm text-gray-500">
+                  {trainers.length === 0 ? 'Loading trainers...' : 'Choose an available trainer for this session'}
+                </p>
+              </div>
+
             </div>
           </div>
 
@@ -768,6 +926,117 @@ export const SessionForm: React.FC<SessionFormProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Promotional Content Section - Only on Edit */}
+          {session && (
+            <div>
+              <h3 className="text-md font-medium text-gray-900 mb-4">Promotional Content</h3>
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="promotionalHeadline" className="block text-sm font-medium text-gray-700">
+                    Promotional Headline
+                  </label>
+                  <input
+                    type="text"
+                    id="promotionalHeadline"
+                    value={formData.promotionalHeadline || ''}
+                    onChange={(e) => handleInputChange('promotionalHeadline', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="promotionalSummary" className="block text-sm font-medium text-gray-700">
+                    Promotional Summary
+                  </label>
+                  <textarea
+                    id="promotionalSummary"
+                    rows={3}
+                    value={formData.promotionalSummary || ''}
+                    onChange={(e) => handleInputChange('promotionalSummary', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="keyBenefits" className="block text-sm font-medium text-gray-700">
+                    Key Benefits (JSON Array)
+                  </label>
+                  <textarea
+                    id="keyBenefits"
+                    rows={3}
+                    value={formData.keyBenefits || ''}
+                    onChange={(e) => handleInputChange('keyBenefits', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="callToAction" className="block text-sm font-medium text-gray-700">
+                    Call to Action
+                  </label>
+                  <input
+                    type="text"
+                    id="callToAction"
+                    value={formData.callToAction || ''}
+                    onChange={(e) => handleInputChange('callToAction', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="socialMediaContent" className="block text-sm font-medium text-gray-700">
+                    Social Media Content
+                  </label>
+                  <textarea
+                    id="socialMediaContent"
+                    rows={3}
+                    value={formData.socialMediaContent || ''}
+                    onChange={(e) => handleInputChange('socialMediaContent', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="emailMarketingContent" className="block text-sm font-medium text-gray-700">
+                    Email Marketing Content
+                  </label>
+                  <textarea
+                    id="emailMarketingContent"
+                    rows={5}
+                    value={formData.emailMarketingContent || ''}
+                    onChange={(e) => handleInputChange('emailMarketingContent', e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="rawJsonContent" className="block text-sm font-medium text-gray-700">
+                    Raw AI-Generated Content (JSON)
+                  </label>
+                  <textarea
+                    id="rawJsonContent"
+                    rows={10}
+                    value={formData.aiGeneratedContent ? JSON.stringify(formData.aiGeneratedContent, null, 2) : ''}
+                    onChange={(e) => handleRawJsonChange(e.target.value)}
+                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono ${
+                      jsonError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
+                    }`}
+                  />
+                  {jsonError && (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h4 className="text-sm font-medium text-red-800">JSON Validation Error</h4>
+                          <p className="mt-1 text-sm text-red-700">{jsonError}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Enhanced Topics Section */}
           {topics.length > 0 ? (

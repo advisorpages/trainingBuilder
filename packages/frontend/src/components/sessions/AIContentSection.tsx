@@ -35,6 +35,23 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
   const [isClearingCache, setIsClearingCache] = useState(false);
   const [cacheMessage, setCacheMessage] = useState<string>('');
 
+  useEffect(() => {
+    if (sessionData?.aiGeneratedContent) {
+      try {
+        const content = typeof sessionData.aiGeneratedContent === 'string'
+          ? JSON.parse(sessionData.aiGeneratedContent)
+          : sessionData.aiGeneratedContent;
+        
+        if (content) {
+          setGeneratedContent(content);
+          setCurrentStep('content');
+        }
+      } catch (error) {
+        console.error("Failed to parse existing aiGeneratedContent", error);
+      }
+    }
+  }, [sessionData?.aiGeneratedContent]);
+
   // Hardcoded template for unified content generation
   const UNIFIED_TEMPLATE_ID = 'session-marketing-copy';
 
@@ -276,10 +293,14 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
   };
 
   const handleContentChange = (field: string, value: any) => {
-    setGeneratedContent(prev => ({
-      ...prev,
+    const newContent = {
+      ...generatedContent,
       [field]: value
-    }));
+    };
+    setGeneratedContent(newContent);
+    if (onContentGenerated) {
+      onContentGenerated(newContent);
+    }
   };
 
   const handleClearCache = async () => {

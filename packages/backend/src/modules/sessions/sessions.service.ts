@@ -190,7 +190,16 @@ export class SessionsService {
       const updateData: Partial<UpdateSessionDto> = {};
       Object.keys(partialData).forEach(key => {
         const value = partialData[key as keyof UpdateSessionDto];
+        // For most fields, only update if value is provided and not empty
         if (value !== undefined && value !== null && value !== '') {
+          (updateData as any)[key] = value;
+        }
+        // For AI content fields, preserve explicit values including null
+        const aiContentFields = [
+          'aiGeneratedContent', 'promotionalHeadline', 'promotionalSummary',
+          'keyBenefits', 'callToAction', 'socialMediaContent', 'emailMarketingContent'
+        ];
+        if (aiContentFields.includes(key) && partialData.hasOwnProperty(key)) {
           (updateData as any)[key] = value;
         }
       });
@@ -292,7 +301,7 @@ export class SessionsService {
   }
 
   // AI Generated Content methods for Story 2.4
-  async saveGeneratedContent(id: string, content: string, user: any): Promise<Session> {
+  async saveGeneratedContent(id: string, content: object, user: any): Promise<Session> {
     const session = await this.findOne(id);
 
     // Extract user info using helper method
@@ -305,8 +314,8 @@ export class SessionsService {
 
     // Handle content versioning for Story 2.5
     if (session.aiGeneratedContent) {
-      const currentContent = JSON.parse(session.aiGeneratedContent);
-      const newContent = JSON.parse(content);
+      const currentContent = session.aiGeneratedContent as any;
+      const newContent = content as any;
 
       // Store previous version if it exists
       if (!newContent.previousVersions) {
@@ -324,7 +333,7 @@ export class SessionsService {
         newContent.previousVersions = newContent.previousVersions.slice(0, 5);
       }
 
-      session.aiGeneratedContent = JSON.stringify(newContent);
+      session.aiGeneratedContent = newContent;
     } else {
       session.aiGeneratedContent = content;
     }
@@ -332,7 +341,7 @@ export class SessionsService {
     return this.sessionRepository.save(session);
   }
 
-  async getGeneratedContent(id: string, user: any): Promise<{ content: string | null; hasContent: boolean }> {
+  async getGeneratedContent(id: string, user: any): Promise<{ content: object | null; hasContent: boolean }> {
     const session = await this.findOne(id);
 
     // Extract user info using helper method
@@ -388,12 +397,8 @@ export class SessionsService {
       throw new ForbiddenException('You can only view sessions you created');
     }
 
-    if (!session.aiGeneratedContent) {
-      return { versions: [], hasVersions: false };
-    }
-
     try {
-      const content = JSON.parse(session.aiGeneratedContent);
+      const content = session.aiGeneratedContent as any;
       const versions = content.previousVersions || [];
 
       return {
@@ -426,7 +431,7 @@ export class SessionsService {
     }
 
     try {
-      const content = JSON.parse(session.aiGeneratedContent);
+      const content = session.aiGeneratedContent as any;
       const versions = content.previousVersions || [];
 
       if (versionIndex < 0 || versionIndex >= versions.length) {
@@ -450,7 +455,7 @@ export class SessionsService {
         generatedAt: new Date()
       };
 
-      session.aiGeneratedContent = JSON.stringify(restoredContent);
+      session.aiGeneratedContent = restoredContent;
       return this.sessionRepository.save(session);
     } catch (error) {
       console.error('Error restoring content version:', error);
@@ -476,7 +481,7 @@ export class SessionsService {
 
     try {
       // Parse the AI generated content
-      const aiContent = JSON.parse(session.aiGeneratedContent);
+      const aiContent = session.aiGeneratedContent as any;
       const updateData: Partial<Session> = {};
 
       // Map AI content to session fields based on user selections
@@ -567,7 +572,7 @@ export class SessionsService {
 
     if (session.aiGeneratedContent) {
       try {
-        aiContent = JSON.parse(session.aiGeneratedContent);
+        aiContent = session.aiGeneratedContent as any;
 
         // If no promotional content exists, suggest AI content as preview
         if (!session.promotionalHeadline && aiContent.contents) {

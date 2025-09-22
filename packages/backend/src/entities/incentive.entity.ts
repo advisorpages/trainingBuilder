@@ -50,9 +50,9 @@ export class Incentive {
   @IsUUID()
   authorId: string;
 
-  @Column({ name: 'ai_generated_content', type: 'text', nullable: true })
+  @Column({ name: 'ai_generated_content', type: 'jsonb', nullable: true })
   @IsOptional()
-  aiGeneratedContent?: string;
+  aiGeneratedContent?: object;
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;

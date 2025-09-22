@@ -92,9 +92,9 @@ export class Session {
   @IsOptional()
   aiPrompt?: string;
 
-  @Column({ name: 'ai_generated_content', type: 'text', nullable: true })
+  @Column({ name: 'ai_generated_content', type: 'jsonb', nullable: true })
   @IsOptional()
-  aiGeneratedContent?: string;
+  aiGeneratedContent?: object;
 
   // Promotional content fields for Story 2.6
   @Column({ name: 'promotional_headline', type: 'text', nullable: true })
