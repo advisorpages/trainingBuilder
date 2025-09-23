@@ -50,6 +50,10 @@ class ApiService {
     return this.axiosInstance.patch<T>(url, data);
   }
 
+  async put<T>(url: string, data?: any): Promise<AxiosResponse<T>> {
+    return this.axiosInstance.put<T>(url, data);
+  }
+
   async delete<T>(url: string): Promise<AxiosResponse<T>> {
     return this.axiosInstance.delete<T>(url);
   }

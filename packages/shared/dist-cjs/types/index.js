@@ -28,4 +28,3 @@ var IncentiveStatus;
     IncentiveStatus["EXPIRED"] = "expired";
     IncentiveStatus["CANCELLED"] = "cancelled";
 })(IncentiveStatus || (exports.IncentiveStatus = IncentiveStatus = {}));
-//# sourceMappingURL=index.js.map

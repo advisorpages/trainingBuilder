@@ -10,10 +10,11 @@ export enum SettingDataType {
 
 @Entity('system_settings')
 export class SystemSetting {
-  @PrimaryColumn({ length: 255 })
+  // Align length with SQL schema (VARCHAR(100)) to prevent sync conflicts
+  @PrimaryColumn({ length: 100 })
   @IsNotEmpty()
   @IsString()
-  @MaxLength(255)
+  @MaxLength(100)
   key: string;
 
   @Column({ type: 'text' })

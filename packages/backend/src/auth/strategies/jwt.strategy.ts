@@ -35,14 +35,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      // Return user object that will be attached to request
-      return {
-        userId: user.id,
-        email: user.email,
-        roleId: user.roleId,
-        roleName: user.role.name,
-        user: user, // Full user object for detailed operations
-      };
+      // Attach the full user entity to the request for downstream use
+      // Many services/controllers expect req.user.id and req.user.role.name
+      return user;
     } catch (error) {
       throw new UnauthorizedException('Invalid token');
     }

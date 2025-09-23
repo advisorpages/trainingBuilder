@@ -28,8 +28,9 @@ export class IncentivesController {
   }
 
   @Get('author/:authorId')
-  findByAuthor(@Param('authorId') authorId: string): Promise<Incentive[]> {
-    return this.incentivesService.findByAuthor(authorId);
+  findByAuthor(@Param('authorId') authorId: string, @Request() req): Promise<Incentive[]> {
+    const resolvedAuthorId = authorId === 'me' ? req.user.id : authorId;
+    return this.incentivesService.findByAuthor(resolvedAuthorId);
   }
 
   @Get(':id')

@@ -1,14 +1,6 @@
-import axios from 'axios';
 import { Incentive } from '@leadership-training/shared';
 import { API_ENDPOINTS } from '@leadership-training/shared';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+import { api } from './api.service';
 
 export interface CreateIncentiveRequest {
   title: string;
@@ -24,100 +16,71 @@ export interface CreateIncentiveRequest {
 export interface UpdateIncentiveRequest extends Partial<CreateIncentiveRequest> {}
 
 class IncentiveService {
-  private api = api;
-
-  constructor() {
-    // Add auth token to requests
-    this.api.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Handle auth errors
-    this.api.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('accessToken');
-          window.location.href = '/login';
-        }
-        return Promise.reject(error);
-      }
-    );
-  }
 
   async createIncentive(data: CreateIncentiveRequest): Promise<Incentive> {
-    const response = await this.api.post(API_ENDPOINTS.INCENTIVES, data);
+    const response = await api.post(API_ENDPOINTS.INCENTIVES, data);
     return response.data;
   }
 
   async updateIncentive(id: string, data: UpdateIncentiveRequest): Promise<Incentive> {
-    const response = await this.api.patch(`${API_ENDPOINTS.INCENTIVES}/${id}`, data);
+    const response = await api.patch(`${API_ENDPOINTS.INCENTIVES}/${id}`, data);
     return response.data;
   }
 
   async getIncentive(id: string): Promise<Incentive> {
-    const response = await this.api.get(`${API_ENDPOINTS.INCENTIVES}/${id}`);
+    const response = await api.get(`${API_ENDPOINTS.INCENTIVES}/${id}`);
     return response.data;
   }
 
   async getIncentives(): Promise<Incentive[]> {
-    const response = await this.api.get(API_ENDPOINTS.INCENTIVES);
+    const response = await api.get(API_ENDPOINTS.INCENTIVES);
     return response.data;
   }
 
   async deleteIncentive(id: string): Promise<void> {
-    await this.api.delete(`${API_ENDPOINTS.INCENTIVES}/${id}`);
+    await api.delete(`${API_ENDPOINTS.INCENTIVES}/${id}`);
   }
 
   async getIncentivesByAuthor(authorId: string): Promise<Incentive[]> {
-    const response = await this.api.get(`${API_ENDPOINTS.INCENTIVES}/author/${authorId}`);
+    const response = await api.get(`${API_ENDPOINTS.INCENTIVES}/author/${authorId}`);
     return response.data;
   }
 
   // Draft-specific methods for Story 6.2
   async saveDraft(id: string, data: UpdateIncentiveRequest): Promise<Incentive> {
-    const response = await this.api.patch(`${API_ENDPOINTS.INCENTIVES}/${id}/draft`, data);
+    const response = await api.patch(`${API_ENDPOINTS.INCENTIVES}/${id}/draft`, data);
     return response.data;
   }
 
   async getMyDrafts(): Promise<Incentive[]> {
-    const response = await this.api.get(`${API_ENDPOINTS.INCENTIVES}/drafts/my`);
+    const response = await api.get(`${API_ENDPOINTS.INCENTIVES}/drafts/my`);
     return response.data;
   }
 
   async autoSaveDraft(id: string, partialData: Partial<UpdateIncentiveRequest>): Promise<{ success: boolean; lastSaved: Date }> {
-    const response = await this.api.post(`${API_ENDPOINTS.INCENTIVES}/${id}/auto-save`, partialData);
+    const response = await api.post(`${API_ENDPOINTS.INCENTIVES}/${id}/auto-save`, partialData);
     return response.data;
   }
 
   async isDraftSaveable(id: string): Promise<boolean> {
-    const response = await this.api.get(`${API_ENDPOINTS.INCENTIVES}/${id}/saveable`);
+    const response = await api.get(`${API_ENDPOINTS.INCENTIVES}/${id}/saveable`);
     return response.data.saveable;
   }
 
   // Publishing methods for Story 6.4
   async publish(id: string): Promise<Incentive> {
-    const response = await this.api.post(`${API_ENDPOINTS.INCENTIVES}/${id}/publish`);
+    const response = await api.post(`${API_ENDPOINTS.INCENTIVES}/${id}/publish`);
     return response.data;
   }
 
   async unpublish(id: string): Promise<Incentive> {
-    const response = await this.api.delete(`${API_ENDPOINTS.INCENTIVES}/${id}/unpublish`);
+    const response = await api.delete(`${API_ENDPOINTS.INCENTIVES}/${id}/unpublish`);
     return response.data;
   }
 
   // Clone method for Story 6.5
   async cloneIncentive(id: string): Promise<Incentive> {
-    const response = await this.api.post(`${API_ENDPOINTS.INCENTIVES}/${id}/clone`);
+    const response = await api.post(`${API_ENDPOINTS.INCENTIVES}/${id}/clone`);
     return response.data;
   }
 

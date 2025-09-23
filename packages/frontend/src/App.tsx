@@ -40,14 +40,14 @@ function App() {
           <Route path="/admin" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/dashboard" element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER, UserRole.TRAINER]}>
               <DashboardPage />
             </ProtectedRoute>
           } />
           <Route
             path="/sessions/worksheet"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <SessionWorksheetPage />
               </ProtectedRoute>
             }
@@ -55,7 +55,7 @@ function App() {
           <Route
             path="/incentives/worksheet"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <IncentiveWorksheetPage />
               </ProtectedRoute>
             }
@@ -63,7 +63,7 @@ function App() {
           <Route
             path="/sessions/manage"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageSessionsPage />
               </ProtectedRoute>
             }
@@ -71,7 +71,7 @@ function App() {
           <Route
             path="/admin/locations"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageLocationsPage />
               </ProtectedRoute>
             }
@@ -79,7 +79,7 @@ function App() {
           <Route
             path="/admin/trainers"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageTrainersPage />
               </ProtectedRoute>
             }
@@ -97,7 +97,7 @@ function App() {
           <Route
             path="/admin/topics"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageTopicsPage />
               </ProtectedRoute>
             }
@@ -105,7 +105,7 @@ function App() {
           <Route
             path="/admin/audiences"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageAudiencesPage />
               </ProtectedRoute>
             }
@@ -113,7 +113,7 @@ function App() {
           <Route
             path="/admin/tones"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageTonesPage />
               </ProtectedRoute>
             }
@@ -121,7 +121,7 @@ function App() {
           <Route
             path="/admin/categories"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageCategoriesPage />
               </ProtectedRoute>
             }
@@ -129,7 +129,7 @@ function App() {
           <Route
             path="/trainer/dashboard"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.TRAINER]}>
                 <TrainerDashboardPage />
               </ProtectedRoute>
             }
@@ -137,7 +137,7 @@ function App() {
           <Route
             path="/trainer/sessions/:sessionId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={[UserRole.TRAINER]}>
                 <TrainerSessionDetailPage />
               </ProtectedRoute>
             }
@@ -145,7 +145,7 @@ function App() {
           <Route
             path="/analytics"
             element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER]}>
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <AnalyticsPage />
               </ProtectedRoute>
             }

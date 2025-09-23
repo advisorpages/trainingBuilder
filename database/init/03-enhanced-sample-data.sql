@@ -24,11 +24,14 @@ INSERT INTO users (id, email, password_hash, role_id, is_active) VALUES
     ('e5f6a7b8-c9d0-1234-5678-901234efabea', 'broker1@company.com', '$2b$10$example.hash.for.development.only', 1, true),
     ('f6a7b8c9-d0e1-2345-6789-012345fabcfa', 'broker2@company.com', '$2b$10$example.hash.for.development.only', 1, true);
 
--- Update trainers with realistic emails to match users
+-- Ensure trainer emails align with intended user accounts without duplicates
 UPDATE trainers SET email = 'john.trainer@company.com' WHERE name = 'John Smith';
-UPDATE trainers SET email = 'lisa.coach@company.com' WHERE name = 'Sarah Johnson';
+-- Keep Sarah Johnson's original email to avoid conflicts
+UPDATE trainers SET email = 'sarah.johnson@company.com' WHERE name = 'Sarah Johnson';
+-- Insert Lisa Chen with a unique email; ignore if already present
 INSERT INTO trainers (name, email, bio, is_active) VALUES
-    ('Lisa Chen', 'lisa.coach@company.com', 'Executive Leadership Coach with expertise in organizational development', true);
+    ('Lisa Chen', 'lisa.coach@company.com', 'Executive Leadership Coach with expertise in organizational development', true)
+ON CONFLICT (email) DO NOTHING;
 
 -- Create comprehensive coaching tips
 INSERT INTO coaching_tips (text, category, difficulty_level, created_by_user_id, is_active) VALUES
@@ -107,19 +110,19 @@ INSERT INTO session_topics (session_id, topic_id) VALUES
 -- Create realistic registrations for published sessions
 INSERT INTO registrations (id, session_id, name, email, phone, referred_by, sync_status, sync_attempts, external_id, notes) VALUES
     -- Leadership Fundamentals Workshop registrations
-    ('r1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Alex Rodriguez', 'alex.rodriguez@company.com', '555-0101', 'HR Department', 'synced', 1, 'EXT001', 'Recently promoted team lead'),
-    ('r1111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111111', 'Emma Thompson', 'emma.thompson@company.com', '555-0102', 'Direct Manager', 'synced', 1, 'EXT002', 'New to management role'),
-    ('r1111111-1111-1111-1111-111111111113', '11111111-1111-1111-1111-111111111111', 'David Chen', 'david.chen@company.com', '555-0103', NULL, 'pending', 0, NULL, 'Self-registered'),
-    ('r1111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111111', 'Maria Garcia', 'maria.garcia@company.com', NULL, 'Colleague', 'synced', 1, 'EXT003', 'Cross-department transfer'),
+    ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Alex Rodriguez', 'alex.rodriguez@company.com', '555-0101', 'HR Department', 'synced', 1, 'EXT001', 'Recently promoted team lead'),
+    ('11111111-1111-1111-1111-111111111112', '11111111-1111-1111-1111-111111111111', 'Emma Thompson', 'emma.thompson@company.com', '555-0102', 'Direct Manager', 'synced', 1, 'EXT002', 'New to management role'),
+    ('11111111-1111-1111-1111-111111111113', '11111111-1111-1111-1111-111111111111', 'David Chen', 'david.chen@company.com', '555-0103', NULL, 'pending', 0, NULL, 'Self-registered'),
+    ('11111111-1111-1111-1111-111111111114', '11111111-1111-1111-1111-111111111111', 'Maria Garcia', 'maria.garcia@company.com', NULL, 'Colleague', 'synced', 1, 'EXT003', 'Cross-department transfer'),
 
     -- Strategic Planning Intensive registrations
-    ('r2222222-2222-2222-2222-222222222221', '22222222-2222-2222-2222-222222222222', 'Robert Kim', 'robert.kim@company.com', '555-0201', 'Executive Team', 'synced', 1, 'EXT004', 'Department head'),
-    ('r2222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'Jennifer Wong', 'jennifer.wong@company.com', '555-0202', NULL, 'failed', 2, NULL, 'Sync issues - retry needed'),
-    ('r2222222-2222-2222-2222-222222222223', '22222222-2222-2222-2222-222222222222', 'Michael Brown', 'michael.brown@company.com', '555-0203', 'Director', 'synced', 1, 'EXT005', 'Strategic planning lead');
+    ('22222222-2222-2222-2222-222222222221', '22222222-2222-2222-2222-222222222222', 'Robert Kim', 'robert.kim@company.com', '555-0201', 'Executive Team', 'synced', 1, 'EXT004', 'Department head'),
+    ('22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'Jennifer Wong', 'jennifer.wong@company.com', '555-0202', NULL, 'failed', 2, NULL, 'Sync issues - retry needed'),
+    ('22222222-2222-2222-2222-222222222223', '22222222-2222-2222-2222-222222222222', 'Michael Brown', 'michael.brown@company.com', '555-0203', 'Director', 'synced', 1, 'EXT005', 'Strategic planning lead');
 
 -- Create sample incentives
 INSERT INTO incentives (id, title, description, rules, start_date, end_date, status, author_id, ai_generated_content, is_active) VALUES
-    ('i1111111-1111-1111-1111-111111111111',
+    ('11111111-1111-1111-1111-111111111111',
      'Early Bird Registration Discount',
      'Save 20% on all leadership training sessions when you register at least 2 weeks in advance.',
      'Valid for registrations made 14+ days before session start date. Cannot be combined with other offers. Maximum 1 use per person per quarter.',
@@ -128,7 +131,7 @@ INSERT INTO incentives (id, title, description, rules, start_date, end_date, sta
      '🚀 Don''t miss out! Register early and save 20% on transformative leadership training. Invest in your growth and your team''s success. Limited time offer - the best leaders plan ahead!',
      true),
 
-    ('i2222222-2222-2222-2222-222222222222',
+    ('22222222-2222-2222-2222-222222222222',
      'Team Builder Bundle',
      'Bring your entire team! Register 5+ people for any session and get the 6th registration free.',
      'Minimum 5 registrations from same department/team required. Free registration must be of equal or lesser value. Valid through end of quarter.',

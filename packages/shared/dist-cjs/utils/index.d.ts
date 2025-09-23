@@ -1,0 +1,15 @@
+export declare const formatDate: (date: Date | string) => string;
+export declare const formatDateTime: (date: Date | string) => string;
+export declare const formatTime: (date: Date | string) => string;
+export declare const slugify: (text: string) => string;
+export declare const truncate: (text: string, maxLength: number) => string;
+export declare const capitalize: (text: string) => string;
+export declare const isValidEmail: (email: string) => boolean;
+export declare const isValidPassword: (password: string) => boolean;
+export declare const unique: <T>(array: T[]) => T[];
+export declare const groupBy: <T, K extends keyof T>(array: T[], key: K) => Record<string, T[]>;
+export declare const buildApiUrl: (baseUrl: string, endpoint: string) => string;
+export declare const buildQueryString: (params: Record<string, any>) => string;
+export declare const isDevelopment: () => boolean;
+export declare const isProduction: () => boolean;
+export declare const getEnvVar: (key: string, defaultValue?: string) => string;

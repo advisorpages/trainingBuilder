@@ -53,8 +53,10 @@ import { RolesGuard } from './common/guards/roles.guard';
         password: configService.get('DATABASE_PASSWORD', 'postgres'),
         database: configService.get('DATABASE_NAME', 'leadership_training'),
         entities: entities,
-        migrations: ['dist/migrations/*.js'],
-        synchronize: configService.get('NODE_ENV') === 'development', // Auto-sync in development only
+        migrations: ['dist/backend/src/migrations/*.js'],
+        // Use migrations as the single source of truth
+        synchronize: false,
+        migrationsRun: true,
         logging: configService.get('NODE_ENV') === 'development',
       }),
       inject: [ConfigService],

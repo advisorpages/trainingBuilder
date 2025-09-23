@@ -37,8 +37,9 @@ export class SessionsController {
   }
 
   @Get('author/:authorId')
-  findByAuthor(@Param('authorId') authorId: string): Promise<Session[]> {
-    return this.sessionsService.findByAuthor(authorId);
+  findByAuthor(@Param('authorId') authorId: string, @Request() req): Promise<Session[]> {
+    const resolvedAuthorId = authorId === 'me' ? req.user.id : authorId;
+    return this.sessionsService.findByAuthor(resolvedAuthorId);
   }
 
   // Public endpoints (no authentication required) - Must be defined before parameterized routes

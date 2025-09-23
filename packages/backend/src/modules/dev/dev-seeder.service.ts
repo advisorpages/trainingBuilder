@@ -72,14 +72,10 @@ export class DevSeederService {
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
     for (const userData of demoUsers) {
-      const existingUser = await this.userRepository.findOne({
-        where: { email: userData.email }
-      });
+      const existingUser = await this.userRepository.findOne({ where: { email: userData.email } });
 
       if (!existingUser) {
-        const role = await this.roleRepository.findOne({
-          where: { name: userData.roleName }
-        });
+        const role = await this.roleRepository.findOne({ where: { name: userData.roleName } });
 
         if (!role) {
           this.logger.warn(`Role ${userData.roleName} not found for user ${userData.email}`);
@@ -97,7 +93,19 @@ export class DevSeederService {
         this.logger.log(`Created demo user: ${userData.email} with role ${userData.roleName}`);
       } else {
         // Ensure user is active and has correct password
-        if (!existingUser.isActive || !(await bcrypt.compare(defaultPassword, existingUser.passwordHash))) {
+        let needsUpdate = !existingUser.isActive;
+        if (!needsUpdate) {
+          try {
+            const matches = await bcrypt.compare(defaultPassword, existingUser.passwordHash);
+            needsUpdate = !matches;
+          } catch (err) {
+            // Handle invalid/placeholder hash from old seed data
+            this.logger.warn(`Invalid password hash detected for ${existingUser.email}. Resetting to default.`);
+            needsUpdate = true;
+          }
+        }
+
+        if (needsUpdate) {
           existingUser.isActive = true;
           existingUser.passwordHash = hashedPassword;
           await this.userRepository.save(existingUser);

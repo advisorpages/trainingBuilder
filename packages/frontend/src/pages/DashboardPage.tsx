@@ -13,7 +13,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "../components/ui/Card"
@@ -107,10 +106,11 @@ const DashboardPage = () => {
 
     switch (user.role.name) {
       case UserRole.CONTENT_DEVELOPER:
+      case UserRole.BROKER:
         return (
           <Card className="mb-8">
             <CardHeader>
-              <CardTitle>Content Developer Actions</CardTitle>
+              <CardTitle>Content & Session Management</CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-3">
@@ -128,7 +128,7 @@ const DashboardPage = () => {
                 </li>
                 <li>
                   <Link to="/admin/topics" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="tag" size="sm" className="mr-2" />
+                    <Icon name="academic-cap" size="sm" className="mr-2" />
                     Manage Topics
                   </Link>
                 </li>
@@ -192,43 +192,6 @@ const DashboardPage = () => {
                 <li className="flex items-center text-muted-foreground">
                   <Icon name="envelope" size="sm" className="mr-2" />
                   Trainer Kit Notifications (Coming in Story 4.5)
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-        )
-
-      case UserRole.BROKER:
-        return (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Broker Access</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                <li>
-                  <Link to="/sessions/worksheet" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="document-text" size="sm" className="mr-2" />
-                    Session Worksheet
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/broker/sessions" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="book-open" size="sm" className="mr-2" />
-                    View Published Sessions
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/broker/incentives" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="trophy" size="sm" className="mr-2" />
-                    Available Incentives
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/broker/reports" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="presentation-chart-line" size="sm" className="mr-2" />
-                    Basic Reports
-                  </Link>
                 </li>
               </ul>
             </CardContent>
@@ -303,8 +266,8 @@ const DashboardPage = () => {
           </CardHeader>
         </Card>
 
-        {/* Show Drafts for Content Developers */}
-        {user.role.name === UserRole.CONTENT_DEVELOPER && (
+        {/* Show Drafts for Content Developers and Brokers */}
+        {(user.role.name === UserRole.CONTENT_DEVELOPER || user.role.name === UserRole.BROKER) && (
           <div className="mb-8 space-y-6">
             <UnifiedDraftsList
               onEditSessionDraft={handleEditSessionDraft}

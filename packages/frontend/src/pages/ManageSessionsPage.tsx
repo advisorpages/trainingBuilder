@@ -11,8 +11,8 @@ export const ManageSessionsPage: React.FC = () => {
   const navigate = useNavigate();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Check if user is Content Developer
-  const canManageSessions = user?.role?.name === UserRole.CONTENT_DEVELOPER;
+  // Check if user is Content Developer or Broker
+  const canManageSessions = user?.role?.name === UserRole.CONTENT_DEVELOPER || user?.role?.name === UserRole.BROKER;
 
   const handleEditSession = (session: Session) => {
     // Navigate to session worksheet for editing
@@ -46,7 +46,7 @@ export const ManageSessionsPage: React.FC = () => {
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-yellow-800">Access Restricted</h3>
                 <p className="mt-1 text-sm text-yellow-700">
-                  You need Content Developer permissions to manage training sessions.
+                  You need Content Developer or Broker permissions to manage training sessions.
                 </p>
               </div>
             </div>

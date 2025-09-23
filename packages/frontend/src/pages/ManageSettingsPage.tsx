@@ -22,8 +22,8 @@ export const ManageSettingsPage: React.FC = () => {
   } | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Check if user is Content Developer
-  const canManageSettings = user?.role?.name === 'Content Developer';
+  // Check if user is Content Developer or Broker
+  const canManageSettings = user?.role?.name === 'Content Developer' || user?.role?.name === 'Broker';
 
   useEffect(() => {
     fetchCategories();
@@ -131,7 +131,7 @@ export const ManageSettingsPage: React.FC = () => {
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-yellow-800">Access Restricted</h3>
                 <p className="mt-1 text-sm text-yellow-700">
-                  You need Content Developer permissions to manage system settings.
+                  You need Content Developer or Broker permissions to manage system settings.
                 </p>
               </div>
             </div>

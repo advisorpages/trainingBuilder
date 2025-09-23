@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "5432:5432"
+      - "5433:5432"  # Use 5433 on host to avoid local conflicts
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
@@ -52,7 +52,8 @@ services:
     networks:
       - app-network
     depends_on:
-      - database
+      database:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:

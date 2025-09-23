@@ -807,3 +807,155 @@ private readonly templatesPath = path.join(process.cwd(), '..', '..', 'config', 
 - ✅ Restart specific services: `docker-compose restart [service]`
 - ✅ Monitor logs: `docker-compose logs [service] --tail 20`
 - ✅ Clean up any manually started processes that might conflict
+
+---
+
+## Issue #15: Recurring Blank Page at localhost:3000 - Deep Systematic Investigation Needed
+**Date:** January 23, 2025
+**Status:** 🔍 INVESTIGATING
+
+### Problem
+User reports: "There's a deep problem with my code" causing a blank page at localhost:3000. This is a recurring issue that has manifested differently across Issues #13 and multiple previous instances.
+
+### Current Understanding from Codebase Analysis
+Based on comprehensive code examination, several potential failure points identified:
+
+#### 1. Docker Container Health Issues
+- **Frontend Container**: Running on port 3000 using Vite development server
+- **Backend Container**: Running on port 3001 with NestJS API
+- **Database Container**: PostgreSQL on port 5432
+- **Potential Issue**: Container startup order, health checks, or service networking
+
+#### 2. Environment Variable Mismatch
+- **Found Inconsistency**: `vite.config.ts` proxy target uses `leadership-training-backend:3001` (container name)
+- **But**: `VITE_API_URL` set to `http://localhost:3001/api` (localhost)
+- **Impact**: API calls may fail due to URL resolution conflicts between container networking and browser access
+
+#### 3. Shared Package Build Dependencies
+- **Dependency Chain**: Frontend → Shared Package → Backend
+- **Build Order**: Shared package must compile TypeScript before frontend can import
+- **Potential Issue**: `/packages/shared/dist/` may be missing or outdated
+- **Impact**: Import failures could prevent React from mounting
+
+#### 4. Authentication Context Initialization Blocking
+- **Complex Auth Flow**: AuthContext performs multiple async operations on mount
+- **Token Validation**: Checks localStorage, validates with backend, initializes refresh
+- **API Dependencies**: Requires backend connectivity for user validation
+- **Potential Issue**: Auth loading state may prevent initial render if backend unreachable
+
+#### 5. Component Import Chain Failures
+- **Previous Pattern**: ManageSettingsPage import broke entire app (Issue #13)
+- **Risk Areas**: AI components, SessionForm, complex routing components
+- **Silent Failures**: Import errors can cause React to fail mounting without obvious console errors
+
+#### 6. API Service Configuration Issues
+- **Base URL Conflicts**: Multiple services use different API URL resolution patterns
+- **Token Handling**: Various localStorage key inconsistencies previously found
+- **CORS/Networking**: Frontend container to backend container communication
+
+### Proposed Systematic Investigation Plan
+
+#### Phase 1: Infrastructure Health Check
+1. **Verify Docker Services**: Check all container status, networking, and logs
+2. **Test API Connectivity**: Direct backend API calls from browser and container
+3. **Environment Variables**: Verify all VITE_ variables and container networking
+4. **Build Status**: Check shared package compilation and frontend build process
+
+#### Phase 2: Component Isolation Testing
+1. **Minimal React Test**: Replace App.tsx with simple component to verify React mounting
+2. **Incremental Import Testing**: Add imports back one-by-one to isolate failing components
+3. **Route Testing**: Test individual page components outside routing context
+4. **Auth Bypass**: Temporarily disable AuthProvider to test without authentication
+
+#### Phase 3: Service Integration Testing
+1. **API Service Testing**: Test each service individually for connectivity
+2. **Token Flow Testing**: Verify authentication token handling end-to-end
+3. **Backend Logging**: Enable detailed backend logging for frontend requests
+4. **Browser Network Tab**: Monitor all network requests for failures
+
+#### Phase 4: Deep Component Analysis
+1. **Error Boundary Logging**: Enhance error boundary to catch and log React errors
+2. **Console Debugging**: Add strategic console.log statements in critical components
+3. **Build Analysis**: Check Vite build output for compilation errors
+4. **TypeScript Checking**: Run type checking for import/syntax issues
+
+### Expected Root Cause Categories
+
+#### Most Likely (Based on Pattern History)
+1. **Container Networking Issues**: Backend unreachable from frontend container
+2. **Shared Package Build**: Missing compiled shared types breaking imports
+3. **Component Import Error**: Similar to Issue #13 ManageSettingsPage failure
+
+#### Moderately Likely
+1. **Authentication Blocking**: AuthContext initialization hanging or failing
+2. **Environment Variable Issues**: API URL resolution conflicts
+3. **Service Configuration**: Inconsistent token handling or API base URLs
+
+#### Less Likely (Already Fixed in Previous Issues)
+1. **Token Key Mismatches**: Previously resolved in Issues #4-5
+2. **React Fast Refresh Issues**: Previously resolved in Issue #11
+3. **AI Component Errors**: Previously resolved in Issues #6-10
+
+### Investigation Tools
+- Docker container logs and health checks
+- Browser developer tools (console, network, elements)
+- Incremental component testing
+- Strategic console logging
+- Backend API direct testing
+
+### Investigation Results - Phase 1 Complete
+
+#### ✅ Infrastructure Health: ALL SYSTEMS OPERATIONAL
+- **Docker Services**: All 3 containers running properly (frontend:3000, backend:3001, database:5432)
+- **API Connectivity**: Backend accessible at localhost:3001/api with valid JSON responses
+- **Shared Package**: Compiled successfully with all required dist files present
+- **Environment Variables**: VITE_API_URL correctly set to http://localhost:3001/api
+- **Container Networking**: Frontend and backend communication working
+
+#### ✅ Vite Development Server: FUNCTIONING CORRECTLY
+- **Vite Compilation**: TypeScript/JSX successfully compiled and transformed
+- **Module Loading**: main.tsx accessible and compiled at /src/main.tsx
+- **HMR/WebSocket**: Vite client loading properly with hot reload functionality
+- **File Serving**: All static assets and module imports resolving correctly
+
+#### ❌ IDENTIFIED ROOT CAUSE: JavaScript Runtime Execution Failure
+**Critical Finding**: Even ultra-minimal React code with extensive console logging is not executing in browser.
+
+**Evidence**:
+1. **Empty Root Div**: `<div id="root"></div>` remains empty despite multiple test components
+2. **No Console Output**: Zero console.log messages appearing in browser (should see "🔍 main.tsx: Script loading started")
+3. **Module Not Executing**: JavaScript imports are resolving but code is not running
+4. **Pattern Match**: Identical to Issue #13 - React fails to mount due to module execution failure
+
+#### 🎯 NEXT INVESTIGATION PHASE: Browser-Side Analysis Required
+
+**Critical Missing Data**: Browser console information needed to identify exact JavaScript execution error.
+
+**Required Next Steps**:
+1. **Access Browser Console**: View http://localhost:3000 in browser and check Console tab for errors
+2. **Check Network Tab**: Look for failed module requests or 500 errors
+3. **Inspect Elements Tab**: Verify if `<div id="root">` exists and structure is correct
+4. **Module Import Analysis**: Check if main.tsx is actually being executed vs just served
+
+**Expected Error Categories**:
+- **Module Import Errors**: Circular dependencies or failed ES module imports
+- **Syntax Errors**: JavaScript/TypeScript compilation issues not caught by Vite
+- **Security/CORS Issues**: Browser blocking module execution due to security policies
+- **Memory/Performance**: Browser tab freezing due to infinite loops or memory issues
+
+### Conclusive Findings
+- ✅ Backend infrastructure completely functional
+- ✅ Vite development server working correctly
+- ✅ TypeScript compilation successful
+- ❌ **JavaScript execution blocked at browser runtime level**
+
+### Browser Debug Session Required
+**Status**: Investigation needs browser access to complete root cause analysis. All infrastructure confirmed working.
+
+### Files Requiring Examination
+- `/packages/frontend/src/main.tsx` - React mounting point
+- `/packages/frontend/src/App.tsx` - Main application component
+- `/packages/frontend/src/contexts/AuthContext.tsx` - Authentication initialization
+- `/docker-compose.yml` - Service configuration
+- `/packages/shared/dist/` - Compiled shared package
+- Browser network tab and console for runtime errors

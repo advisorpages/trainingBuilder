@@ -11,6 +11,11 @@ dist/
 build/
 **/*.tgz
 
+# Prevent accidental compiled artifacts in shared src
+packages/shared/src/**/*.js
+packages/shared/src/**/*.js.map
+packages/shared/src/**/*.d.ts
+
 # Logs
 *.log
 npm-debug.log*

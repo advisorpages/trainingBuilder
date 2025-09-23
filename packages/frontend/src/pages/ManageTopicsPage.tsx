@@ -2,20 +2,21 @@ import React, { useState } from 'react';
 import { Topic } from '@leadership-training/shared';
 import { topicService, CreateTopicRequest, UpdateTopicRequest } from '../services/topic.service';
 import { TopicList } from '../components/topics/TopicList';
-import { TopicForm } from '../components/topics/TopicForm';
 import { EnhancedTopicForm } from '../components/topics/EnhancedTopicForm';
 import { TopicDetails } from '../components/topics/TopicDetails';
 import { DeleteTopicModal } from '../components/topics/DeleteTopicModal';
+import { EditTopicModal } from '../components/topics/EditTopicModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useTopicCreation } from '../hooks/useTopicCreation';
 
-type ViewMode = 'list' | 'create' | 'details';
+type ViewMode = 'list' | 'create' | 'details' | 'edit';
 
 export const ManageTopicsPage: React.FC = () => {
   const { user } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [topicToDelete, setTopicToDelete] = useState<Topic | null>(null);
+  const [topicToEdit, setTopicToEdit] = useState<Topic | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [notification, setNotification] = useState<{
@@ -24,8 +25,8 @@ export const ManageTopicsPage: React.FC = () => {
   } | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Check if user is Content Developer
-  const canManageTopics = user?.role?.name === 'Content Developer';
+  // Check if user is Content Developer or Broker
+  const canManageTopics = user?.role?.name === 'Content Developer' || user?.role?.name === 'Broker';
 
   // Topic creation hook with context loading
   const {
@@ -34,7 +35,6 @@ export const ManageTopicsPage: React.FC = () => {
     categories,
     isLoadingContext,
     error: contextError,
-    loadContextData,
     clearError
   } = useTopicCreation({
     autoLoadContext: viewMode === 'create'
@@ -53,10 +53,10 @@ export const ManageTopicsPage: React.FC = () => {
     }
   }, [contextError, clearError]);
 
-  const handleCreateTopic = async (data: CreateTopicRequest) => {
+  const handleCreateTopic = async (data: CreateTopicRequest | UpdateTopicRequest) => {
     try {
       setIsSubmitting(true);
-      await topicService.createTopic(data);
+      await topicService.createTopic(data as CreateTopicRequest);
       showNotification('success', 'Topic created successfully');
       setViewMode('list');
       setRefreshTrigger(prev => prev + 1);
@@ -88,9 +88,39 @@ export const ManageTopicsPage: React.FC = () => {
     }
   };
 
-  const handleViewDetails = (topic: Topic) => {
-    setSelectedTopic(topic);
-    setViewMode('details');
+  const handleEditTopic = async (data: UpdateTopicRequest) => {
+    if (!topicToEdit) return;
+
+    try {
+      setIsSubmitting(true);
+      await topicService.updateTopic(topicToEdit.id, data);
+      showNotification('success', 'Topic updated successfully');
+      setTopicToEdit(null);
+      setViewMode('list');
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      showNotification('error', error.response?.data?.message || 'Failed to update topic');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleStatusChange = async (topic: Topic, isActive: boolean) => {
+    try {
+      await topicService.updateTopic(topic.id, { isActive });
+      showNotification('success',
+        isActive ? 'Topic activated successfully' : 'Topic deactivated successfully'
+      );
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      showNotification('error', error.response?.data?.message || 'Failed to update topic status');
+      throw error; // Re-throw to let the TopicList handle the error state
+    }
+  };
+
+
+  const handleEdit = (topic: Topic) => {
+    setTopicToEdit(topic);
   };
 
   const handleDelete = (topic: Topic) => {
@@ -100,6 +130,7 @@ export const ManageTopicsPage: React.FC = () => {
   const handleCancel = () => {
     setViewMode('list');
     setSelectedTopic(null);
+    setTopicToEdit(null);
   };
 
   if (!canManageTopics) {
@@ -116,7 +147,7 @@ export const ManageTopicsPage: React.FC = () => {
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-yellow-800">Access Restricted</h3>
                 <p className="mt-1 text-sm text-yellow-700">
-                  You need Content Developer permissions to manage topics.
+                  You need Content Developer or Broker permissions to manage topics.
                 </p>
               </div>
             </div>
@@ -170,7 +201,7 @@ export const ManageTopicsPage: React.FC = () => {
                   </li>
                   <li>
                     <span className="text-gray-500">
-                      {viewMode === 'create' ? 'Create' : 'Details'}
+                      {viewMode === 'create' ? 'Create' : viewMode === 'edit' ? 'Edit' : 'Details'}
                     </span>
                   </li>
                 </>
@@ -219,9 +250,10 @@ export const ManageTopicsPage: React.FC = () => {
         {/* Main Content */}
         {viewMode === 'list' && (
           <TopicList
-            onEdit={handleViewDetails}
+            onEdit={handleEdit}
             onDelete={handleDelete}
-            key={refreshTrigger}
+            onStatusChange={handleStatusChange}
+            refreshTrigger={refreshTrigger}
           />
         )}
 
@@ -249,6 +281,16 @@ export const ManageTopicsPage: React.FC = () => {
           <TopicDetails
             topic={selectedTopic}
             onBack={handleCancel}
+          />
+        )}
+
+        {/* Edit Modal */}
+        {topicToEdit && (
+          <EditTopicModal
+            topic={topicToEdit}
+            onSave={handleEditTopic}
+            onCancel={() => setTopicToEdit(null)}
+            isSubmitting={isSubmitting}
           />
         )}
 
