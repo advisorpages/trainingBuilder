@@ -1,10 +1,16 @@
 import { api } from './api.service';
-import { Topic } from '../../../shared/src/types';
-import { API_ENDPOINTS } from '../../../shared/src/constants';
+import { Topic, TopicAIContent } from '@leadership-training/shared';
+import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateTopicRequest {
   name: string;
   description?: string;
+  // AI Enhancement Fields
+  aiGeneratedContent?: TopicAIContent;
+  learningOutcomes?: string;
+  trainerNotes?: string;
+  materialsNeeded?: string;
+  deliveryGuidance?: string;
 }
 
 export interface UpdateTopicRequest extends Partial<CreateTopicRequest> {
@@ -75,6 +81,26 @@ class TopicService {
 
   async checkUsage(id: number): Promise<UsageCheckResponse> {
     const response = await api.get<UsageCheckResponse>(`${this.baseUrl}/${id}/usage-check`);
+    return response.data;
+  }
+
+  // AI Enhancement Methods
+  async createTopicWithAI(data: CreateTopicRequest): Promise<Topic> {
+    const response = await api.post<Topic>(`${this.baseUrl}/with-ai`, data);
+    return response.data;
+  }
+
+  async getTopicAIContent(id: number): Promise<TopicAIContent | null> {
+    try {
+      const response = await api.get<{ aiContent: TopicAIContent }>(`${this.baseUrl}/${id}/ai-content`);
+      return response.data.aiContent;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async updateTopicAI(id: number, aiContent: TopicAIContent): Promise<Topic> {
+    const response = await api.put<Topic>(`${this.baseUrl}/${id}/ai-content`, { aiContent });
     return response.data;
   }
 }

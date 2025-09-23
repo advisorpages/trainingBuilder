@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Location } from '../../../../shared/src/types';
+import { Location } from '@leadership-training/shared';
 import { CreateLocationRequest, UpdateLocationRequest } from '../../services/location.service';
 
 interface LocationFormProps {

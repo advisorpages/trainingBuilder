@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { Session } from '../../../shared/src/types'
+import { Session } from '@leadership-training/shared'
 import { sessionService } from '../services/session.service'
 import RegistrationForm from '../components/RegistrationForm'
 import SessionContent from '../components/SessionContent'

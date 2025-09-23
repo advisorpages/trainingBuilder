@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { sessionService } from '../services/session.service'
 import SessionCard from '../components/sessions/SessionCard'
-import { Session } from '../../../shared/src/types'
+import { Session } from '@leadership-training/shared'
 
 const HomePage = () => {
   const [backendHealth, setBackendHealth] = useState<string>('Checking...')

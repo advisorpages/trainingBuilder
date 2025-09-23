@@ -11,10 +11,11 @@ import { WorkflowMonitoringService } from './services/workflow-monitoring.servic
 import { Session } from '../../entities/session.entity';
 import { SessionStatusHistory } from '../../entities/session-status-history.entity';
 import { Registration } from '../../entities/registration.entity';
+import { Topic } from '../../entities/topic.entity';
 import { QrCodeService } from '../../services/qr-code.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Session, SessionStatusHistory, Registration])],
+  imports: [TypeOrmModule.forFeature([Session, SessionStatusHistory, Registration, Topic])],
   controllers: [SessionsController],
   providers: [
     SessionsService,

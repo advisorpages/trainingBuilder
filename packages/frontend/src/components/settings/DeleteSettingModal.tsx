@@ -1,5 +1,5 @@
 import React from 'react';
-import { SystemSetting } from '../../../../shared/src/types';
+import { SystemSetting } from '@leadership-training/shared';
 
 interface DeleteSettingModalProps {
   setting: SystemSetting;

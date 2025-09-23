@@ -17,7 +17,7 @@ import { IncentiveWorksheetPage } from './pages/IncentiveWorksheetPage'
 import { ManageSessionsPage } from './pages/ManageSessionsPage'
 import { ManageLocationsPage } from './pages/ManageLocationsPage'
 import { ManageTrainersPage } from './pages/ManageTrainersPage'
-import { ManageSettingsPage } from './pages/ManageSettingsPage'
+// import { ManageSettingsPage } from './pages/ManageSettingsPage' // Temporarily disabled due to import errors
 import { ManageTopicsPage } from './pages/ManageTopicsPage'
 import { ManageAudiencesPage } from './pages/ManageAudiencesPage'
 import { ManageTonesPage } from './pages/ManageTonesPage'
@@ -87,9 +87,11 @@ function App() {
           <Route
             path="/admin/settings"
             element={
-              <ProtectedRoute>
-                <ManageSettingsPage />
-              </ProtectedRoute>
+              <div style={{ padding: '2rem', textAlign: 'center' }}>
+                <h2 style={{ color: '#e74c3c' }}>Settings Page Temporarily Disabled</h2>
+                <p>This page has import errors and needs to be fixed.</p>
+                <a href="/dashboard" style={{ color: '#6366f1' }}>← Back to Dashboard</a>
+              </div>
             }
           />
           <Route

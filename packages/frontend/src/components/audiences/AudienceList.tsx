@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Audience } from '../../../../shared/src/types';
+import { Audience } from '@leadership-training/shared';
 import { audienceService, AudienceQueryParams } from '../../services/audience.service';
 
 interface AudienceListProps {

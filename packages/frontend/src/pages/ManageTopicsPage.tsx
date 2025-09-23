@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Topic } from '../../../shared/src/types';
+import { Topic } from '@leadership-training/shared';
 import { topicService, CreateTopicRequest, UpdateTopicRequest } from '../services/topic.service';
 import { TopicList } from '../components/topics/TopicList';
 import { TopicForm } from '../components/topics/TopicForm';
+import { EnhancedTopicForm } from '../components/topics/EnhancedTopicForm';
+import { TopicDetails } from '../components/topics/TopicDetails';
 import { DeleteTopicModal } from '../components/topics/DeleteTopicModal';
 import { useAuth } from '../contexts/AuthContext';
+import { useTopicCreation } from '../hooks/useTopicCreation';
 
-type ViewMode = 'list' | 'create' | 'edit';
+type ViewMode = 'list' | 'create' | 'details';
 
 export const ManageTopicsPage: React.FC = () => {
   const { user } = useAuth();
@@ -24,10 +27,31 @@ export const ManageTopicsPage: React.FC = () => {
   // Check if user is Content Developer
   const canManageTopics = user?.role?.name === 'Content Developer';
 
+  // Topic creation hook with context loading
+  const {
+    audiences,
+    tones,
+    categories,
+    isLoadingContext,
+    error: contextError,
+    loadContextData,
+    clearError
+  } = useTopicCreation({
+    autoLoadContext: viewMode === 'create'
+  });
+
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 5000);
   };
+
+  // Handle context loading errors
+  React.useEffect(() => {
+    if (contextError) {
+      showNotification('error', contextError);
+      clearError();
+    }
+  }, [contextError, clearError]);
 
   const handleCreateTopic = async (data: CreateTopicRequest) => {
     try {
@@ -43,22 +67,6 @@ export const ManageTopicsPage: React.FC = () => {
     }
   };
 
-  const handleUpdateTopic = async (data: UpdateTopicRequest) => {
-    if (!selectedTopic) return;
-
-    try {
-      setIsSubmitting(true);
-      await topicService.updateTopic(selectedTopic.id, data);
-      showNotification('success', 'Topic updated successfully');
-      setViewMode('list');
-      setSelectedTopic(null);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to update topic');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleDeleteTopic = async () => {
     if (!topicToDelete) return;
@@ -80,9 +88,9 @@ export const ManageTopicsPage: React.FC = () => {
     }
   };
 
-  const handleEdit = (topic: Topic) => {
+  const handleViewDetails = (topic: Topic) => {
     setSelectedTopic(topic);
-    setViewMode('edit');
+    setViewMode('details');
   };
 
   const handleDelete = (topic: Topic) => {
@@ -162,7 +170,7 @@ export const ManageTopicsPage: React.FC = () => {
                   </li>
                   <li>
                     <span className="text-gray-500">
-                      {viewMode === 'create' ? 'Create' : 'Edit'}
+                      {viewMode === 'create' ? 'Create' : 'Details'}
                     </span>
                   </li>
                 </>
@@ -211,26 +219,36 @@ export const ManageTopicsPage: React.FC = () => {
         {/* Main Content */}
         {viewMode === 'list' && (
           <TopicList
-            onEdit={handleEdit}
+            onEdit={handleViewDetails}
             onDelete={handleDelete}
             key={refreshTrigger}
           />
         )}
 
         {viewMode === 'create' && (
-          <TopicForm
-            onSubmit={handleCreateTopic}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
+          isLoadingContext ? (
+            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-600">Loading context data...</span>
+              </div>
+            </div>
+          ) : (
+            <EnhancedTopicForm
+              audiences={audiences}
+              tones={tones}
+              categories={categories}
+              onSubmit={handleCreateTopic}
+              onCancel={handleCancel}
+              isSubmitting={isSubmitting}
+            />
+          )
         )}
 
-        {viewMode === 'edit' && selectedTopic && (
-          <TopicForm
+        {viewMode === 'details' && selectedTopic && (
+          <TopicDetails
             topic={selectedTopic}
-            onSubmit={handleUpdateTopic}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
+            onBack={handleCancel}
           />
         )}
 

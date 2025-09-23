@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Incentive } from '../../../shared/src/types'
+import { Incentive } from '@leadership-training/shared'
 import { incentiveService } from '../services/incentive.service'
 import IncentiveCard from '../components/incentives/IncentiveCard'
 

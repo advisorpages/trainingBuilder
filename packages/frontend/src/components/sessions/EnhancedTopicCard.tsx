@@ -1,5 +1,5 @@
 import React from 'react';
-import { Topic, Trainer } from '../../../../shared/src/types';
+import { Topic, Trainer } from '@leadership-training/shared';
 
 export interface SessionTopicDetail {
   topicId: number;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SystemSetting, SettingDataType } from '../../../../shared/src/types';
+import { SystemSetting, SettingDataType } from '@leadership-training/shared';
 import { CreateSettingRequest, UpdateSettingRequest } from '../../services/settings.service';
 
 interface SettingsFormProps {

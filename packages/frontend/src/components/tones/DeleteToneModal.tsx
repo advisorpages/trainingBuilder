@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tone } from '../../../../shared/src/types';
+import { Tone } from '@leadership-training/shared';
 
 interface DeleteToneModalProps {
   tone: Tone;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Topic } from '../../../../shared/src/types';
+import { Topic } from '@leadership-training/shared';
 
 interface DeleteTopicModalProps {
   topic: Topic;

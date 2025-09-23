@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Category } from '../../../shared/src/types';
+import { Category } from '@leadership-training/shared';
 import { categoryService, CreateCategoryRequest, UpdateCategoryRequest } from '../services/category.service';
 import { CategoryList } from '../components/categories/CategoryList';
 import { CategoryForm } from '../components/categories/CategoryForm';

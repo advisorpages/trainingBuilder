@@ -1,5 +1,5 @@
 import React from 'react';
-import { IncentiveStatus } from '../../../../shared/src/types';
+import { IncentiveStatus } from '@leadership-training/shared';
 
 interface IncentiveStatusIndicatorProps {
   status: IncentiveStatus;

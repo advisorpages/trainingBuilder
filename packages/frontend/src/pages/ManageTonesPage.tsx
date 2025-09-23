@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tone } from '../../../shared/src/types';
+import { Tone } from '@leadership-training/shared';
 import { toneService, CreateToneRequest, UpdateToneRequest } from '../services/tone.service';
 import { ToneList } from '../components/tones/ToneList';
 import { ToneForm } from '../components/tones/ToneForm';

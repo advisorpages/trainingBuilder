@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Topic } from '../../../../shared/src/types';
+import { Topic } from '@leadership-training/shared';
 import { CreateTopicRequest, UpdateTopicRequest } from '../../services/topic.service';
 
 interface TopicFormProps {

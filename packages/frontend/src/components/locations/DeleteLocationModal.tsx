@@ -1,5 +1,5 @@
 import React from 'react';
-import { Location } from '../../../../shared/src/types';
+import { Location } from '@leadership-training/shared';
 
 interface DeleteLocationModalProps {
   location: Location;

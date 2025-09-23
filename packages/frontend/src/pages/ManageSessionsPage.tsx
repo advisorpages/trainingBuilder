@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Session } from '../../../shared/src/types';
+import { Session } from '@leadership-training/shared';
 import { sessionService } from '../services/session.service';
 import { DraftsList } from '../components/sessions/DraftsList';
 import { useAuth } from '../contexts/AuthContext';

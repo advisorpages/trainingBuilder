@@ -1,6 +1,6 @@
 import React from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { Topic, Trainer } from '../../../../shared/src/types';
+import { Topic, Trainer } from '@leadership-training/shared';
 import { SessionTopicDetail } from './EnhancedTopicCard';
 
 interface DraggableSessionFlowProps {

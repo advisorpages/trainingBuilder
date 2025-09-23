@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trainer } from '../../../../shared/src/types';
+import { Trainer } from '@leadership-training/shared';
 
 interface DeleteTrainerModalProps {
   trainer: Trainer;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Session } from '../../../../shared/src/types';
+import { Session } from '@leadership-training/shared';
 import { aiPromptService, PromptTemplate } from '../../services/ai-prompt.service';
 import { aiContentService, AIContentResponse } from '../../services/ai-content.service';
 import { AIContentDisplay } from './AIContentDisplay';

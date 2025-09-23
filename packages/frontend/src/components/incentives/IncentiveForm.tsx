@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Incentive, Audience, Tone, Category } from '../../../../shared/src/types';
+import { Incentive, Audience, Tone, Category } from '@leadership-training/shared';
 import { attributesService } from '../../services/attributes.service';
 import { incentiveService, UpdateIncentiveRequest, CreateIncentiveRequest } from '../../services/incentive.service';
 import { IncentiveAIContentGenerator } from './IncentiveAIContentGenerator';

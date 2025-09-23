@@ -1,5 +1,5 @@
 import React from 'react';
-import { Category } from '../../../../shared/src/types';
+import { Category } from '@leadership-training/shared';
 
 interface DeleteCategoryModalProps {
   category: Category;

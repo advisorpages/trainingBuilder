@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Incentive } from '../../../shared/src/types';
+import { Incentive } from '@leadership-training/shared';
 import { IncentiveForm } from '../components/incentives/IncentiveForm';
 import { IncentiveDraftsList } from '../components/incentives/IncentiveDraftsList';
 import { UnsavedChangesModal } from '../components/sessions/UnsavedChangesModal';

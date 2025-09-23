@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Session } from '../../../shared/src/types';
+import { Session } from '@leadership-training/shared';
 import { SessionForm } from '../components/sessions/SessionForm';
+import { SessionDetails } from '../components/sessions/SessionDetails';
 import { sessionService } from '../services/session.service';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types/auth.types';
@@ -69,10 +70,13 @@ export const SessionWorksheetPage: React.FC = () => {
     try {
       setIsSubmitting(true);
       const updatedSession = await sessionService.updateSession(session.id, data);
-      setSession(updatedSession);
-      showNotification('success', 'Session draft saved successfully');
+      console.log('Session updated successfully, navigating to dashboard');
+      showNotification('success', 'Session updated successfully');
+      // Navigate back to dashboard immediately after successful update
+      navigate('/dashboard');
     } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to save session draft');
+      console.error('Update session error:', error);
+      showNotification('error', error.response?.data?.message || 'Failed to update session');
     } finally {
       setIsSubmitting(false);
     }

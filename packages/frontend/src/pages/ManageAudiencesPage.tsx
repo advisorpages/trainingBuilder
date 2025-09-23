@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Audience } from '../../../shared/src/types';
+import { Audience } from '@leadership-training/shared';
 import { audienceService, CreateAudienceRequest, UpdateAudienceRequest } from '../services/audience.service';
 import { AudienceList } from '../components/audiences/AudienceList';
 import { AudienceForm } from '../components/audiences/AudienceForm';

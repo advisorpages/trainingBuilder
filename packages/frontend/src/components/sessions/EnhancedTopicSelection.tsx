@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Topic, Trainer } from '../../../../shared/src/types';
+import { Topic, Trainer } from '@leadership-training/shared';
 import { EnhancedTopicCard, SessionTopicDetail } from './EnhancedTopicCard';
 import { DraggableSessionFlow } from './DraggableSessionFlow';
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Session, Incentive } from '../../../../shared/src/types';
+import { Session, Incentive } from '@leadership-training/shared';
 import { sessionService } from '../../services/session.service';
 import { incentiveService } from '../../services/incentive.service';
 import { SessionStatusIndicator, SessionStatus } from './SessionStatusIndicator';

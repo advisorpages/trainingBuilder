@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { UserRole } from '../types/auth.types'
 import { UnifiedDraftsList } from '../components/common/UnifiedDraftsList'
 import { IncentiveDraftsList } from '../components/incentives/IncentiveDraftsList'
-import { Session, Incentive } from '../../../shared/src/types'
+import { Session, Incentive } from '@leadership-training/shared'
 import { useState } from 'react'
 import { sessionService } from '../services/session.service'
 import { incentiveService } from '../services/incentive.service'
@@ -25,9 +25,18 @@ const DashboardPage = () => {
   const [refreshDrafts, setRefreshDrafts] = useState(0)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
+  console.log('DASHBOARD DEBUG: Page loaded, user:', user);
+
   if (!user) {
+    console.log('DASHBOARD DEBUG: No user, showing loading...');
     return <div>Loading...</div>
   }
+
+  console.log('DASHBOARD DEBUG: User found, role check:', {
+    userRole: user.role.name,
+    contentDeveloperConst: UserRole.CONTENT_DEVELOPER,
+    isMatch: user.role.name === UserRole.CONTENT_DEVELOPER
+  });
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -90,6 +99,12 @@ const DashboardPage = () => {
   }
 
   const getRoleBasedContent = () => {
+    console.log('DEBUG: User object:', user);
+    console.log('DEBUG: User role:', user.role);
+    console.log('DEBUG: User role name:', user.role.name);
+    console.log('DEBUG: UserRole.CONTENT_DEVELOPER:', UserRole.CONTENT_DEVELOPER);
+    console.log('DEBUG: Role comparison:', user.role.name === UserRole.CONTENT_DEVELOPER);
+
     switch (user.role.name) {
       case UserRole.CONTENT_DEVELOPER:
         return (
@@ -109,6 +124,12 @@ const DashboardPage = () => {
                   <Link to="/sessions/manage" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
                     <Icon name="clipboard-document-list" size="sm" className="mr-2" />
                     Manage Sessions
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/admin/topics" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
+                    <Icon name="tag" size="sm" className="mr-2" />
+                    Manage Topics
                   </Link>
                 </li>
                 <li>

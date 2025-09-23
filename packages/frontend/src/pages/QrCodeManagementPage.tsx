@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Session, SessionStatus } from '../../../shared/src/types';
+import { Session, SessionStatus } from '@leadership-training/shared';
 import QrCodeDisplay from '../components/sessions/QrCodeDisplay';
 import { useAuth } from '../contexts/AuthContext';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Location } from '../../../shared/src/types';
+import { Location } from '@leadership-training/shared';
 import { locationService, CreateLocationRequest, UpdateLocationRequest } from '../services/location.service';
 import { LocationList } from '../components/locations/LocationList';
 import { LocationForm } from '../components/locations/LocationForm';

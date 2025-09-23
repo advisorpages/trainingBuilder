@@ -4,7 +4,9 @@
   "private": true,
   "description": "Shared types and constants for Leadership Training App",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

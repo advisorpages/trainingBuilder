@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { Incentive } from '../../../shared/src/types';
-import { API_ENDPOINTS } from '../../../shared/src/constants';
+import { Incentive } from '@leadership-training/shared';
+import { API_ENDPOINTS } from '@leadership-training/shared';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 const api = axios.create({

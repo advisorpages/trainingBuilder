@@ -4,6 +4,7 @@ import { Repository, Not, IsNull } from 'typeorm';
 import { Session, SessionStatus } from '../../entities/session.entity';
 import { Registration, SyncStatus } from '../../entities/registration.entity';
 import { User } from '../../entities/user.entity';
+import { Topic } from '../../entities/topic.entity';
 import { CreateSessionDto, UpdateSessionDto, SavePromptDto, IntegrateAIContentDto, CreateRegistrationDto } from './dto';
 
 @Injectable()
@@ -13,6 +14,8 @@ export class SessionsService {
     private sessionRepository: Repository<Session>,
     @InjectRepository(Registration)
     private registrationRepository: Repository<Registration>,
+    @InjectRepository(Topic)
+    private topicRepository: Repository<Topic>,
   ) {}
 
   // Helper method to extract user information from JWT payload
@@ -55,12 +58,24 @@ export class SessionsService {
     // Extract user info using helper method
     const { id: authorId } = this.extractUserInfo(author);
 
+    // Extract topicIds from DTO and remove it from session data
+    const { topicIds, ...sessionData } = createSessionDto;
+
     const session = this.sessionRepository.create({
-      ...createSessionDto,
+      ...sessionData,
       authorId: authorId,
       status: SessionStatus.DRAFT,
       isActive: true,
     });
+
+    // Handle topic relationships if topicIds are provided
+    if (topicIds && topicIds.length > 0) {
+      const topics = await this.topicRepository.findByIds(topicIds);
+      if (topics.length !== topicIds.length) {
+        throw new BadRequestException('One or more topic IDs are invalid');
+      }
+      session.topics = topics;
+    }
 
     return this.sessionRepository.save(session);
   }
@@ -118,7 +133,24 @@ export class SessionsService {
       throw new BadRequestException('Maximum registrations must be at least 1');
     }
 
-    Object.assign(session, updateSessionDto);
+    // Extract topicIds from DTO and remove it from session data
+    const { topicIds, ...sessionData } = updateSessionDto;
+
+    // Handle topic relationships if topicIds are provided
+    if (topicIds !== undefined) {
+      if (topicIds.length > 0) {
+        const topics = await this.topicRepository.findByIds(topicIds);
+        if (topics.length !== topicIds.length) {
+          throw new BadRequestException('One or more topic IDs are invalid');
+        }
+        session.topics = topics;
+      } else {
+        // If empty array is provided, clear all topics
+        session.topics = [];
+      }
+    }
+
+    Object.assign(session, sessionData);
     return this.sessionRepository.save(session);
   }
 

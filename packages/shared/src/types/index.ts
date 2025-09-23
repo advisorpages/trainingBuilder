@@ -111,6 +111,12 @@ export interface Topic {
   id: number;
   name: string;
   description?: string;
+  // AI Enhancement Fields
+  aiGeneratedContent?: object;
+  learningOutcomes?: string;
+  trainerNotes?: string;
+  materialsNeeded?: string;
+  deliveryGuidance?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -224,4 +230,92 @@ export enum IncentiveStatus {
   PUBLISHED = 'published',
   EXPIRED = 'expired',
   CANCELLED = 'cancelled',
+}
+
+// AI Enhancement Types for Topics
+export interface TopicEnhancementInput {
+  name: string;
+  learningOutcome: string;
+  categoryId: number;
+  audienceId: number;
+  toneId: number;
+  deliveryStyle?: 'workshop' | 'presentation' | 'discussion';
+  specialConsiderations?: string;
+  sessionContext?: {
+    sessionTitle?: string;
+    sessionDescription?: string;
+    existingTopics?: string[];
+  };
+}
+
+export interface TopicAIContent {
+  enhancementContext: {
+    audienceId: number;
+    audienceName: string;
+    toneId: number;
+    toneName: string;
+    categoryId: number;
+    categoryName: string;
+    deliveryStyle: 'workshop' | 'presentation' | 'discussion';
+    learningOutcome: string;
+    sessionContext?: {
+      sessionTitle: string;
+      sessionDescription?: string;
+      existingTopics: string[];
+    };
+  };
+
+  enhancementMeta: {
+    generatedAt: string;
+    promptUsed: string;
+    aiModel?: string;
+    enhancementVersion: string;
+  };
+
+  enhancedContent: {
+    originalInput: {
+      name: string;
+      description?: string;
+    };
+
+    attendeeSection: {
+      enhancedName: string;
+      whatYoullLearn: string;
+      whoThisIsFor: string;
+      keyTakeaways: string[];
+      prerequisites?: string;
+    };
+
+    trainerSection: {
+      deliveryFormat: string;
+      preparationGuidance: string;
+      keyTeachingPoints: string[];
+      recommendedActivities: string[];
+      materialsNeeded: string[];
+      timeAllocation?: string;
+      commonChallenges: string[];
+      assessmentSuggestions?: string[];
+    };
+
+    enhancedDescription: string;
+  };
+
+  userModifications?: {
+    modifiedFields: string[];
+    lastModified: string;
+    customizations: Record<string, any>;
+  };
+}
+
+export interface TopicEnhancementResponse {
+  enhancedTopic: {
+    name: string;
+    description: string;
+    learningOutcomes: string;
+    trainerNotes: string;
+    materialsNeeded: string;
+    deliveryGuidance: string;
+  };
+  aiContent: TopicAIContent;
+  prompt?: string; // For manual mode
 }

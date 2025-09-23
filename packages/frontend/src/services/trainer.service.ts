@@ -1,6 +1,6 @@
 import { api } from './api.service';
-import { Trainer } from '../../../shared/src/types';
-import { API_ENDPOINTS } from '../../../shared/src/constants';
+import { Trainer } from '@leadership-training/shared';
+import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateTrainerRequest {
   name: string;

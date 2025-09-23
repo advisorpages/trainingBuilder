@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trainer } from '../../../shared/src/types';
+import { Trainer } from '@leadership-training/shared';
 import { trainerService, CreateTrainerRequest, UpdateTrainerRequest } from '../services/trainer.service';
 import { TrainerList } from '../components/trainers/TrainerList';
 import { TrainerForm } from '../components/trainers/TrainerForm';

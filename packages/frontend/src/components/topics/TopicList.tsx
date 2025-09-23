@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Topic } from '../../../../shared/src/types';
+import { Topic } from '@leadership-training/shared';
 import { topicService, TopicQueryParams } from '../../services/topic.service';
 
 interface TopicListProps {
@@ -169,7 +169,7 @@ export const TopicList: React.FC<TopicListProps> = ({ onEdit, onDelete }) => {
                       onClick={() => onEdit(topic)}
                       className="text-blue-600 hover:text-blue-800"
                     >
-                      Edit
+                      View Details
                     </button>
                     <button
                       onClick={() => onDelete(topic)}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Session } from '../../../../shared/src/types';
+import { Session } from '@leadership-training/shared';
 import { sessionService } from '../../services/session.service';
 import { SessionStatusIndicator, SessionStatus } from '../common/SessionStatusIndicator';
 import { SessionStatusFilter, useSessionStatusFilter } from '../common/SessionStatusFilter';

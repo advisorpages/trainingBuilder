@@ -1,4 +1,4 @@
-import { Incentive } from '../../../../shared/src/types'
+import { Incentive } from '@leadership-training/shared'
 import './IncentiveCard.css'
 
 interface IncentiveCardProps {

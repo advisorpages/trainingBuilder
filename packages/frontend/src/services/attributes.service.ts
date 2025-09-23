@@ -1,5 +1,5 @@
 import { api } from './api.service';
-import { Audience, Tone, Category, Topic } from '../../../shared/src/types';
+import { Audience, Tone, Category, Topic } from '@leadership-training/shared';
 
 class AttributesService {
   async getAudiences(): Promise<Audience[]> {

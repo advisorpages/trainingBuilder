@@ -1,4 +1,4 @@
-import { Session } from '../../../../shared/src/types'
+import { Session } from '@leadership-training/shared'
 import QrCodeDisplay from './QrCodeDisplay'
 import './SessionCard.css'
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SystemSetting } from '../../../shared/src/types';
+import { SystemSetting } from '@leadership-training/shared';
 import { settingsService, CreateSettingRequest, UpdateSettingRequest } from '../services/settings.service';
 import { SettingsList } from '../components/settings/SettingsList';
 import { SettingsForm } from '../components/settings/SettingsForm';

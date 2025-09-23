@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { RegistrationRequest } from '../../../shared/src/types'
+import { RegistrationRequest } from '@leadership-training/shared'
 import { sessionService } from '../services/session.service'
 import './RegistrationForm.css'
 

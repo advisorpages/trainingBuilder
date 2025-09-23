@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Category } from '../../../../shared/src/types';
+import { Category } from '@leadership-training/shared';
 import { CreateCategoryRequest, UpdateCategoryRequest } from '../../services/category.service';
 
 interface CategoryFormProps {

@@ -1,6 +1,6 @@
 import { api } from './api.service';
-import { Audience } from '../../../shared/src/types';
-import { API_ENDPOINTS } from '../../../shared/src/constants';
+import { Audience } from '@leadership-training/shared';
+import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateAudienceRequest {
   name: string;
