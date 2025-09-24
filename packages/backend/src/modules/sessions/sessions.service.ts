@@ -195,15 +195,30 @@ export class SessionsService {
   }
 
   async getDraftsByAuthor(authorId: string): Promise<Session[]> {
+    // Return a minimal, robust projection to avoid any serialization issues
+    // or legacy column mismatches during drafts loading.
     return this.sessionRepository.find({
       where: {
         authorId,
         isActive: true,
         status: SessionStatus.DRAFT
       },
-      relations: ['author', 'location', 'trainer', 'audience', 'tone', 'category', 'topics'],
+      // Only select fields needed by the drafts list
+      // Avoid loading eager relations for stability
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        updatedAt: true,
+        locationId: true,
+        trainerId: true,
+      } as any,
+      loadEagerRelations: false,
       order: { updatedAt: 'DESC' },
-    });
+    }) as any;
   }
 
   async autoSaveDraft(id: string, partialData: Partial<UpdateSessionDto>, user: any): Promise<{ success: boolean; lastSaved: Date }> {
@@ -756,5 +771,12 @@ export class SessionsService {
     return this.registrationRepository.count({
       where: { sessionId },
     });
+  }
+
+  // Internal update method that bypasses user authorization - for system operations
+  async internalUpdate(id: string, updateData: Partial<Session>): Promise<Session> {
+    const session = await this.findOne(id);
+    Object.assign(session, updateData);
+    return this.sessionRepository.save(session);
   }
 }

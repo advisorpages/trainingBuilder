@@ -115,9 +115,15 @@ const DashboardPage = () => {
             <CardContent>
               <ul className="space-y-3">
                 <li>
+                  <Link to="/sessions/builder" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
+                    <Icon name="squares-plus" size="sm" className="mr-2" />
+                    Session Builder (Phase 5) - Complete Training Kit Workflow
+                  </Link>
+                </li>
+                <li>
                   <Link to="/sessions/worksheet" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
                     <Icon name="document-text" size="sm" className="mr-2" />
-                    Session Worksheet
+                    Session Worksheet (Legacy)
                   </Link>
                 </li>
                 <li>

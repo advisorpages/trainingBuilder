@@ -80,8 +80,8 @@ export class SessionsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Request() req): Promise<void> {
-    return this.sessionsService.remove(id, req.user);
+  remove(@Param('id') id: string, @Request() req): Promise<{ success: boolean }> {
+    return this.sessionsService.remove(id, req.user).then(() => ({ success: true }));
   }
 
   // Draft-specific endpoints for Story 2.2

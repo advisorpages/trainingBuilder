@@ -36,7 +36,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Check role permissions if required
   if (requiredRoles.length > 0) {
-    const hasRequiredRole = requiredRoles.includes(user.role.name as UserRole);
+    const userRoleName = (user?.role as any)?.name || (user as any)?.roleName || (typeof (user as any)?.role === 'string' ? (user as any).role : undefined);
+    const hasRequiredRole = !!userRoleName && requiredRoles.includes(userRoleName as UserRole);
 
     if (!hasRequiredRole) {
       return (
@@ -52,7 +53,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <h3>Access Denied</h3>
           <p>You don't have permission to access this page.</p>
           <p>Required roles: {requiredRoles.join(', ')}</p>
-          <p>Your role: {user.role.name}</p>
+          <p>Your role: {userRoleName || 'unknown'}</p>
         </div>
       );
     }

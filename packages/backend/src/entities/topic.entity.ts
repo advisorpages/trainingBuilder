@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany, JoinTable } from 'typeorm';
-import { IsNotEmpty, MaxLength, IsOptional } from 'class-validator';
+import { IsNotEmpty, MaxLength, IsOptional, IsIn, IsInt, Min } from 'class-validator';
 import { Session } from './session.entity';
 import { CoachingTip } from './coaching-tip.entity';
 
@@ -41,6 +41,29 @@ export class Topic {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  // Exercise Fields
+  @Column({ name: 'is_exercise', default: false })
+  isExercise: boolean;
+
+  @Column({
+    name: 'exercise_type',
+    type: 'varchar',
+    length: 50,
+    nullable: true
+  })
+  @IsOptional()
+  @IsIn(['discussion', 'activity', 'workshop', 'case-study', 'role-play', 'presentation'])
+  exerciseType?: 'discussion' | 'activity' | 'workshop' | 'case-study' | 'role-play' | 'presentation';
+
+  @Column({ name: 'exercise_instructions', type: 'text', nullable: true })
+  @IsOptional()
+  exerciseInstructions?: string;
+
+  @Column({ name: 'estimated_duration', default: 30 })
+  @IsInt()
+  @Min(1)
+  estimatedDuration: number;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

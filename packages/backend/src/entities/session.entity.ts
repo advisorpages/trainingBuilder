@@ -149,6 +149,27 @@ export class Session {
   @Column({ name: 'last_validation_check', type: 'timestamp', nullable: true })
   lastValidationCheck?: Date;
 
+  // Session Builder fields (Phase 2)
+  @Column({ name: 'marketing_kit_content', type: 'text', nullable: true })
+  @IsOptional()
+  marketingKitContent?: string;
+
+  @Column({ name: 'session_outline_data', type: 'jsonb', nullable: true })
+  @IsOptional()
+  sessionOutlineData?: object;
+
+  @Column({ name: 'builder_generated', default: false })
+  builderGenerated: boolean;
+
+  // Phase 5 fields
+  @Column({ name: 'training_kit_content', type: 'text', nullable: true })
+  @IsOptional()
+  trainingKitContent?: string;
+
+  @Column({ name: 'builder_completion_status', type: 'jsonb', nullable: true })
+  @IsOptional()
+  builderCompletionStatus?: object;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

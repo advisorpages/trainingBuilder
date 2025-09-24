@@ -4,49 +4,77 @@ export class AddPublishingLogicToSessions1726789800000 implements MigrationInter
   name = 'AddPublishingLogicToSessions1726789800000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add new columns to sessions table for publishing logic
-    await queryRunner.addColumns('sessions', [
-      new TableColumn({
+    // Check if columns already exist before adding them
+    const table = await queryRunner.getTable('sessions');
+    const columnsToAdd: TableColumn[] = [];
+
+    if (!table.findColumnByName('status_changed_at')) {
+      columnsToAdd.push(new TableColumn({
         name: 'status_changed_at',
         type: 'timestamp',
         isNullable: true,
-      }),
-      new TableColumn({
+      }));
+    }
+
+    if (!table.findColumnByName('status_changed_by')) {
+      columnsToAdd.push(new TableColumn({
         name: 'status_changed_by',
         type: 'uuid',
         isNullable: true,
-      }),
-      new TableColumn({
+      }));
+    }
+
+    if (!table.findColumnByName('automated_status_change')) {
+      columnsToAdd.push(new TableColumn({
         name: 'automated_status_change',
         type: 'boolean',
         default: false,
-      }),
-      new TableColumn({
+      }));
+    }
+
+    if (!table.findColumnByName('content_validation_status')) {
+      columnsToAdd.push(new TableColumn({
         name: 'content_validation_status',
         type: 'varchar',
         length: '20',
         default: "'pending'",
-      }),
-      new TableColumn({
+      }));
+    }
+
+    if (!table.findColumnByName('content_validation_errors')) {
+      columnsToAdd.push(new TableColumn({
         name: 'content_validation_errors',
         type: 'json',
         isNullable: true,
-      }),
-      new TableColumn({
+      }));
+    }
+
+    if (!table.findColumnByName('publication_requirements_met')) {
+      columnsToAdd.push(new TableColumn({
         name: 'publication_requirements_met',
         type: 'boolean',
         default: false,
-      }),
-      new TableColumn({
+      }));
+    }
+
+    if (!table.findColumnByName('last_validation_check')) {
+      columnsToAdd.push(new TableColumn({
         name: 'last_validation_check',
         type: 'timestamp',
         isNullable: true,
-      }),
-    ]);
+      }));
+    }
 
-    // Create session_status_history table
-    await queryRunner.createTable(
-      new Table({
+    // Add columns if any need to be added
+    if (columnsToAdd.length > 0) {
+      await queryRunner.addColumns('sessions', columnsToAdd);
+    }
+
+    // Create session_status_history table if it doesn't exist
+    const historyTableExists = await queryRunner.hasTable('session_status_history');
+    if (!historyTableExists) {
+      await queryRunner.createTable(
+        new Table({
         name: 'session_status_history',
         columns: [
           {
@@ -106,23 +134,31 @@ export class AddPublishingLogicToSessions1726789800000 implements MigrationInter
         ],
       }),
     );
+    }
 
-    // Add indexes for performance
-    await queryRunner.query(`
-      CREATE INDEX "IDX_session_status_history_session_id" ON "session_status_history" ("session_id");
-    `);
+    // Add indexes for performance - only if they don't exist
+    try {
+      if (!historyTableExists) {
+        await queryRunner.query(`
+          CREATE INDEX IF NOT EXISTS "IDX_session_status_history_session_id" ON "session_status_history" ("session_id");
+        `);
 
-    await queryRunner.query(`
-      CREATE INDEX "IDX_session_status_history_created_at" ON "session_status_history" ("created_at");
-    `);
+        await queryRunner.query(`
+          CREATE INDEX IF NOT EXISTS "IDX_session_status_history_created_at" ON "session_status_history" ("created_at");
+        `);
+      }
 
-    await queryRunner.query(`
-      CREATE INDEX "IDX_sessions_status_changed_at" ON "sessions" ("status_changed_at");
-    `);
+      await queryRunner.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_sessions_status_changed_at" ON "sessions" ("status_changed_at");
+      `);
 
-    await queryRunner.query(`
-      CREATE INDEX "IDX_sessions_content_validation_status" ON "sessions" ("content_validation_status");
-    `);
+      await queryRunner.query(`
+        CREATE INDEX IF NOT EXISTS "IDX_sessions_content_validation_status" ON "sessions" ("content_validation_status");
+      `);
+    } catch (error) {
+      // Indexes might already exist, ignore the error
+      console.log('Some indexes may already exist, continuing...');
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

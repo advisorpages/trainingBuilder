@@ -27,6 +27,7 @@ import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
 import BrokerSessionsPage from './pages/BrokerSessionsPage'
 import BrokerIncentivesPage from './pages/BrokerIncentivesPage'
 import BrokerReportsPage from './pages/BrokerReportsPage'
+import { SessionBuilderPage } from './pages/SessionBuilderPage'
 
 
 function App() {
@@ -49,6 +50,14 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <SessionWorksheetPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sessions/builder"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <SessionBuilderPage />
               </ProtectedRoute>
             }
           />

@@ -56,10 +56,20 @@ CREATE TABLE IF NOT EXISTS topics (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    ai_generated_content JSONB,
+    learning_outcomes TEXT,
+    trainer_notes TEXT,
+    materials_needed TEXT,
+    delivery_guidance TEXT,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Topic AI enhancement indexes
+CREATE INDEX IF NOT EXISTS idx_topics_ai_content ON topics USING GIN (ai_generated_content);
+CREATE INDEX IF NOT EXISTS idx_topics_learning_outcomes ON topics (learning_outcomes);
+CREATE INDEX IF NOT EXISTS idx_topics_trainer_notes ON topics (trainer_notes);
 
 -- Attribute Tables
 CREATE TABLE IF NOT EXISTS audiences (

@@ -1,6 +1,10 @@
 import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { Session } from '../../entities/session.entity';
 import { Incentive } from '../../entities/incentive.entity';
+import { SessionOutline, SessionOutlineLegacy, FlexibleSessionOutline, SessionTemplate, FlexibleSessionSection, SessionOutlineSection, TopicSection, ExerciseTopicSection, InspirationSection, ClosingSection } from '../sessions/interfaces/session-outline.interface';
+import { SessionOutlineUtils } from '../sessions/utils/session-outline.utils';
+import { SuggestSessionOutlineDto } from '../sessions/dto/session-builder.dto';
+import { Topic } from '../../entities/topic.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -918,5 +922,812 @@ P.S. ${urgency === 'high' ? 'This truly is your final chance - act now!' : 'Reme
       isValid: missingFields.length === 0,
       missingFields
     };
+  }
+
+  // NEW SESSION BUILDER METHODS
+
+  async generateSessionOutline(
+    request: SuggestSessionOutlineDto,
+    relevantTopics: Topic[] = [],
+    ragSuggestions?: any
+  ): Promise<SessionOutlineLegacy> {
+    try {
+      // Calculate session duration
+      const startTime = new Date(request.startTime);
+      const endTime = new Date(request.endTime);
+      const totalDuration = Math.floor((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+
+      // Prepare context for AI prompt
+      const promptContext = {
+        category: request.category,
+        sessionType: request.sessionType,
+        desiredOutcome: request.desiredOutcome,
+        currentProblem: request.currentProblem || '',
+        specificTopics: request.specificTopics || '',
+        duration: totalDuration,
+        relevantTopics: relevantTopics.map(t => `${t.name}: ${t.description || ''}`).join('; '),
+        ragSuggestions: ragSuggestions ? this.formatRAGSuggestions(ragSuggestions) : ''
+      };
+
+      // Get the session outline template
+      const template = await this.getTemplate('session-outline-generator');
+      if (!template) {
+        throw new BadRequestException('Session outline template not found');
+      }
+
+      // Generate AI prompt
+      const prompt = this.populateTemplate(template.template, promptContext);
+
+      // For now, generate a structured outline based on the requirements
+      // In production, this would call OpenAI API
+      const outline = this.generateStructuredOutline(request, totalDuration, relevantTopics, ragSuggestions);
+
+      return outline;
+    } catch (error) {
+      console.error('Error generating session outline:', error);
+      throw new InternalServerErrorException('Failed to generate session outline');
+    }
+  }
+
+  private formatRAGSuggestions(ragSuggestions: any): string {
+    if (!ragSuggestions || !ragSuggestions.sources) {
+      return '';
+    }
+
+    return ragSuggestions.sources
+      .slice(0, 5) // Top 5 suggestions
+      .map((source: any, index: number) => `${index + 1}. ${source.text || source.content || ''}`)
+      .join('\n');
+  }
+
+  private populateTemplate(template: string, context: any): string {
+    let populatedTemplate = template;
+
+    Object.entries(context).forEach(([key, value]) => {
+      const regex = new RegExp(`\\{${key}\\}`, 'g');
+      populatedTemplate = populatedTemplate.replace(regex, String(value || ''));
+    });
+
+    return populatedTemplate;
+  }
+
+  private generateStructuredOutline(
+    request: SuggestSessionOutlineDto,
+    totalDuration: number,
+    relevantTopics: Topic[],
+    ragSuggestions?: any
+  ): SessionOutlineLegacy {
+    // Generate opener section
+    const opener: SessionOutlineSection = {
+      title: `Welcome & ${request.category} Session Introduction`,
+      duration: 15,
+      description: `Welcome participants and establish the session's objectives. Brief icebreaker activity to engage the group and set expectations for the ${request.sessionType}.`
+    };
+
+    // Generate main topic 1
+    const topic1: TopicSection = {
+      title: this.generateTopicTitle(request.category, request.specificTopics, relevantTopics, 1),
+      duration: 30,
+      description: this.generateTopicDescription(request.category, request.desiredOutcome, relevantTopics, ragSuggestions),
+      learningObjectives: this.generateLearningObjectives(request.category, request.desiredOutcome),
+      suggestedActivities: ['Group discussion', 'Case study review', 'Q&A session'],
+      materialsNeeded: ['Presentation slides', 'Handouts', 'Flip chart paper'],
+
+      // Enhanced properties for exercise capability
+      isExercise: false,
+      estimatedDuration: 30,
+      learningOutcomes: this.generateLearningOutcomes(request.category, request.desiredOutcome),
+      trainerNotes: this.generateTrainerNotes(request.category, false),
+      deliveryGuidance: this.generateDeliveryGuidance(request.category, false)
+    };
+
+    // Generate exercise topic 2
+    const topic2: ExerciseTopicSection = {
+      title: this.generateTopicTitle(request.category, request.specificTopics, relevantTopics, 2),
+      duration: 30,
+      description: `Interactive exercise designed to reinforce ${request.category} concepts through hands-on practice and group engagement.`,
+      learningObjectives: [`Apply ${request.category} principles in practical scenarios`, 'Develop confidence through practice', 'Learn from peer interactions'],
+      exerciseDescription: this.generateExerciseDescription(request.category, request.sessionType),
+      engagementType: this.selectEngagementType(request.sessionType),
+      suggestedActivities: ['Role-playing exercise', 'Small group breakouts', 'Peer feedback sessions'],
+      materialsNeeded: ['Exercise worksheets', 'Timer', 'Name tags for roles'],
+
+      // Enhanced properties for exercise capability
+      isExercise: true,
+      exerciseType: this.selectExerciseType(request.sessionType),
+      exerciseInstructions: this.generateDetailedExerciseInstructions(request.category, request.sessionType),
+      estimatedDuration: 30,
+      learningOutcomes: this.generateLearningOutcomes(request.category, request.desiredOutcome, true),
+      trainerNotes: this.generateTrainerNotes(request.category, true),
+      deliveryGuidance: this.generateDeliveryGuidance(request.category, true)
+    };
+
+    // Generate inspirational content
+    const inspirationalContent: InspirationSection = {
+      title: 'Inspiration & Motivation',
+      duration: 10,
+      type: 'video',
+      suggestions: this.generateInspirationSuggestions(request.category),
+      description: `Motivational content to inspire participants and reinforce the importance of ${request.category} in their professional development.`
+    };
+
+    // Generate closing section
+    const closing: ClosingSection = {
+      title: 'Wrap-up & Action Planning',
+      duration: 20,
+      description: 'Summarize key learnings, establish action items, and ensure participants leave with clear next steps.',
+      keyTakeaways: this.generateKeyTakeaways(request.category, request.desiredOutcome),
+      actionItems: this.generateActionItems(request.category, request.desiredOutcome),
+      nextSteps: ['Schedule follow-up check-ins', 'Access additional resources', 'Apply learnings in daily work']
+    };
+
+    return {
+      opener,
+      topic1,
+      topic2,
+      inspirationalContent,
+      closing,
+      totalDuration,
+      suggestedSessionTitle: this.generateSessionTitle(request.category, request.sessionType, request.desiredOutcome),
+      suggestedDescription: this.generateSessionDescription(request.category, request.sessionType, request.desiredOutcome),
+      difficulty: this.determineDifficulty(request.sessionType, relevantTopics.length),
+      recommendedAudienceSize: this.getRecommendedAudienceSize(request.sessionType),
+      ragSuggestions: ragSuggestions || null,
+      fallbackUsed: !ragSuggestions,
+      generatedAt: new Date()
+    };
+  }
+
+  async generateFlexibleSessionOutline(
+    request: SuggestSessionOutlineDto,
+    relevantTopics: Topic[] = [],
+    ragSuggestions?: any,
+    template?: SessionTemplate
+  ): Promise<SessionOutline> {
+    try {
+      // Calculate session duration
+      const startTime = new Date(request.startTime);
+      const endTime = new Date(request.endTime);
+      const totalDuration = Math.floor((endTime.getTime() - startTime.getTime()) / (1000 * 60));
+
+      // Use provided template or get default
+      const sessionTemplate = template || SessionOutlineUtils.getDefaultTemplate();
+
+      // Generate flexible sections based on template
+      const sections: FlexibleSessionSection[] = sessionTemplate.sections.map((section, index) => ({
+        ...section,
+        id: section.id || `section-${index + 1}`,
+        position: index + 1,
+        title: this.customizeForRequest(section.title, request.category, request.specificTopics),
+        description: this.customizeForRequest(section.description, request.category, request.desiredOutcome),
+        duration: Math.max(5, Math.floor(section.duration * (totalDuration / sessionTemplate.totalDuration))),
+        // Enhance with AI-generated content
+        trainerNotes: section.trainerNotes || this.generateTrainerNotes(request.category, section.isExercise || false),
+        learningOutcomes: section.learningOutcomes || this.generateLearningOutcomes(request.category, request.desiredOutcome, section.isExercise || false),
+        deliveryGuidance: section.deliveryGuidance || this.generateDeliveryGuidance(request.category, section.isExercise || false),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+
+      // Adjust durations to match total
+      const totalSectionDuration = sections.reduce((sum, s) => sum + s.duration, 0);
+      if (totalSectionDuration !== totalDuration) {
+        this.adjustSectionDurations(sections, totalDuration);
+      }
+
+      return {
+        sections,
+        totalDuration,
+        suggestedSessionTitle: this.generateSessionTitle(request.category, request.sessionType, request.desiredOutcome),
+        suggestedDescription: this.generateSessionDescription(request.category, request.sessionType, request.desiredOutcome),
+        difficulty: this.determineDifficulty(request.sessionType, relevantTopics.length),
+        recommendedAudienceSize: this.getRecommendedAudienceSize(request.sessionType),
+        ragSuggestions: ragSuggestions || null,
+        fallbackUsed: !ragSuggestions && relevantTopics.length === 0,
+        generatedAt: new Date()
+      };
+    } catch (error) {
+      console.error('Error generating flexible session outline:', error);
+      throw new InternalServerErrorException('Failed to generate flexible session outline');
+    }
+  }
+
+  private customizeForRequest(text: string, category: string, specificInfo?: string): string {
+    if (!text) return '';
+
+    let customized = text.replace(/\{category\}/gi, category);
+    if (specificInfo) {
+      customized = customized.replace(/\{specific\}/gi, specificInfo);
+    }
+
+    // Replace generic placeholders with category-specific content
+    if (text.includes('Core Learning Topic')) {
+      return `${category} Fundamentals and Best Practices`;
+    }
+    if (text.includes('Interactive Practice Exercise')) {
+      return `${category} Skills Application Exercise`;
+    }
+
+    return customized;
+  }
+
+  private adjustSectionDurations(sections: FlexibleSessionSection[], targetTotal: number): void {
+    const currentTotal = sections.reduce((sum, s) => sum + s.duration, 0);
+    const adjustment = targetTotal - currentTotal;
+
+    if (Math.abs(adjustment) <= 5) return; // Small differences are acceptable
+
+    // Distribute adjustment proportionally across non-required sections
+    const adjustableSections = sections.filter(s => !s.isRequired);
+    if (adjustableSections.length === 0) return;
+
+    const adjustmentPerSection = Math.floor(adjustment / adjustableSections.length);
+    let remainingAdjustment = adjustment - (adjustmentPerSection * adjustableSections.length);
+
+    adjustableSections.forEach((section, index) => {
+      section.duration += adjustmentPerSection;
+      if (index < remainingAdjustment) {
+        section.duration += 1;
+      }
+      // Ensure minimum duration of 5 minutes
+      section.duration = Math.max(5, section.duration);
+    });
+  }
+
+  private generateTopicTitle(category: string, specificTopics: string = '', relevantTopics: Topic[], topicNumber: number): string {
+    if (specificTopics && topicNumber === 1) {
+      return `Core ${category}: ${specificTopics.split(',')[0]?.trim() || 'Fundamentals'}`;
+    }
+
+    if (relevantTopics.length > 0 && topicNumber <= relevantTopics.length) {
+      return relevantTopics[topicNumber - 1].name;
+    }
+
+    const defaultTopics = {
+      1: `${category} Foundations`,
+      2: `${category} Application & Practice`
+    };
+
+    return defaultTopics[topicNumber as keyof typeof defaultTopics] || `${category} Topic ${topicNumber}`;
+  }
+
+  private generateTopicDescription(category: string, desiredOutcome: string, relevantTopics: Topic[], ragSuggestions?: any): string {
+    let description = `Comprehensive exploration of ${category} principles and practices. `;
+
+    if (desiredOutcome) {
+      description += `This topic directly supports the goal of ${desiredOutcome.toLowerCase()}. `;
+    }
+
+    if (relevantTopics.length > 0) {
+      description += `Drawing from proven methodologies including ${relevantTopics.slice(0, 2).map(t => t.name).join(' and ')}. `;
+    }
+
+    description += 'Participants will engage in interactive discussions and practical applications.';
+
+    return description;
+  }
+
+  private generateLearningObjectives(category: string, desiredOutcome: string): string[] {
+    return [
+      `Understand core ${category} principles and their practical applications`,
+      `Identify key strategies for ${desiredOutcome.toLowerCase() || 'professional success'}`,
+      `Develop confidence in applying ${category} skills in real-world scenarios`,
+      'Build a personal action plan for continued growth'
+    ];
+  }
+
+  private generateExerciseDescription(category: string, sessionType: string): string {
+    const exerciseTypes = {
+      workshop: `Hands-on ${category} simulation with real-world scenarios`,
+      training: `Structured practice session with guided ${category} application`,
+      webinar: `Interactive breakout sessions focusing on ${category} implementation`,
+      event: `Collaborative ${category} challenge with peer learning opportunities`
+    };
+
+    return exerciseTypes[sessionType as keyof typeof exerciseTypes] || `Interactive ${category} exercise`;
+  }
+
+  private selectEngagementType(sessionType: string): 'discussion' | 'activity' | 'workshop' | 'case-study' | 'role-play' {
+    const engagementMap = {
+      workshop: 'workshop' as const,
+      training: 'activity' as const,
+      webinar: 'discussion' as const,
+      event: 'case-study' as const
+    };
+
+    return engagementMap[sessionType as keyof typeof engagementMap] || 'activity';
+  }
+
+  private generateInspirationSuggestions(category: string): string[] {
+    return [
+      `"The Power of ${category}" - Industry success stories`,
+      `"Transforming Teams Through ${category}" - Leadership insights`,
+      `"Real-World ${category} Champions" - Client testimonials`,
+      `"Future of ${category}" - Innovation and trends`,
+      `"Personal ${category} Journey" - Motivational speaker`
+    ];
+  }
+
+  private generateKeyTakeaways(category: string, desiredOutcome: string): string[] {
+    return [
+      `${category} is essential for ${desiredOutcome.toLowerCase() || 'professional success'}`,
+      'Practical tools and strategies can be implemented immediately',
+      'Continuous learning and practice drive mastery',
+      'Peer collaboration enhances individual growth',
+      'Personal commitment is key to achieving lasting change'
+    ];
+  }
+
+  private generateActionItems(category: string, desiredOutcome: string): string[] {
+    return [
+      `Identify one ${category} skill to practice this week`,
+      `Schedule time for daily ${category} application`,
+      'Find an accountability partner for ongoing support',
+      `Set specific goals related to ${desiredOutcome.toLowerCase() || 'skill development'}`,
+      'Plan follow-up learning activities and resources'
+    ];
+  }
+
+  private generateSessionTitle(category: string, sessionType: string, desiredOutcome: string): string {
+    const typeModifiers = {
+      workshop: 'Interactive',
+      training: 'Comprehensive',
+      webinar: 'Virtual',
+      event: 'Special'
+    };
+
+    const modifier = typeModifiers[sessionType as keyof typeof typeModifiers] || 'Professional';
+    return `${modifier} ${category} ${sessionType.charAt(0).toUpperCase() + sessionType.slice(1)}: ${desiredOutcome}`;
+  }
+
+  private generateSessionDescription(category: string, sessionType: string, desiredOutcome: string): string {
+    return `Join us for this engaging ${sessionType} focused on ${category} development. Designed to help participants ${desiredOutcome.toLowerCase()}, this session combines expert instruction with practical application. Participants will leave with actionable strategies and increased confidence in their ${category.toLowerCase()} capabilities.`;
+  }
+
+  private determineDifficulty(sessionType: string, topicCount: number): 'beginner' | 'intermediate' | 'advanced' {
+    if (sessionType === 'event' || topicCount <= 2) return 'beginner';
+    if (sessionType === 'workshop' || topicCount > 5) return 'advanced';
+    return 'intermediate';
+  }
+
+  private getRecommendedAudienceSize(sessionType: string): string {
+    const sizeRecommendations = {
+      workshop: '8-12 participants for optimal interaction',
+      training: '12-20 participants for effective learning',
+      webinar: '20-50 participants for broad reach',
+      event: '15-30 participants for networking opportunities'
+    };
+
+    return sizeRecommendations[sessionType as keyof typeof sizeRecommendations] || '10-25 participants';
+  }
+
+  // PHASE 5: Training Kit and Marketing Kit Generation
+
+  async generateTrainingKitForSession(session: Session): Promise<{
+    trainerPreparation: string;
+    deliveryTips: string[];
+    materialsList: string[];
+    timingGuidance: string;
+    troubleshooting: string[];
+    resourceLinks: string[];
+  }> {
+    try {
+      // Extract session outline data if available
+      let sessionStructure = 'Standard session format';
+      if (session.sessionOutlineData) {
+        sessionStructure = this.formatOutlineForTrainingKit(session.sessionOutlineData);
+      }
+
+      const context = {
+        title: session.title,
+        description: session.description || '',
+        category: session.category?.name || 'General',
+        audience: session.audience?.name || 'General audience',
+        tone: session.tone?.name || 'Professional',
+        topics: session.topics?.map(t => t.name).join(', ') || '',
+        sessionStructure,
+        duration: this.calculateSessionDuration(session.startTime, session.endTime)
+      };
+
+      // Use enhanced training kit template
+      const template = await this.getTemplate('training-kit-generator');
+      if (!template) {
+        throw new BadRequestException('Training kit template not found');
+      }
+
+      const prompt = this.populateTemplate(template.template, context);
+
+      // For now, generate structured training kit based on session data
+      // In production, this would call OpenAI API
+      return this.generateStructuredTrainingKit(session, context);
+
+    } catch (error) {
+      console.error('Error generating training kit:', error);
+      throw new InternalServerErrorException('Failed to generate training kit');
+    }
+  }
+
+  async generateMarketingKitForSession(session: Session): Promise<{
+    socialMediaPosts: string[];
+    emailTemplates: string[];
+    landingPageContent: string;
+    promotionalFlyers: string;
+    partnerOutreach: string;
+    followUpSequence: string[];
+  }> {
+    try {
+      const context = {
+        title: session.title,
+        description: session.description || '',
+        category: session.category?.name || 'General',
+        audience: session.audience?.name || 'General audience',
+        tone: session.tone?.name || 'Professional',
+        startTime: session.startTime,
+        endTime: session.endTime,
+        location: session.location?.name || 'TBD',
+        maxRegistrations: session.maxRegistrations,
+        keyBenefits: session.keyBenefits || '',
+        callToAction: session.callToAction || ''
+      };
+
+      const template = await this.getTemplate('marketing-kit-generator');
+      if (!template) {
+        throw new BadRequestException('Marketing kit template not found');
+      }
+
+      const prompt = this.populateTemplate(template.template, context);
+
+      // Generate structured marketing kit
+      return this.generateStructuredMarketingKit(session, context);
+
+    } catch (error) {
+      console.error('Error generating marketing kit:', error);
+      throw new InternalServerErrorException('Failed to generate marketing kit');
+    }
+  }
+
+  private formatOutlineForTrainingKit(outlineData: any): string {
+    if (!outlineData || typeof outlineData !== 'object') {
+      return 'Standard session format';
+    }
+
+    const sections = [];
+
+    if (outlineData.opener) {
+      sections.push(`Opener (${outlineData.opener.duration}min): ${outlineData.opener.title}`);
+    }
+    if (outlineData.topic1) {
+      sections.push(`Topic 1 (${outlineData.topic1.duration}min): ${outlineData.topic1.title}`);
+    }
+    if (outlineData.topic2) {
+      sections.push(`Topic 2 (${outlineData.topic2.duration}min): ${outlineData.topic2.title} - ${outlineData.topic2.exerciseDescription || 'Interactive exercise'}`);
+    }
+    if (outlineData.inspirationalContent) {
+      sections.push(`Inspiration (${outlineData.inspirationalContent.duration}min): ${outlineData.inspirationalContent.title}`);
+    }
+    if (outlineData.closing) {
+      sections.push(`Closing (${outlineData.closing.duration}min): ${outlineData.closing.title}`);
+    }
+
+    return sections.join('\n');
+  }
+
+  private calculateSessionDuration(startTime: Date, endTime: Date): string {
+    const diffMs = endTime.getTime() - startTime.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    return `${diffMins}`;
+  }
+
+  private generateStructuredTrainingKit(session: Session, context: any): any {
+    const category = context.category.toLowerCase();
+    const duration = context.duration;
+
+    return {
+      trainerPreparation: `Complete preparation guide for delivering "${session.title}". This ${duration}-minute ${category} session requires thorough preparation to ensure maximum impact. Review all materials 24 hours before delivery, prepare backup activities, and ensure all technology is tested. Familiarize yourself with the session flow and key learning objectives.`,
+
+      deliveryTips: [
+        `Start with energy - the opening sets the tone for the entire ${duration}-minute session`,
+        `Maintain engagement through interactive elements throughout`,
+        `Use real-world examples relevant to ${context.audience}`,
+        `Monitor time carefully - each section has specific duration targets`,
+        `Encourage questions and participation to enhance learning`,
+        `Be prepared to adapt content based on group dynamics`,
+        `Close with clear action items and next steps`
+      ],
+
+      materialsList: [
+        'Presentation slides (backup copies ready)',
+        'Handouts and worksheets for all participants',
+        'Name tags and markers',
+        'Flip chart paper and markers',
+        'Timer or stopwatch',
+        'Audio/visual equipment (tested)',
+        'Participant feedback forms',
+        'Resource links and follow-up materials'
+      ],
+
+      timingGuidance: `Session Duration: ${duration} minutes\n\nRecommended flow:\n- Opening and introductions: 10-15% of total time\n- Main content delivery: 60-70% of total time\n- Interactive exercises: 15-20% of total time\n- Wrap-up and action planning: 10-15% of total time\n\nAlways have 5-10 minutes buffer for questions and overruns.`,
+
+      troubleshooting: [
+        'Technology fails: Have printed backup materials ready',
+        'Low participation: Use smaller group activities to build confidence',
+        'Running over time: Identify optional content that can be shortened',
+        'Difficult participants: Acknowledge concerns and redirect to learning objectives',
+        'Room too small/large: Adapt seating arrangement and interaction style',
+        'Last-minute cancellations: Have contingency activities for smaller groups'
+      ],
+
+      resourceLinks: [
+        `Additional ${category} resources and reading materials`,
+        'Follow-up training opportunities',
+        'Online tools and assessment resources',
+        'Industry best practices and case studies',
+        'Professional development resources',
+        'Feedback and evaluation tools'
+      ]
+    };
+  }
+
+  private generateStructuredMarketingKit(session: Session, context: any): any {
+    const formatDate = (date: Date) => date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const formatTime = (date: Date) => date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    return {
+      socialMediaPosts: [
+        `🚀 Ready to transform your ${context.category.toLowerCase()} skills? Join "${session.title}" on ${formatDate(new Date(context.startTime))}! Limited to ${context.maxRegistrations} participants. Register now: [LINK] #ProfessionalDevelopment #${context.category.replace(/\s+/g, '')}`,
+
+        `💡 What if you could master ${context.category.toLowerCase()} in just one session? "${session.title}" delivers practical strategies you can implement immediately. ${formatDate(new Date(context.startTime))} at ${formatTime(new Date(context.startTime))}. Don't miss out! [LINK]`,
+
+        `🎯 Calling all ${context.audience}! Transform your approach to ${context.category.toLowerCase()} with expert-led training. "${session.title}" - ${formatDate(new Date(context.startTime))}. Only ${context.maxRegistrations} spots available. [LINK] #Training #CareerGrowth`,
+
+        `⏰ Final reminder: "${session.title}" starts tomorrow at ${formatTime(new Date(context.startTime))}! Join ${context.audience} from across the industry for this game-changing session. Last chance to register: [LINK]`
+      ],
+
+      emailTemplates: [
+        `Subject: Transform Your ${context.category} Skills - "${session.title}"\n\nDear Professional,\n\nAre you ready to take your ${context.category.toLowerCase()} capabilities to the next level?\n\nJoin us for "${session.title}" - an intensive training designed specifically for ${context.audience}.\n\n📅 When: ${formatDate(new Date(context.startTime))} at ${formatTime(new Date(context.startTime))}\n📍 Where: ${context.location}\n👥 Limited to: ${context.maxRegistrations} participants\n\nWhat You'll Gain:\n${context.keyBenefits || '• Practical strategies for immediate implementation\n• Expert insights from industry leaders\n• Networking with like-minded professionals\n• Resources for continued growth'}\n\n${context.callToAction || 'Don\'t miss this opportunity to advance your career!'}\n\nRegister now: [REGISTRATION LINK]\n\nBest regards,\nThe Training Team`,
+
+        `Subject: Last Chance - "${session.title}" Registration Closes Soon\n\nHi [Name],\n\nThis is your final reminder that registration for "${session.title}" closes in 24 hours.\n\nWe've designed this session specifically for professionals like you who are serious about improving their ${context.category.toLowerCase()} skills.\n\n⚡ Quick Details:\n• Date: ${formatDate(new Date(context.startTime))}\n• Time: ${formatTime(new Date(context.startTime))} - ${formatTime(new Date(context.endTime))}\n• Format: Interactive ${context.audience} training\n• Investment: Your time + commitment to growth\n\nOnly ${context.maxRegistrations} spots available, and we're filling fast.\n\nSecure your seat: [REGISTRATION LINK]\n\nQuestions? Reply to this email.\n\nSee you there!\n[Your Name]`
+      ],
+
+      landingPageContent: `# ${session.title}\n\n## Transform Your ${context.category} Skills in One Intensive Session\n\n**${formatDate(new Date(context.startTime))} | ${formatTime(new Date(context.startTime))} - ${formatTime(new Date(context.endTime))} | ${context.location}**\n\n### Why This Session?\n\n${session.description}\n\nDesigned specifically for ${context.audience}, this intensive training combines expert instruction with hands-on application to deliver real results.\n\n### What You'll Achieve\n\n${context.keyBenefits || '• Master essential techniques that drive results\n• Gain practical tools for immediate implementation\n• Build confidence through proven methodologies\n• Network with motivated professionals\n• Access exclusive resources and continued support'}\n\n### Session Format\n\nOur proven methodology ensures maximum learning in minimum time:\n- **Interactive Learning**: Engaging activities and real-world applications\n- **Expert Instruction**: Led by industry practitioners\n- **Practical Focus**: Tools and strategies you can use immediately\n- **Personalized Attention**: Limited to ${context.maxRegistrations} participants\n\n### Who Should Attend\n\nThis session is perfect for ${context.audience} who are:\n- Ready to take their ${context.category.toLowerCase()} skills to the next level\n- Looking for practical, actionable strategies\n- Committed to implementing what they learn\n- Interested in networking with like-minded professionals\n\n### ${context.callToAction || 'Ready to Transform Your Career?'}\n\n**Limited to ${context.maxRegistrations} participants to ensure personalized attention.**\n\n[REGISTER NOW - BUTTON]`,
+
+      promotionalFlyers: `**${session.title.toUpperCase()}**\n\n🎯 ${context.category} Training for ${context.audience}\n\n📅 ${formatDate(new Date(context.startTime))}\n🕐 ${formatTime(new Date(context.startTime))} - ${formatTime(new Date(context.endTime))}\n📍 ${context.location}\n\n✨ WHAT YOU'LL GAIN:\n${context.keyBenefits || '• Practical strategies for immediate results\n• Expert insights from industry leaders\n• Networking opportunities\n• Exclusive resources and tools'}\n\n🚀 LIMITED TO ${context.maxRegistrations} PARTICIPANTS\n\n${context.callToAction || 'Register now to secure your spot!'}\n\n[QR CODE] | [WEBSITE] | [PHONE]\n\n"Invest in your future - the results speak for themselves!"`,
+
+      partnerOutreach: `Subject: Partnership Opportunity - "${session.title}"\n\nDear [Partner Name],\n\nI hope this email finds you well. I'm reaching out to share an exciting training opportunity that would be perfect for your ${context.audience}.\n\nWe're hosting "${session.title}" on ${formatDate(new Date(context.startTime))}, and I believe your team/members would benefit tremendously from this specialized training.\n\n**Why This Matters for Your Team:**\n• Directly applicable ${context.category.toLowerCase()} skills\n• Proven methodologies for immediate implementation\n• Professional development that delivers ROI\n• Networking with industry leaders\n\n**Partnership Benefits:**\n• Group registration discounts available\n• Co-marketing opportunities\n• Customization options for your specific needs\n• Follow-up resources and support\n\nI'd love to discuss how we can work together to provide maximum value for your team. Are you available for a brief call this week?\n\nBest regards,\n[Your Name]\n[Contact Information]`,
+
+      followUpSequence: [
+        `Day +1: Thank you for attending "${session.title}"! Your session materials and resources are attached. What's your first step?`,
+
+        `Day +3: How are you implementing what you learned? Remember, small consistent actions lead to big results. Need any clarification on the strategies we covered?`,
+
+        `Week +1: Quick check-in: Have you had a chance to apply any of the ${context.category.toLowerCase()} techniques from our session? I'd love to hear about your progress!`,
+
+        `Week +2: Midpoint momentum check! You're halfway through the optimal implementation window. What's working well? What challenges can we help you overcome?`,
+
+        `Month +1: It's been a month since "${session.title}" - time for a success celebration! Please share your wins, big or small. Your progress inspires others!`
+      ]
+    };
+  }
+
+  // ADD new prompt templates creation methods
+  async createTrainingKitTemplate(): Promise<void> {
+    const templateContent = `---
+id: training-kit-generator
+name: Training Kit Generator
+description: Generate comprehensive training kits for session delivery
+category: trainer-support
+variables: [title, description, category, audience, tone, topics, sessionStructure, duration]
+---
+
+Generate a comprehensive training kit for the session: "{title}"
+
+Session Details:
+- Category: {category}
+- Target Audience: {audience}
+- Tone: {tone}
+- Duration: {duration}
+- Topics: {topics}
+
+Session Structure:
+{sessionStructure}
+
+Description: {description}
+
+Create a detailed training kit that includes:
+
+1. **Trainer Preparation Guide**: Step-by-step preparation instructions
+2. **Delivery Tips**: Best practices for effective session delivery
+3. **Materials List**: All required materials and resources
+4. **Timing Guidance**: Detailed timing recommendations for each section
+5. **Troubleshooting Guide**: Common issues and solutions
+6. **Resource Links**: Additional resources and follow-up materials
+
+The training kit should be practical, actionable, and specifically tailored to help trainers deliver this {category} session effectively to {audience}.
+
+Focus on:
+- Clear, step-by-step instructions
+- Practical tips that improve delivery quality
+- Contingency planning for common challenges
+- Resources that enhance learning outcomes
+- Professional presentation and delivery techniques`;
+
+    // Save template to file system (would be implemented based on your template system)
+  }
+
+  async createMarketingKitTemplate(): Promise<void> {
+    const templateContent = `---
+id: marketing-kit-generator
+name: Marketing Kit Generator
+description: Generate comprehensive marketing materials for session promotion
+category: marketing-support
+variables: [title, description, category, audience, tone, startTime, endTime, location, maxRegistrations, keyBenefits, callToAction]
+---
+
+Create a comprehensive marketing kit for: "{title}"
+
+Session Details:
+- Category: {category}
+- Target Audience: {audience}
+- Tone: {tone}
+- Schedule: {startTime} to {endTime}
+- Location: {location}
+- Capacity: {maxRegistrations} participants
+- Key Benefits: {keyBenefits}
+- Call to Action: {callToAction}
+
+Description: {description}
+
+Generate marketing materials including:
+
+1. **Social Media Posts**: 4-5 engaging posts for different stages of promotion
+2. **Email Templates**: Registration and reminder email templates
+3. **Landing Page Content**: Complete landing page copy with structure
+4. **Promotional Flyers**: Print-ready promotional content
+5. **Partner Outreach**: Template for reaching out to potential partners
+6. **Follow-up Sequence**: Post-session follow-up communication templates
+
+All content should:
+- Be compelling and action-oriented
+- Highlight the value proposition for {audience}
+- Use appropriate {tone} for the target audience
+- Include clear calls to action
+- Be adaptable for different marketing channels
+- Drive registrations and engagement`;
+
+    // Save template to file system
+  }
+
+  // Enhanced AI generation helper methods for exercise-capable topics
+
+  private generateLearningOutcomes(category: string, desiredOutcome: string, isExercise: boolean = false): string {
+    const baseOutcomes = `Participants will be able to:
+- Apply ${category} principles in their daily work
+- Identify opportunities for ${desiredOutcome.toLowerCase() || 'improvement'}
+- Develop confidence in ${category} skills`;
+
+    if (isExercise) {
+      return baseOutcomes + `
+- Practice ${category} techniques in a safe environment
+- Learn through hands-on experience and peer feedback
+- Build muscle memory for key ${category} behaviors`;
+    }
+
+    return baseOutcomes + `
+- Understand theoretical foundations of ${category}
+- Recognize best practices and proven methodologies`;
+  }
+
+  private generateTrainerNotes(category: string, isExercise: boolean): string {
+    const baseNotes = `Key facilitation points:
+- Encourage active participation and questions
+- Use real-world examples relevant to the audience
+- Check for understanding regularly`;
+
+    if (isExercise) {
+      return baseNotes + `
+- Provide clear instructions before starting the exercise
+- Monitor group dynamics and provide guidance as needed
+- Ensure all participants are engaged in the activity
+- Debrief thoroughly to capture key learnings
+- Be prepared to adapt based on group energy and engagement`;
+    }
+
+    return baseNotes + `
+- Present information in digestible chunks
+- Use visual aids and interactive elements
+- Allow time for reflection and note-taking`;
+  }
+
+  private generateDeliveryGuidance(category: string, isExercise: boolean): string {
+    if (isExercise) {
+      return `Exercise facilitation guidance:
+1. Set clear expectations and ground rules
+2. Form groups strategically (mix of experience levels)
+3. Provide written instructions for reference
+4. Circulate actively to provide support and feedback
+5. Keep track of time and provide regular updates
+6. Use the debrief to reinforce key ${category} concepts
+7. Connect the exercise back to real-world applications`;
+    }
+
+    return `Content delivery guidance:
+1. Start with a compelling hook or real-world scenario
+2. Break complex ${category} concepts into manageable pieces
+3. Use the "tell them what you'll tell them" approach
+4. Incorporate interactive elements every 10-15 minutes
+5. Use stories and examples to make concepts memorable
+6. Check for understanding through questions and discussion
+7. Summarize key points before transitioning`;
+  }
+
+  private selectExerciseType(sessionType: string): 'discussion' | 'activity' | 'workshop' | 'case-study' | 'role-play' | 'presentation' {
+    const exerciseTypeMap = {
+      workshop: 'workshop' as const,
+      training: 'activity' as const,
+      webinar: 'case-study' as const,
+      event: 'role-play' as const
+    };
+
+    return exerciseTypeMap[sessionType as keyof typeof exerciseTypeMap] || 'activity';
+  }
+
+  private generateDetailedExerciseInstructions(category: string, sessionType: string): string {
+    const exerciseType = this.selectExerciseType(sessionType);
+
+    const instructionTemplates = {
+      workshop: `Interactive ${category} Workshop Exercise:
+1. Divide into small groups of 4-5 participants
+2. Each group receives a real-world ${category} scenario
+3. Groups have 15 minutes to develop their approach
+4. Present solutions to the larger group (5 minutes each)
+5. Facilitate group discussion on different approaches
+6. Trainer provides expert feedback and guidance`,
+
+      activity: `${category} Practice Activity:
+1. Individual reflection phase (5 minutes)
+2. Partner sharing and feedback (10 minutes)
+3. Small group synthesis (10 minutes)
+4. Large group debrief and key takeaways (5 minutes)
+5. Action planning for implementation`,
+
+      'case-study': `${category} Case Study Analysis:
+1. Present detailed case study scenario
+2. Individual analysis phase (10 minutes)
+3. Small group discussion and solution development (15 minutes)
+4. Group presentations and peer feedback (5 minutes)
+5. Expert analysis and best practice discussion`,
+
+      'role-play': `${category} Role-Playing Exercise:
+1. Assign roles and provide character backgrounds
+2. Brief preparation time for role understanding (5 minutes)
+3. Conduct role-play scenarios (15 minutes)
+4. Step out of character for debrief discussion (10 minutes)
+5. Identify key learnings and real-world applications`,
+
+      discussion: `Guided ${category} Discussion:
+1. Present thought-provoking questions or scenarios
+2. Individual reflection time (3 minutes)
+3. Pair-share discussions (7 minutes)
+4. Small group synthesis (15 minutes)
+5. Large group sharing and expert insights (5 minutes)`,
+
+      presentation: `${category} Presentation Exercise:
+1. Teams prepare mini-presentations on assigned topics (15 minutes)
+2. Each team presents for 5 minutes
+3. Q&A and peer feedback (5 minutes per team)
+4. Group discussion on key insights and takeaways`
+    };
+
+    return instructionTemplates[exerciseType] || instructionTemplates.activity;
   }
 }

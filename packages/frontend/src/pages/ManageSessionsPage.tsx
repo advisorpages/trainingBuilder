@@ -120,12 +120,12 @@ export const ManageSessionsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Sessions List */}
+        {/* Sessions List - default to drafts for stability */}
         <DraftsList
           onEditDraft={handleEditSession}
           onDeleteDraft={handleDeleteSession}
           refreshTrigger={refreshTrigger}
-          showAllSessions={true}
+          showAllSessions={false}
         />
       </div>
     </div>

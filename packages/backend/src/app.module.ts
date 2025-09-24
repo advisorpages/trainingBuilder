@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { HttpModule } from '@nestjs/axios';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -64,6 +65,9 @@ import { RolesGuard } from './common/guards/roles.guard';
 
     // TypeORM for webhook sync service
     TypeOrmModule.forFeature([Registration]),
+
+    // HTTP module for external API calls
+    HttpModule,
 
     // Feature modules
     AuthModule,

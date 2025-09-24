@@ -41,12 +41,18 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
+    // Extract user's role name in a robust way (supports multiple shapes)
+    const userRoleName: string | undefined =
+      user?.role?.name || // Full entity relation loaded
+      user?.roleName || // JWT payload may carry roleName
+      (typeof user?.role === 'string' ? user.role : undefined); // Sometimes role may be a plain string
+
     // Check if user has any of the required roles
-    const hasRole = requiredRoles.some((role) => user.roleName === role);
+    const hasRole = !!userRoleName && requiredRoles.some((role) => userRoleName === role);
 
     if (!hasRole) {
       throw new ForbiddenException(
-        `Access denied. Required roles: ${requiredRoles.join(', ')}. User role: ${user.roleName}`
+        `Access denied. Required roles: ${requiredRoles.join(', ')}. User role: ${userRoleName ?? 'unknown'}`
       );
     }
 

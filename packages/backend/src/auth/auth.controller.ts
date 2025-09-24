@@ -60,8 +60,7 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'JWT token required' })
   async getProfile(@Request() req): Promise<any> {
     // Remove sensitive information before returning
-    const { user } = req.user;
-    const { passwordHash: _passwordHash, ...safeUser } = user;
+    const { passwordHash: _passwordHash, ...safeUser } = req.user;
     return safeUser;
   }
 

@@ -36,8 +36,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       }
 
       // Attach the full user entity to the request for downstream use
+      // Also merge payload role info to guard against missing relations in edge cases
       // Many services/controllers expect req.user.id and req.user.role.name
-      return user;
+      return {
+        ...user,
+        roleName: payload.roleName,
+        roleId: payload.roleId,
+      } as any;
     } catch (error) {
       throw new UnauthorizedException('Invalid token');
     }
