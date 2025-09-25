@@ -42,6 +42,14 @@ services:
       QR_CODE_ERROR_CORRECTION: M
       QR_CODE_SIZE: 300x300
       QR_CODE_FORMAT: PNG
+      # OpenAI Configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      OPENAI_MODEL: gpt-4o-mini
+      OPENAI_MAX_TOKENS: 2500
+      OPENAI_TEMPERATURE: 0.7
+      OPENAI_TIMEOUT_MS: 30000
+      OPENAI_MAX_RETRIES: 3
     ports:
       - "3001:3001"
     volumes:

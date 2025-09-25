@@ -3,3 +3,7 @@ export * from './AIComposer';
 export * from './ArtifactsPreview';
 export * from './QuickAddModal';
 export * from './AutosaveIndicator';
+export * from './StepIndicator';
+export * from './VersionComparison';
+export * from './ReadinessIndicator';
+export * from './DebugPanel';

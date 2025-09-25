@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import {
@@ -20,6 +20,7 @@ import {
   SuggestOutlineResponse,
   SuggestedSessionSection,
 } from './dto/suggest-outline.dto';
+import { OpenAIService, OpenAISessionOutlineRequest } from '../../services/openai.service';
 
 @Injectable()
 export class SessionsService {
@@ -37,6 +38,7 @@ export class SessionsService {
     @InjectRepository(SessionBuilderDraft)
     private readonly draftsRepository: Repository<SessionBuilderDraft>,
     private readonly readinessScoringService: ReadinessScoringService,
+    private readonly openAIService: OpenAIService,
   ) {}
 
   private applyPublishTimestamp(session: Session, previousStatus: SessionStatus) {
@@ -179,74 +181,163 @@ export class SessionsService {
     return this.contentRepository.save(version);
   }
 
+  private readonly logger = new Logger(SessionsService.name);
+
   async suggestOutline(payload: SuggestOutlineDto): Promise<SuggestOutlineResponse> {
+    const startTime = Date.now();
     const now = new Date();
-    const sections: SuggestedSessionSection[] = [
-      {
-        id: `intro-${now.getTime()}`,
-        type: 'opener',
-        position: 0,
-        title: 'Welcome & Context Setting',
-        duration: 10,
-        description: `Open the ${payload.sessionType} with a quick framing that highlights why ${payload.category.toLowerCase()} matters right now.`,
-        learningObjectives: ['Establish psychological safety', 'Align on session outcomes'],
-      },
-      {
-        id: `core-${now.getTime() + 1}`,
-        type: 'topic',
-        position: 1,
-        title: 'Core Concepts & Stories',
-        duration: 25,
-        description: `Introduce the primary frameworks and reference recent examples that map to the desired outcome: ${payload.desiredOutcome}.`,
-        learningObjectives: payload.specificTopics
-          ? payload.specificTopics.split(',').map((topic) => topic.trim()).filter(Boolean)
-          : undefined,
-      },
-      {
-        id: `apply-${now.getTime() + 2}`,
-        type: 'exercise',
-        position: 2,
-        title: 'Application Lab',
-        duration: 20,
-        description: 'Move the group into pairs or triads to translate the ideas into their current challenges.',
-        suggestedActivities: ['Role-play scenarios', 'Case study walk-through', 'Peer feedback loops'],
-      },
-      {
-        id: `close-${now.getTime() + 3}`,
-        type: 'closing',
-        position: 3,
-        title: 'Commitments & Next Actions',
-        duration: 10,
-        description: 'Capture top takeaways and individual commitments; reference support assets available post-session.',
-      },
-    ];
+
+    // Calculate session duration from start/end times
+    const duration = payload.startTime && payload.endTime
+      ? Math.round((new Date(payload.endTime).getTime() - new Date(payload.startTime).getTime()) / 60000)
+      : 60; // Default to 60 minutes
+
+    let useOpenAI = false;
+    let aiOutline: any = null;
+    let fallbackUsed = false;
+
+    // Try OpenAI first if configured
+    if (this.openAIService.isConfigured()) {
+      try {
+        this.logger.log(`Attempting OpenAI generation for session: ${payload.title || payload.category}`);
+
+        const openAIRequest: OpenAISessionOutlineRequest = {
+          title: payload.title,
+          category: payload.category,
+          sessionType: payload.sessionType,
+          desiredOutcome: payload.desiredOutcome,
+          currentProblem: payload.currentProblem,
+          specificTopics: payload.specificTopics,
+          duration,
+          audienceSize: '8-20', // Could be made configurable
+        };
+
+        aiOutline = await this.openAIService.generateSessionOutline(openAIRequest);
+        useOpenAI = true;
+        this.logger.log('Successfully generated outline using OpenAI');
+      } catch (error) {
+        this.logger.error('OpenAI generation failed, falling back to template', error.message);
+        fallbackUsed = true;
+      }
+    } else {
+      this.logger.warn('OpenAI not configured, using template fallback');
+      fallbackUsed = true;
+    }
+
+    let sections: SuggestedSessionSection[];
+    let sessionTitle: string;
+    let description: string;
+    let difficulty: string;
+    let recommendedAudienceSize: string;
+
+    if (useOpenAI && aiOutline) {
+      // Convert OpenAI response to our format
+      sections = aiOutline.sections.map((section: any, index: number) => ({
+        id: `ai-${now.getTime()}-${index}`,
+        type: this.mapSectionType(section.title, index),
+        position: index,
+        title: section.title,
+        duration: section.duration,
+        description: section.description,
+        learningObjectives: section.learningObjectives || [],
+        suggestedActivities: section.suggestedActivities || [],
+      }));
+
+      sessionTitle = aiOutline.suggestedTitle;
+      description = aiOutline.summary;
+      difficulty = aiOutline.difficulty || 'Intermediate';
+      recommendedAudienceSize = aiOutline.recommendedAudienceSize || '8-20';
+    } else {
+      // Fallback to template-based generation
+      sections = [
+        {
+          id: `intro-${now.getTime()}`,
+          type: 'opener',
+          position: 0,
+          title: 'Welcome & Context Setting',
+          duration: Math.round(duration * 0.15), // ~15% of total time
+          description: `Open the ${payload.sessionType} with a quick framing that highlights why ${payload.category.toLowerCase()} matters right now.`,
+          learningObjectives: ['Establish psychological safety', 'Align on session outcomes'],
+        },
+        {
+          id: `core-${now.getTime() + 1}`,
+          type: 'topic',
+          position: 1,
+          title: 'Core Concepts & Stories',
+          duration: Math.round(duration * 0.4), // ~40% of total time
+          description: `Introduce the primary frameworks and reference recent examples that map to the desired outcome: ${payload.desiredOutcome}.`,
+          learningObjectives: payload.specificTopics
+            ? payload.specificTopics.split(',').map((topic) => topic.trim()).filter(Boolean)
+            : undefined,
+        },
+        {
+          id: `apply-${now.getTime() + 2}`,
+          type: 'exercise',
+          position: 2,
+          title: 'Application Lab',
+          duration: Math.round(duration * 0.3), // ~30% of total time
+          description: 'Move the group into pairs or triads to translate the ideas into their current challenges.',
+          suggestedActivities: ['Role-play scenarios', 'Case study walk-through', 'Peer feedback loops'],
+        },
+        {
+          id: `close-${now.getTime() + 3}`,
+          type: 'closing',
+          position: 3,
+          title: 'Commitments & Next Actions',
+          duration: Math.round(duration * 0.15), // ~15% of total time
+          description: 'Capture top takeaways and individual commitments; reference support assets available post-session.',
+        },
+      ];
+
+      sessionTitle = `${payload.category} ${payload.sessionType === 'workshop' ? 'Workshop' : 'Session'}`;
+      description = payload.currentProblem
+        ? `Equip participants to address ${payload.currentProblem.toLowerCase()} while progressing toward ${payload.desiredOutcome}.`
+        : `Guide participants toward ${payload.desiredOutcome} with practical tools they can deploy immediately.`;
+      difficulty = 'Intermediate';
+      recommendedAudienceSize = '8-20';
+    }
 
     const totalDuration = sections.reduce((acc, section) => acc + section.duration, 0);
-    const sessionTitle = `${payload.category} ${payload.sessionType === 'workshop' ? 'Workshop' : 'Session'}`;
+    const processingTime = Date.now() - startTime;
 
     return {
       outline: {
         sections,
         totalDuration,
         suggestedSessionTitle: sessionTitle,
-        suggestedDescription:
-          payload.currentProblem
-            ? `Equip participants to address ${payload.currentProblem.toLowerCase()} while progressing toward ${payload.desiredOutcome}.`
-            : `Guide participants toward ${payload.desiredOutcome} with practical tools they can deploy immediately.`,
-        difficulty: 'Intermediate',
-        recommendedAudienceSize: '8-20',
-        fallbackUsed: false,
+        suggestedDescription: description,
+        difficulty,
+        recommendedAudienceSize,
+        fallbackUsed,
         generatedAt: now.toISOString(),
       },
       relevantTopics: [],
       ragAvailable: false,
       generationMetadata: {
-        processingTime: 320,
+        processingTime,
         ragQueried: false,
-        fallbackUsed: false,
-        topicsFound: sections[1].learningObjectives?.length ?? 0,
+        fallbackUsed,
+        topicsFound: sections[1]?.learningObjectives?.length ?? 0,
       },
     };
+  }
+
+  private mapSectionType(title: string, index: number): string {
+    const titleLower = title.toLowerCase();
+
+    if (titleLower.includes('welcome') || titleLower.includes('intro') || titleLower.includes('opening') || index === 0) {
+      return 'opener';
+    }
+
+    if (titleLower.includes('closing') || titleLower.includes('wrap') || titleLower.includes('conclusion') || titleLower.includes('commitment')) {
+      return 'closing';
+    }
+
+    if (titleLower.includes('practice') || titleLower.includes('exercise') || titleLower.includes('activity') || titleLower.includes('lab')) {
+      return 'exercise';
+    }
+
+    return 'topic';
   }
 
   async getBuilderCompleteData(sessionId: string) {

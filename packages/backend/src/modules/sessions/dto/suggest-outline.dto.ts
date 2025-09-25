@@ -8,6 +8,10 @@ export enum SuggestedSessionType {
 }
 
 export class SuggestOutlineDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
   @IsString()
   category: string;
 
@@ -24,6 +28,18 @@ export class SuggestOutlineDto {
   @IsOptional()
   @IsString()
   specificTopics?: string;
+
+  @IsOptional()
+  @IsString()
+  startTime?: string;
+
+  @IsOptional()
+  @IsString()
+  endTime?: string;
+
+  @IsOptional()
+  @IsString()
+  audienceSize?: string;
 }
 
 export interface SuggestedSessionSection {

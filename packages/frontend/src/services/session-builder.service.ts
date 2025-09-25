@@ -212,10 +212,19 @@ class SessionBuilderService {
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
       const params = templateId ? `?template=${templateId}` : '';
+      console.log('Sending request to backend:', { url: `/sessions/builder/suggest-outline${params}`, input });
       const response = await api.post(`/sessions/builder/suggest-outline${params}`, input);
+      console.log('Backend response:', response.data);
       return response.data as SessionOutlineResponse;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to generate session outline');
+      console.error('API Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        fullError: error
+      });
+      throw new Error(error.response?.data?.message || error.message || 'Failed to generate session outline');
     }
   }
 

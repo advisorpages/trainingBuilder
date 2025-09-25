@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { ReadinessScoringService } from './services/readiness-scoring.service';
+import { OpenAIService } from '../../services/openai.service';
 import {
   Session,
   SessionContentVersion,
@@ -28,7 +29,7 @@ import {
     ]),
   ],
   controllers: [SessionsController],
-  providers: [SessionsService, ReadinessScoringService],
+  providers: [SessionsService, ReadinessScoringService, OpenAIService],
   exports: [SessionsService, ReadinessScoringService],
 })
 export class SessionsModule {}

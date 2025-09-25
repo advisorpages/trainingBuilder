@@ -41,10 +41,12 @@ function createEmptyOutline(): SessionOutline {
 }
 
 function buildDefaultMetadata(): SessionMetadata {
-  const start = new Date();
-  start.setMinutes(0, 0, 0);
-  start.setHours(start.getHours() + 1);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const today = new Date();
+  // Set start time to today at 7:00 PM
+  const start = new Date(today);
+  start.setHours(19, 0, 0, 0); // 7:00 PM
+  // Set end time to 8:30 PM (1.5 hours later)
+  const end = new Date(start.getTime() + 90 * 60 * 1000); // 90 minutes
 
   return {
     title: '',
@@ -53,7 +55,7 @@ function buildDefaultMetadata(): SessionMetadata {
     desiredOutcome: '',
     currentProblem: '',
     specificTopics: '',
-    startDate: start.toISOString().slice(0, 10),
+    startDate: today.toISOString().slice(0, 10),
     startTime: start.toISOString(),
     endTime: end.toISOString(),
     timezone: DEFAULT_TIMEZONE,
@@ -71,7 +73,6 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     desiredOutcome: metadata.desiredOutcome,
     currentProblem: metadata.currentProblem,
     specificTopics: metadata.specificTopics,
-    date: metadata.startDate,
     startTime: metadata.startTime,
     endTime: metadata.endTime,
     locationId: metadata.locationId,
@@ -152,14 +153,23 @@ function outlineToVersion(outline: SessionOutline, prompt: string): AIContentVer
     body: section.description,
   }));
 
+  // Detect if this is template content from backend vs real AI
+  const isTemplate = outline.fallbackUsed === false &&
+    (outline.suggestedSessionTitle?.includes('Workshop') ||
+     outline.suggestedSessionTitle?.includes('Session') ||
+     blocks.some(block =>
+       block.heading === 'Welcome & Context Setting' ||
+       block.heading === 'Core Concepts & Stories'
+     ));
+
   return {
-    id: `ai-${Date.now()}`,
+    id: `${isTemplate ? 'template' : 'ai'}-${Date.now()}`,
     prompt,
     summary: outline.suggestedDescription,
     blocks,
     createdAt: outline.generatedAt || new Date().toISOString(),
     status: 'ready',
-    source: 'ai',
+    source: isTemplate ? 'template' : 'ai',
   };
 }
 
@@ -188,7 +198,7 @@ function buildMockVersion(prompt: string, metadata: SessionMetadata): AIContentV
     ],
     createdAt,
     status: 'ready',
-    source: 'ai',
+    source: 'mock',
   };
 }
 
@@ -463,13 +473,17 @@ export const SessionBuilderProvider: React.FC<{
         dispatch({ type: 'AI_REQUEST_SUCCESS', payload: version });
         updatePrompt(prompt);
       } catch (error) {
-        console.warn('AI generation failed, falling back to mock content', error);
-        const version = buildMockVersion(prompt, state.draft.metadata);
-        dispatch({ type: 'AI_REQUEST_SUCCESS', payload: version });
-        updatePrompt(prompt);
+        console.error('AI generation failed:', error);
+        // Show the actual error to the user instead of silently falling back
+        dispatch({ type: 'AI_REQUEST_FAILURE', payload: error.message });
+        publish({
+          variant: 'error',
+          title: 'AI Generation Failed',
+          description: error.message || 'Unable to generate AI content. Please try again.',
+        });
       }
     },
-    [state.draft, updatePrompt]
+    [state.draft, updatePrompt, publish]
   );
 
   const value = React.useMemo<SessionBuilderContextValue>(() => ({

@@ -33,7 +33,7 @@ export interface AIContentVersion {
   blocks: AIContentBlock[];
   createdAt: string;
   status: 'pending' | 'ready' | 'error';
-  source: 'ai' | 'user';
+  source: 'ai' | 'user' | 'template' | 'mock';
 }
 
 export interface SessionDraftData {
@@ -55,6 +55,8 @@ export interface BuilderState {
   aiStatus: AIRequestStatus;
   error?: string;
   draft: SessionDraftData | null;
+  lastGenerationSource?: 'ai' | 'template' | 'mock';
+  lastGenerationError?: string;
 }
 
 export type BuilderAction =
