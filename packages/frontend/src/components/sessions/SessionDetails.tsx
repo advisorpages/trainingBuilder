@@ -108,7 +108,17 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
   const renderAIContent = () => {
     if (!session.aiGeneratedContent) return null;
 
-    const content = session.aiGeneratedContent as Record<string, any>;
+    const content: Record<string, any> =
+      typeof session.aiGeneratedContent === 'string'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(session.aiGeneratedContent);
+              return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            } catch {
+              return {};
+            }
+          })()
+        : session.aiGeneratedContent;
 
     return (
       <div className="space-y-4">

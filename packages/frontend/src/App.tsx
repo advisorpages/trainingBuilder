@@ -1,33 +1,31 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import SessionTimeoutWarning from './components/auth/SessionTimeoutWarning'
 import ErrorBoundary from './components/ErrorBoundary'
 import { UserRole } from './types/auth.types'
-import DashboardPage from './pages/DashboardPage'
 import PublicHomepage from './pages/PublicHomepage'
 import SessionDetailPage from './pages/SessionDetailPage'
-import HomePage from './pages/HomePage'
+import PublicSessionPage from './pages/PublicSessionPage'
 import LoginPage from './pages/LoginPage'
-import './App.css'
-
-// All components now imported directly (no lazy loading)
-import AnalyticsPage from './pages/AnalyticsPage'
-import { SessionWorksheetPage } from './pages/SessionWorksheetPage'
-import { IncentiveWorksheetPage } from './pages/IncentiveWorksheetPage'
-import { ManageSessionsPage } from './pages/ManageSessionsPage'
-import { ManageLocationsPage } from './pages/ManageLocationsPage'
+import ManageSessionsPage from './pages/ManageSessionsPage'
 import { ManageTrainersPage } from './pages/ManageTrainersPage'
-// import { ManageSettingsPage } from './pages/ManageSettingsPage' // Temporarily disabled due to import errors
-import { ManageTopicsPage } from './pages/ManageTopicsPage'
-import { ManageAudiencesPage } from './pages/ManageAudiencesPage'
-import { ManageTonesPage } from './pages/ManageTonesPage'
-import { ManageCategoriesPage } from './pages/ManageCategoriesPage'
+import { TopicsManagePage } from './pages/TopicsManagePage'
 import TrainerDashboardPage from './pages/TrainerDashboardPage'
 import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
+import { SessionBuilderPage } from './pages/SessionBuilderPage'
+import DashboardPage from './pages/DashboardPage'
+import AnalyticsPage from './pages/AnalyticsPage'
+import SessionWorksheetPage from './pages/SessionWorksheetPage'
+import ManageLocationsPage from './pages/ManageLocationsPage'
+import ManageAudiencesPage from './pages/ManageAudiencesPage'
+import ManageTonesPage from './pages/ManageTonesPage'
+import ManageCategoriesPage from './pages/ManageCategoriesPage'
+import IncentiveWorksheetPage from './pages/IncentiveWorksheetPage'
 import BrokerSessionsPage from './pages/BrokerSessionsPage'
 import BrokerIncentivesPage from './pages/BrokerIncentivesPage'
 import BrokerReportsPage from './pages/BrokerReportsPage'
-import { SessionBuilderPage } from './pages/SessionBuilderPage'
+import HomePage from './pages/HomePage'
+import './App.css'
 
 
 function App() {
@@ -37,7 +35,7 @@ function App() {
         <main>
           <Routes>
           <Route path="/" element={<PublicHomepage />} />
-          <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
+          <Route path="/sessions/:sessionId" element={<PublicSessionPage />} />
           <Route path="/admin" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/dashboard" element={
@@ -55,6 +53,10 @@ function App() {
           />
           <Route
             path="/sessions/builder"
+            element={<Navigate to="/sessions/builder/new" replace />}
+          />
+          <Route
+            path="/sessions/builder/:sessionId"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <SessionBuilderPage />
@@ -62,7 +64,23 @@ function App() {
             }
           />
           <Route
+            path="/sessions"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <ManageSessionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/incentives/worksheet"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <IncentiveWorksheetPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/incentives"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <IncentiveWorksheetPage />
@@ -104,10 +122,18 @@ function App() {
             }
           />
           <Route
+            path="/topics"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <TopicsManagePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/topics"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <ManageTopicsPage />
+                <TopicsManagePage />
               </ProtectedRoute>
             }
           />

@@ -1,14 +1,14 @@
-import { IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateTopicDto {
-  @IsNotEmpty()
-  @MaxLength(255)
+  @IsString()
   name: string;
 
   @IsOptional()
-  @MaxLength(2000)
+  @IsString()
   description?: string;
 
   @IsOptional()
-  isActive?: boolean = true;
+  @IsString()
+  tags?: string;
 }

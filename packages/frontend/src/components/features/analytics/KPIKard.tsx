@@ -2,13 +2,14 @@ import React from 'react';
 
 interface KPIKardProps {
   title?: string;
-  value?: string;
-  change?: string | number;
-  changeType?: 'increase' | 'decrease' | 'stable';
+  value?: number | string;
+  change?: number | string;
+  trend?: 'up' | 'down' | 'stable';
+  icon?: React.ReactNode;
   loading?: boolean;
 }
 
-const KPIKard: React.FC<KPIKardProps> = ({ title, value, change, changeType, loading }) => {
+const KPIKard: React.FC<KPIKardProps> = ({ title, value, change, trend = 'stable', icon, loading }) => {
   if (loading) {
     return (
       <div className="bg-white p-6 rounded-lg shadow animate-pulse">
@@ -19,48 +20,73 @@ const KPIKard: React.FC<KPIKardProps> = ({ title, value, change, changeType, loa
     );
   }
 
-  const getTrendIcon = () => {
-    switch (changeType) {
-      case 'increase':
-        return (
-          <svg className="h-5 w-5 mr-1 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-        );
-      case 'decrease':
-        return (
-          <svg className="h-5 w-5 mr-1 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        );
+  const formatValue = (input?: number | string) => {
+    if (typeof input === 'number') {
+      return input.toLocaleString('en-US');
+    }
+    return input ?? '—';
+  };
+
+  const formatChange = (input?: number | string) => {
+    if (input === undefined || input === null || input === '') {
+      return '—';
+    }
+
+    if (typeof input === 'number') {
+      const formatted = Math.abs(input).toLocaleString('en-US', {
+        maximumFractionDigits: 1,
+        minimumFractionDigits: Number.isInteger(input) ? 0 : 1,
+      });
+      const prefix = input < 0 ? '-' : '';
+      return `${prefix}${formatted}%`;
+    }
+
+    return input;
+  };
+
+  const getTrendGlyph = () => {
+    switch (trend) {
+      case 'up':
+        return '↗';
+      case 'down':
+        return '↘';
       default:
-        return (
-          <svg className="h-5 w-5 mr-1 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
-          </svg>
-        );
+        return '→';
     }
   };
 
   const getChangeTextColor = () => {
-    switch (changeType) {
-      case 'increase':
+    switch (trend) {
+      case 'up':
         return 'text-green-600';
-      case 'decrease':
+      case 'down':
         return 'text-red-600';
       default:
-        return 'text-gray-500';
+        return 'text-gray-600';
     }
   };
 
+  const arrow = getTrendGlyph();
+  const changeText = formatChange(change);
+  const valueText = formatValue(value);
+
   return (
     <div className="bg-white p-6 rounded-lg shadow">
-      <h3 className="text-lg font-medium text-gray-900">{title}</h3>
-      <p className="mt-2 text-3xl font-bold">{value}</p>
+      <h3 className="text-lg font-medium text-gray-900">
+        {icon ? (
+          <span className="mr-2" aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
+        {title}
+      </h3>
+      <p className="mt-2 text-3xl font-bold" data-testid="kpi-value">{valueText}</p>
       <div className="mt-2 flex items-center">
-        <span className={`flex items-center text-sm font-medium ${getChangeTextColor()}`}>
-          {getTrendIcon()}
-          {change}
+        <span className="flex items-center text-sm font-medium">
+          <span aria-hidden="true" className={`mr-1 ${getChangeTextColor()}`}>
+            {arrow}
+          </span>
+          <span className={getChangeTextColor()}>{changeText}</span>
         </span>
         <span className="ml-2 text-sm text-gray-500">from last month</span>
       </div>

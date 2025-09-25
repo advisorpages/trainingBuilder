@@ -20,6 +20,27 @@ interface SessionFormProps {
   isSubmitting: boolean;
 }
 
+type SessionFormState = {
+  title: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  locationId: number | '';
+  trainerId: number | '';
+  audienceId: number | '';
+  toneId: number | '';
+  categoryId: number | '';
+  topicIds: string[];
+  maxRegistrations: number;
+  aiGeneratedContent: Record<string, any> | string | null;
+  promotionalHeadline: string | null;
+  promotionalSummary: string | null;
+  keyBenefits: string | null;
+  callToAction: string | null;
+  socialMediaContent: string | null;
+  emailMarketingContent: string | null;
+};
+
 export const SessionForm: React.FC<SessionFormProps> = ({
   session,
   onSubmit,
@@ -63,7 +84,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     return formatDateForInput(today);
   };
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SessionFormState>({
     title: session?.title || '',
     description: session?.description || '',
     startTime: getDefaultStartTime(),
@@ -78,9 +99,13 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     aiGeneratedContent: session?.aiGeneratedContent || null,
     promotionalHeadline: session?.promotionalHeadline || null,
     promotionalSummary: session?.promotionalSummary || null,
-    keyBenefits: session?.keyBenefits || null,
+    keyBenefits: Array.isArray(session?.keyBenefits)
+      ? JSON.stringify(session?.keyBenefits, null, 2)
+      : session?.keyBenefits || null,
     callToAction: session?.callToAction || null,
-    socialMediaContent: session?.socialMediaContent || null,
+    socialMediaContent: Array.isArray(session?.socialMediaContent)
+      ? session?.socialMediaContent[0] || null
+      : session?.socialMediaContent || null,
     emailMarketingContent: session?.emailMarketingContent || null,
   });
 
@@ -542,22 +567,42 @@ export const SessionForm: React.FC<SessionFormProps> = ({
       };
 
       if (promoFieldsMap[field]) {
-        const aiContentCopy = { ...(newFormData.aiGeneratedContent as object) };
+        const sourceContent = (() => {
+          if (
+            typeof newFormData.aiGeneratedContent === 'object' &&
+            newFormData.aiGeneratedContent !== null
+          ) {
+            return newFormData.aiGeneratedContent;
+          }
+          if (typeof newFormData.aiGeneratedContent === 'string') {
+            try {
+              const parsed = JSON.parse(newFormData.aiGeneratedContent);
+              return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            } catch {
+              return {} as Record<string, any>;
+            }
+          }
+          return {} as Record<string, any>;
+        })();
+
+        const aiContentCopy: Record<string, any> = { ...sourceContent };
         let current: any = aiContentCopy;
         const path = promoFieldsMap[field];
-        
+
         for (let i = 0; i < path.length - 1; i++) {
-          if (current[path[i]] === undefined) {
+          if (current[path[i]] === undefined || current[path[i]] === null) {
             current[path[i]] = {};
           }
           current = current[path[i]];
         }
-        
+
         let finalValue = value;
         if (field === 'keyBenefits') {
           try {
             finalValue = JSON.parse(value);
-          } catch (e) { /* Ignore parse error, keep as string */ }
+          } catch {
+            // Keep original string if parsing fails
+          }
         }
 
         current[path[path.length - 1]] = finalValue;
@@ -596,7 +641,11 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
   const handleDynamicFieldChange = (fieldName: string, value: any) => {
     setFormData(prev => {
-      const newAiContent = { ...(prev.aiGeneratedContent as Record<string, any>) };
+      const baseContent =
+        typeof prev.aiGeneratedContent === 'object' && prev.aiGeneratedContent !== null
+          ? prev.aiGeneratedContent
+          : {};
+      const newAiContent: Record<string, any> = { ...baseContent };
 
       if (value === undefined || value === null) {
         delete newAiContent[fieldName];

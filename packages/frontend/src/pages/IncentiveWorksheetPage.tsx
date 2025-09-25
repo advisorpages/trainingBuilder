@@ -1,342 +1,425 @@
-import React, { useState } from 'react';
-import { Incentive } from '@leadership-training/shared';
-import { IncentiveForm } from '../components/incentives/IncentiveForm';
-import { IncentiveDraftsList } from '../components/incentives/IncentiveDraftsList';
-import { UnsavedChangesModal } from '../components/sessions/UnsavedChangesModal';
-import { IncentiveStatusIndicator } from '../components/common/IncentiveStatusIndicator';
-import { useAuth } from '../contexts/AuthContext';
-import { incentiveService } from '../services/incentive.service';
+import React, { useState, useEffect } from 'react';
+import { BuilderLayout } from '../layouts/BuilderLayout';
+import { Button } from '../ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
+import { Input } from '../ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
-type ViewMode = 'list' | 'create' | 'edit';
+interface Incentive {
+  id: string;
+  title: string;
+  description: string;
+  type: 'attendance' | 'completion' | 'feedback' | 'referral';
+  value: string;
+  startDate: string;
+  endDate: string;
+  eligibilityRules: string[];
+  status: 'draft' | 'active' | 'expired' | 'paused';
+  participantCount: number;
+  redemptionCount: number;
+  budget: number;
+  costPerRedemption: number;
+}
 
-export const IncentiveWorksheetPage: React.FC = () => {
-  const { user } = useAuth();
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedIncentive, setSelectedIncentive] = useState<Incentive | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
-  const [pendingNavigation] = useState<() => void>(() => {});
-  const [notification, setNotification] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
+const IncentiveWorksheetPage: React.FC = () => {
+  const [incentives, setIncentives] = useState<Incentive[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('active');
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // Check if user is Content Developer
-  const canCreateIncentives = user?.role?.name === 'Content Developer';
+  useEffect(() => {
+    setTimeout(() => {
+      setIncentives([
+        {
+          id: '1',
+          title: 'Early Bird Registration',
+          description: '15% discount for sessions booked 2+ weeks in advance',
+          type: 'attendance',
+          value: '15% discount',
+          startDate: '2024-01-01',
+          endDate: '2024-12-31',
+          eligibilityRules: ['Register 14+ days before session', 'First-time participants only'],
+          status: 'active',
+          participantCount: 84,
+          redemptionCount: 67,
+          budget: 10000,
+          costPerRedemption: 125,
+        },
+        {
+          id: '2',
+          title: 'Course Completion Certificate',
+          description: 'Digital certificate for completing leadership fundamentals',
+          type: 'completion',
+          value: 'Digital Certificate',
+          startDate: '2024-01-01',
+          endDate: '2024-12-31',
+          eligibilityRules: ['Complete all session modules', 'Score 80%+ on assessments'],
+          status: 'active',
+          participantCount: 156,
+          redemptionCount: 142,
+          budget: 5000,
+          costPerRedemption: 35,
+        },
+        {
+          id: '3',
+          title: 'Feedback Reward Points',
+          description: 'Earn points for detailed session feedback',
+          type: 'feedback',
+          value: '50 reward points',
+          startDate: '2024-01-01',
+          endDate: '2024-06-30',
+          eligibilityRules: ['Submit feedback within 24 hours', 'Minimum 100 characters'],
+          status: 'expired',
+          participantCount: 234,
+          redemptionCount: 198,
+          budget: 3000,
+          costPerRedemption: 15,
+        },
+        {
+          id: '4',
+          title: 'Referral Program',
+          description: 'Bonus session credit for successful referrals',
+          type: 'referral',
+          value: 'Free session credit',
+          startDate: '2024-02-01',
+          endDate: '2024-08-31',
+          eligibilityRules: ['Referred person must attend session', 'Maximum 3 referrals per month'],
+          status: 'draft',
+          participantCount: 0,
+          redemptionCount: 0,
+          budget: 8000,
+          costPerRedemption: 200,
+        },
+      ]);
+      setLoading(false);
+    }, 1000);
+  }, []);
 
-  const showNotification = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message });
-    setTimeout(() => setNotification(null), 5000);
-  };
-
-  const handleCreateIncentive = async (data: any) => {
-    try {
-      setIsSubmitting(true);
-
-      // Type guard to ensure we have all required fields for creation
-      if (!data.title || !data.startDate || !data.endDate) {
-        throw new Error('Missing required fields for incentive creation');
-      }
-
-      const newIncentive = await incentiveService.createIncentive(data);
-
-      showNotification('success', 'Incentive draft created successfully');
-      setSelectedIncentive(newIncentive);
-      setViewMode('edit');
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to create incentive');
-    } finally {
-      setIsSubmitting(false);
+  const getStatusColor = (status: Incentive['status']) => {
+    switch (status) {
+      case 'active':
+        return 'bg-green-100 text-green-700 border-green-200';
+      case 'draft':
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'expired':
+        return 'bg-red-100 text-red-700 border-red-200';
+      case 'paused':
+        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      default:
+        return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
 
-  const handleUpdateIncentive = async (data: any) => {
-    if (!selectedIncentive) return;
-
-    try {
-      setIsSubmitting(true);
-      const updatedIncentive = await incentiveService.saveDraft(selectedIncentive.id, data);
-
-      showNotification('success', 'Incentive draft saved successfully');
-      setSelectedIncentive(updatedIncentive);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to save incentive draft');
-    } finally {
-      setIsSubmitting(false);
+  const getTypeIcon = (type: Incentive['type']) => {
+    switch (type) {
+      case 'attendance':
+        return '📅';
+      case 'completion':
+        return '🏆';
+      case 'feedback':
+        return '⭐';
+      case 'referral':
+        return '🤝';
+      default:
+        return '🎁';
     }
   };
 
-  const handleCancel = () => {
-    setViewMode('list');
-    setSelectedIncentive(null);
-  };
-
-  // Draft management handlers
-  const handleEditDraft = (incentive: Incentive) => {
-    setSelectedIncentive(incentive);
-    setViewMode('edit');
-  };
-
-  const handleDeleteDraft = async (incentive: Incentive) => {
-    if (confirm(`Are you sure you want to delete the draft "${incentive.title || 'Untitled Incentive'}"?`)) {
-      try {
-        await incentiveService.deleteIncentive(incentive.id);
-
-        showNotification('success', 'Draft deleted successfully');
-        setRefreshTrigger(prev => prev + 1);
-      } catch (error: any) {
-        showNotification('error', error.response?.data?.message || 'Failed to delete draft');
-      }
+  const filterIncentivesByTab = (tab: string) => {
+    switch (tab) {
+      case 'active':
+        return incentives.filter(i => i.status === 'active');
+      case 'draft':
+        return incentives.filter(i => i.status === 'draft');
+      case 'expired':
+        return incentives.filter(i => i.status === 'expired' || i.status === 'paused');
+      default:
+        return incentives;
     }
   };
 
-  // Publishing handlers for Story 6.4
-  const handlePublishIncentive = async (incentive: Incentive) => {
-    if (confirm(`Are you sure you want to publish "${incentive.title}"? This will make it visible to all users.`)) {
-      try {
-        await incentiveService.publish(incentive.id);
-
-        showNotification('success', 'Incentive published successfully');
-        setRefreshTrigger(prev => prev + 1);
-      } catch (error: any) {
-        showNotification('error', error.response?.data?.message || 'Failed to publish incentive');
-      }
-    }
-  };
-
-  const handleUnpublishIncentive = async (incentive: Incentive) => {
-    if (confirm(`Are you sure you want to unpublish "${incentive.title}"? This will remove it from public view.`)) {
-      try {
-        await incentiveService.unpublish(incentive.id);
-
-        showNotification('success', 'Incentive unpublished successfully');
-        setRefreshTrigger(prev => prev + 1);
-      } catch (error: any) {
-        showNotification('error', error.response?.data?.message || 'Failed to unpublish incentive');
-      }
-    }
-  };
-
-  // Clone handler for Story 6.5
-  const handleCloneIncentive = async (incentive: Incentive) => {
-    try {
-      const clonedIncentive = await incentiveService.cloneIncentive(incentive.id);
-
-      showNotification('success', `Incentive cloned successfully as "${clonedIncentive.title}"`);
-      setRefreshTrigger(prev => prev + 1);
-
-      // Automatically open the cloned incentive for editing
-      setSelectedIncentive(clonedIncentive);
-      setViewMode('edit');
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to clone incentive');
-    }
-  };
-
-  const handleCreateNew = () => {
-    setSelectedIncentive(null);
-    setViewMode('create');
-  };
-
-  // Unsaved changes handling
-  const handleSaveDraft = async () => {
-    if (selectedIncentive) {
-      try {
-        setIsSubmitting(true);
-        // This would need to call the form's save functionality
-        // For now, we'll just close the modal
-        setShowUnsavedModal(false);
-        pendingNavigation();
-      } catch (error: any) {
-        showNotification('error', 'Failed to save draft');
-      } finally {
-        setIsSubmitting(false);
-      }
-    }
-  };
-
-  const handleDiscardChanges = () => {
-    setShowUnsavedModal(false);
-    pendingNavigation();
-  };
-
-  const handleCancelModal = () => {
-    setShowUnsavedModal(false);
-  };
-
-  if (!canCreateIncentives) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">Access Restricted</h3>
-                <p className="mt-1 text-sm text-yellow-700">
-                  You need Content Developer permissions to create incentives.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const totalBudget = incentives.reduce((sum, i) => sum + i.budget, 0);
+  const totalRedemptions = incentives.reduce((sum, i) => sum + i.redemptionCount, 0);
+  const totalParticipants = incentives.reduce((sum, i) => sum + i.participantCount, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Incentive Worksheet</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                {viewMode === 'list'
-                  ? 'Manage your draft incentives and create new promotional content'
-                  : 'Create and design your incentive with AI-powered content generation'}
-              </p>
-            </div>
+    <BuilderLayout
+      title="Incentive Management"
+      subtitle="Engagement rewards and participation incentives"
+      statusSlot={
+        <Button onClick={() => setShowCreateForm(true)}>
+          🎁 Create Incentive
+        </Button>
+      }
+    >
+      <div className="space-y-6 max-w-7xl">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Active Incentives
+                  </p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {incentives.filter(i => i.status === 'active').length}
+                  </p>
+                </div>
+                <div className="text-2xl">🎯</div>
+              </div>
+            </CardContent>
+          </Card>
 
-            <div className="flex items-center space-x-3">
-              {selectedIncentive && (
-                <IncentiveStatusIndicator
-                  status={selectedIncentive.status}
-                  showDescription={true}
-                />
-              )}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Total Participants
+                  </p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {totalParticipants}
+                  </p>
+                </div>
+                <div className="text-2xl">👥</div>
+              </div>
+            </CardContent>
+          </Card>
 
-              {viewMode !== 'list' && (
-                <button
-                  onClick={handleCancel}
-                  className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  Back to Drafts
-                </button>
-              )}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Redemptions
+                  </p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {totalRedemptions}
+                  </p>
+                </div>
+                <div className="text-2xl">🎁</div>
+              </div>
+            </CardContent>
+          </Card>
 
-              {viewMode === 'list' && (
-                <button
-                  onClick={handleCreateNew}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  Create New Incentive
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Breadcrumb */}
-          <nav className="flex mt-4" aria-label="Breadcrumb">
-            <ol className="flex items-center space-x-2">
-              <li>
-                <a href="/dashboard" className="text-blue-600 hover:text-blue-800">
-                  Dashboard
-                </a>
-              </li>
-              <li>
-                <span className="text-gray-400">/</span>
-              </li>
-              <li>
-                <span className="text-gray-500">Incentive Worksheet</span>
-              </li>
-              {selectedIncentive && (
-                <>
-                  <li>
-                    <span className="text-gray-400">/</span>
-                  </li>
-                  <li>
-                    <span className="text-gray-500 truncate max-w-xs">
-                      {selectedIncentive.title || 'Untitled Incentive'}
-                    </span>
-                  </li>
-                </>
-              )}
-            </ol>
-          </nav>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Total Budget
+                  </p>
+                  <p className="text-2xl font-bold text-orange-600">
+                    ${(totalBudget / 1000).toFixed(0)}K
+                  </p>
+                </div>
+                <div className="text-2xl">💰</div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Notification */}
-        {notification && (
-          <div className={`mb-4 p-4 rounded-md ${
-            notification.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}>
-            <div className="flex">
-              <div className="flex-shrink-0">
-                {notification.type === 'success' ? (
-                  <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                )}
+        {/* Create Incentive Form */}
+        {showCreateForm && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Incentive</CardTitle>
+              <CardDescription>Design a new reward program to boost engagement</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input placeholder="Incentive title" />
+                <select className="px-3 py-2 border border-slate-200 rounded-md">
+                  <option>Select incentive type...</option>
+                  <option value="attendance">Attendance Reward</option>
+                  <option value="completion">Completion Reward</option>
+                  <option value="feedback">Feedback Incentive</option>
+                  <option value="referral">Referral Program</option>
+                </select>
+                <Input placeholder="Reward value (e.g., 20% discount)" />
+                <Input placeholder="Budget allocation" type="number" />
+                <Input placeholder="Start date" type="date" />
+                <Input placeholder="End date" type="date" />
+                <textarea
+                  placeholder="Description and eligibility rules..."
+                  className="md:col-span-2 w-full min-h-[80px] px-3 py-2 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
-              <div className="ml-3">
-                <p className="text-sm">{notification.message}</p>
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+                <Button>Create Incentive</Button>
               </div>
-              <div className="ml-auto pl-3">
-                <button
-                  onClick={() => setNotification(null)}
-                  className="inline-flex text-sm"
-                >
-                  <span className="sr-only">Dismiss</span>
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Incentives Tabs */}
+        <Tabs defaultValue="active" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="active">
+              Active ({incentives.filter(i => i.status === 'active').length})
+            </TabsTrigger>
+            <TabsTrigger value="draft">
+              Draft ({incentives.filter(i => i.status === 'draft').length})
+            </TabsTrigger>
+            <TabsTrigger value="expired">
+              Ended ({incentives.filter(i => ['expired', 'paused'].includes(i.status)).length})
+            </TabsTrigger>
+            <TabsTrigger value="all">
+              All ({incentives.length})
+            </TabsTrigger>
+          </TabsList>
+
+          {(['active', 'draft', 'expired', 'all'] as const).map(tab => (
+            <TabsContent key={tab} value={tab} className="space-y-4">
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i}>
+                      <CardContent className="p-4">
+                        <div className="animate-pulse space-y-3">
+                          <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                          <div className="h-3 bg-slate-200 rounded w-full"></div>
+                          <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filterIncentivesByTab(tab).map((incentive) => (
+                    <Card key={incentive.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="text-2xl">{getTypeIcon(incentive.type)}</div>
+                            <div>
+                              <h3 className="font-semibold text-slate-900">{incentive.title}</h3>
+                              <p className="text-sm font-medium text-blue-600">{incentive.value}</p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-1 text-xs rounded-full border ${getStatusColor(incentive.status)}`}>
+                            {incentive.status}
+                          </span>
+                        </div>
+
+                        <p className="text-sm text-slate-600 mb-4">{incentive.description}</p>
+
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Participants:</span>
+                            <span className="font-medium">{incentive.participantCount}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Redemptions:</span>
+                            <span className="font-medium">{incentive.redemptionCount}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Success Rate:</span>
+                            <span className="font-medium">
+                              {incentive.participantCount > 0
+                                ? Math.round((incentive.redemptionCount / incentive.participantCount) * 100)
+                                : 0}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Budget:</span>
+                            <span className="font-medium">${incentive.budget.toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-100">
+                          <div className="text-xs text-slate-500 mb-3">
+                            {new Date(incentive.startDate).toLocaleDateString()} - {new Date(incentive.endDate).toLocaleDateString()}
+                          </div>
+
+                          <div className="flex justify-between items-center">
+                            <Button variant="outline" size="sm">
+                              Edit
+                            </Button>
+                            <div className="flex gap-2">
+                              <Button variant="ghost" size="sm" className="text-slate-500">
+                                Analytics
+                              </Button>
+                              {incentive.status === 'active' && (
+                                <Button variant="outline" size="sm">
+                                  Pause
+                                </Button>
+                              )}
+                              {incentive.status === 'draft' && (
+                                <Button size="sm">
+                                  Activate
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {!loading && filterIncentivesByTab(tab).length === 0 && (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <div className="text-4xl mb-4">🎁</div>
+                    <h3 className="text-lg font-medium text-slate-900 mb-2">
+                      No {tab === 'all' ? '' : tab} incentives found
+                    </h3>
+                    <p className="text-slate-600 mb-4">
+                      Create your first incentive program to boost engagement.
+                    </p>
+                    <Button onClick={() => setShowCreateForm(true)}>
+                      Create Incentive
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
+
+        {/* Performance Insights */}
+        {!loading && incentives.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Performance Insights</CardTitle>
+              <CardDescription>Key metrics and trends from your incentive programs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <h4 className="font-medium text-green-900 mb-2">🎯 Top Performer</h4>
+                  <p className="text-sm text-green-800">
+                    "Course Completion Certificate" has the highest engagement with {Math.round((142/156) * 100)}% success rate.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="font-medium text-blue-900 mb-2">💡 Optimization Tip</h4>
+                  <p className="text-sm text-blue-800">
+                    Attendance-based incentives show 20% higher participation when combined with early-bird discounts.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <h4 className="font-medium text-orange-900 mb-2">📊 Budget Efficiency</h4>
+                  <p className="text-sm text-orange-800">
+                    Average cost per redemption is ${Math.round(totalBudget / totalRedemptions)} across all active programs.
+                  </p>
+                </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
-
-        {/* Main Content */}
-        {viewMode === 'list' && (
-          <IncentiveDraftsList
-            onEditDraft={handleEditDraft}
-            onDeleteDraft={handleDeleteDraft}
-            onPublishIncentive={handlePublishIncentive}
-            onUnpublishIncentive={handleUnpublishIncentive}
-            onCloneIncentive={handleCloneIncentive}
-            refreshTrigger={refreshTrigger}
-          />
-        )}
-
-        {viewMode === 'create' && (
-          <IncentiveForm
-            onSubmit={handleCreateIncentive}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
-        )}
-
-        {viewMode === 'edit' && selectedIncentive && (
-          <IncentiveForm
-            incentive={selectedIncentive}
-            onSubmit={handleUpdateIncentive}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
-        )}
-
-        {/* Unsaved Changes Modal */}
-        <UnsavedChangesModal
-          isOpen={showUnsavedModal}
-          onSave={handleSaveDraft}
-          onDiscard={handleDiscardChanges}
-          onCancel={handleCancelModal}
-          isSaving={isSubmitting}
-        />
       </div>
-    </div>
+    </BuilderLayout>
   );
 };
+
+export default IncentiveWorksheetPage;

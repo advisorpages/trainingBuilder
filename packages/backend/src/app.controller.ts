@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { AppService } from './app.service';
 import { Public } from './common/decorators/public.decorator';
 import { Roles } from './common/decorators/roles.decorator';
-import { UserRole } from './common/guards/roles.guard';
+import { UserRole } from './entities';
 import { CurrentUser } from './common/decorators/current-user.decorator';
 
 @Controller()
@@ -38,9 +38,9 @@ export class AppController {
     return {
       message: 'This is a protected endpoint',
       user: {
-        id: user.userId,
+        id: user.id,
         email: user.email,
-        role: user.roleName,
+        role: user.role,
       },
       timestamp: new Date().toISOString(),
     };

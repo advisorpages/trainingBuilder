@@ -1,5 +1,5 @@
 import axios, { AxiosResponse } from 'axios';
-import { LoginCredentials, AuthResponse, RefreshResponse, User } from '../types/auth.types';
+import { LoginCredentials, AuthResponse, RefreshResponse, User, UserRole, UserRoleKey } from '../types/auth.types';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -8,6 +8,11 @@ class AuthService {
   private refreshTimer: number | null = null;
   private readonly TOKEN_REFRESH_BUFFER = 60; // seconds before expiration to refresh
   private onUnauthorized: (() => void) | null = null;
+  private static readonly ROLE_METADATA: Record<UserRoleKey, { id: number; name: UserRole }> = {
+    broker: { id: 1, name: UserRole.BROKER },
+    content_developer: { id: 2, name: UserRole.CONTENT_DEVELOPER },
+    trainer: { id: 3, name: UserRole.TRAINER },
+  };
 
   constructor() {
     // Setup axios interceptor for authentication
@@ -75,14 +80,20 @@ class AuthService {
       });
 
       const { accessToken, refreshToken } = response.data;
+      const normalizedUser = this.normalizeUser(response.data.user);
+      const authResponse: AuthResponse = {
+        ...response.data,
+        user: normalizedUser,
+      };
 
       // Store tokens securely
       this.setTokens(accessToken, refreshToken);
+      this.setUserInStorage(normalizedUser);
 
       // Schedule automatic token refresh
       this.scheduleTokenRefresh();
 
-      return response.data;
+      return authResponse;
     } catch (error) {
       console.error('Login error:', error);
       throw new Error('Invalid email or password');
@@ -118,7 +129,9 @@ class AuthService {
   async getCurrentUser(): Promise<User> {
     try {
       const response: AxiosResponse<User> = await axios.get(`${this.baseURL}/auth/profile`);
-      return response.data;
+      const normalized = this.normalizeUser(response.data);
+      this.setUserInStorage(normalized);
+      return normalized;
     } catch (error) {
       console.error('Get current user error:', error);
       throw error;
@@ -192,14 +205,16 @@ class AuthService {
   getUserFromStorage(): User | null {
     try {
       const userStr = localStorage.getItem('user');
-      return userStr ? JSON.parse(userStr) : null;
+      return userStr ? this.normalizeUser(JSON.parse(userStr)) : null;
     } catch (error) {
       return null;
     }
   }
 
-  setUserInStorage(user: User): void {
-    localStorage.setItem('user', JSON.stringify(user));
+  setUserInStorage(user: User): User {
+    const normalized = this.normalizeUser(user);
+    localStorage.setItem('user', JSON.stringify(normalized));
+    return normalized;
   }
 
   private scheduleTokenRefresh(): void {
@@ -268,6 +283,67 @@ class AuthService {
 
   clearUnauthorizedCallback(): void {
     this.onUnauthorized = null;
+  }
+
+  private normalizeUser(user: any): User {
+    if (!user) {
+      return user;
+    }
+
+    // Handle already-normalized structures
+    if (user.role && typeof user.role === 'object' && 'key' in user.role && user.role.key) {
+      const roleKey = this.normalizeRoleKey(user.role.key);
+      const roleMeta = AuthService.ROLE_METADATA[roleKey];
+
+      return {
+        ...user,
+        role: {
+          id: user.role.id ?? roleMeta.id,
+          name: roleMeta.name,
+          key: roleKey,
+        },
+      };
+    }
+
+    const roleKey = this.normalizeRoleKey(user.role);
+    const roleMeta = AuthService.ROLE_METADATA[roleKey];
+
+    return {
+      ...user,
+      role: {
+        id: roleMeta.id,
+        name: roleMeta.name,
+        key: roleKey,
+      },
+    };
+  }
+
+  private normalizeRoleKey(role: unknown): UserRoleKey {
+    if (typeof role === 'string') {
+      const normalized = role.toLowerCase();
+
+      if (normalized in AuthService.ROLE_METADATA) {
+        return normalized as UserRoleKey;
+      }
+
+      if (normalized === 'content developer') {
+        return 'content_developer';
+      }
+
+      if (normalized === 'broker') {
+        return 'broker';
+      }
+
+      if (normalized === 'trainer') {
+        return 'trainer';
+      }
+    }
+
+    if (role && typeof role === 'object' && 'name' in (role as any)) {
+      return this.normalizeRoleKey((role as any).name);
+    }
+
+    return 'content_developer';
   }
 
   // Debug method to force clear all auth data

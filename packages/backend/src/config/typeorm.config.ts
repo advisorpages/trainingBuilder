@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { entities } from '../entities';
+import { SnakeNamingStrategy } from './snake-naming.strategy';
 
 // TypeORM configuration for migrations
 const AppDataSource = new DataSource({
@@ -14,6 +15,7 @@ const AppDataSource = new DataSource({
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  namingStrategy: new SnakeNamingStrategy(),
 });
 
 export default AppDataSource;

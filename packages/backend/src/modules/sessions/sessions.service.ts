@@ -1,782 +1,483 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull } from 'typeorm';
-import { Session, SessionStatus } from '../../entities/session.entity';
-import { Registration, SyncStatus } from '../../entities/registration.entity';
-import { User } from '../../entities/user.entity';
-import { Topic } from '../../entities/topic.entity';
-import { CreateSessionDto, UpdateSessionDto, SavePromptDto, IntegrateAIContentDto, CreateRegistrationDto } from './dto';
+import { In, Repository } from 'typeorm';
+import {
+  Incentive,
+  Session,
+  SessionBuilderDraft,
+  SessionContentVersion,
+  SessionStatus,
+  SessionStatusLog,
+  Topic,
+} from '../../entities';
+import { ReadinessScore, ReadinessScoringService } from './services/readiness-scoring.service';
+import { CreateSessionDto } from './dto/create-session.dto';
+import { UpdateSessionDto } from './dto/update-session.dto';
+import { CreateContentVersionDto } from './dto/create-content-version.dto';
+import { BuilderAutosaveDto } from './dto/builder-autosave.dto';
+import {
+  SuggestOutlineDto,
+  SuggestOutlineResponse,
+  SuggestedSessionSection,
+} from './dto/suggest-outline.dto';
 
 @Injectable()
 export class SessionsService {
   constructor(
     @InjectRepository(Session)
-    private sessionRepository: Repository<Session>,
-    @InjectRepository(Registration)
-    private registrationRepository: Repository<Registration>,
+    private readonly sessionsRepository: Repository<Session>,
     @InjectRepository(Topic)
-    private topicRepository: Repository<Topic>,
+    private readonly topicsRepository: Repository<Topic>,
+    @InjectRepository(Incentive)
+    private readonly incentivesRepository: Repository<Incentive>,
+    @InjectRepository(SessionContentVersion)
+    private readonly contentRepository: Repository<SessionContentVersion>,
+    @InjectRepository(SessionStatusLog)
+    private readonly statusLogsRepository: Repository<SessionStatusLog>,
+    @InjectRepository(SessionBuilderDraft)
+    private readonly draftsRepository: Repository<SessionBuilderDraft>,
+    private readonly readinessScoringService: ReadinessScoringService,
   ) {}
 
-  // Helper method to extract user information from JWT payload
-  private extractUserInfo(userContext: any): { id: string; roleName: string } {
-    // Handle both JWT payload format and User entity format
-    const userId = userContext.userId || userContext.user?.id || userContext.id;
-    const roleName = userContext.roleName || userContext.user?.role?.name || userContext.role?.name;
-
-    if (!userId) {
-      throw new BadRequestException('Unable to determine user ID from context');
+  private applyPublishTimestamp(session: Session, previousStatus: SessionStatus) {
+    if (session.status === SessionStatus.PUBLISHED && previousStatus !== SessionStatus.PUBLISHED) {
+      session.publishedAt = session.publishedAt ?? new Date();
     }
 
-    return { id: userId, roleName: roleName || 'Unknown' };
+    if (session.status !== SessionStatus.PUBLISHED && previousStatus === SessionStatus.PUBLISHED) {
+      session.publishedAt = null;
+    }
   }
 
-  getStatus(): object {
-    return {
-      module: 'Sessions',
-      status: 'Active - Session Worksheet Implementation',
-      features: [
-        'Session management',
-        'AI content generation',
-        'Publishing workflow',
-        'Registration handling',
-      ],
-    };
-  }
-
-  async create(createSessionDto: CreateSessionDto, author: any): Promise<Session> {
-    // Validate start and end times
-    if (createSessionDto.endTime <= createSessionDto.startTime) {
-      throw new BadRequestException('End time must be after start time');
+  private async recordStatusTransition(
+    session: Session,
+    previousStatus: SessionStatus,
+    readiness: ReadinessScore,
+    remark?: string,
+  ) {
+    if (previousStatus === session.status) {
+      return;
     }
 
-    // Validate max registrations
-    if (createSessionDto.maxRegistrations < 1) {
-      throw new BadRequestException('Maximum registrations must be at least 1');
-    }
-
-    // Extract user info using helper method
-    const { id: authorId } = this.extractUserInfo(author);
-
-    // Extract topicIds from DTO and remove it from session data
-    const { topicIds, ...sessionData } = createSessionDto;
-
-    const session = this.sessionRepository.create({
-      ...sessionData,
-      authorId: authorId,
-      status: SessionStatus.DRAFT,
-      isActive: true,
+    const log = this.statusLogsRepository.create({
+      session,
+      fromStatus: previousStatus,
+      toStatus: session.status,
+      readinessScore: readiness.percentage,
+      checklistSnapshot: {
+        checks: readiness.checks,
+        recommendedActions: readiness.recommendedActions,
+      },
+      remark,
     });
 
-    // Handle topic relationships if topicIds are provided
-    if (topicIds && topicIds.length > 0) {
-      const topics = await this.topicRepository.findByIds(topicIds);
-      if (topics.length !== topicIds.length) {
-        throw new BadRequestException('One or more topic IDs are invalid');
-      }
-      session.topics = topics;
+    await this.statusLogsRepository.save(log);
+  }
+
+  async findAll(filters?: {
+    status?: SessionStatus;
+    topicId?: string;
+    trainerId?: string;
+  }): Promise<Session[]> {
+    const queryBuilder = this.sessionsRepository
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.topic', 'topic')
+      .leftJoinAndSelect('session.landingPage', 'landingPage')
+      .leftJoinAndSelect('session.incentives', 'incentives')
+      .leftJoinAndSelect('session.trainerAssignments', 'trainerAssignments')
+      .leftJoinAndSelect('trainerAssignments.trainer', 'trainer')
+      .orderBy('session.updatedAt', 'DESC');
+
+    if (filters?.status) {
+      queryBuilder.andWhere('session.status = :status', { status: filters.status });
     }
 
-    return this.sessionRepository.save(session);
-  }
+    if (filters?.topicId) {
+      queryBuilder.andWhere('session.topicId = :topicId', { topicId: filters.topicId });
+    }
 
-  async findAll(): Promise<Session[]> {
-    return this.sessionRepository.find({
-      where: { isActive: true },
-      relations: ['author', 'location', 'trainer', 'audience', 'tone', 'category', 'topics'],
-      order: { createdAt: 'DESC' },
-    });
-  }
+    if (filters?.trainerId) {
+      queryBuilder.andWhere('trainerAssignments.trainerId = :trainerId', { trainerId: filters.trainerId });
+    }
 
-  async findByAuthor(authorId: string): Promise<Session[]> {
-    return this.sessionRepository.find({
-      where: { authorId, isActive: true },
-      relations: ['author', 'location', 'trainer', 'audience', 'tone', 'category', 'topics'],
-      order: { createdAt: 'DESC' },
-    });
+    return queryBuilder.getMany();
   }
 
   async findOne(id: string): Promise<Session> {
-    const session = await this.sessionRepository.findOne({
-      where: { id, isActive: true },
-      relations: ['author', 'location', 'trainer', 'audience', 'tone', 'category', 'topics'],
+    const session = await this.sessionsRepository.findOne({
+      where: { id },
+      relations: ['topic', 'landingPage', 'incentives', 'trainerAssignments', 'contentVersions', 'agendaItems'],
     });
 
     if (!session) {
-      throw new NotFoundException(`Session with ID ${id} not found`);
+      throw new NotFoundException(`Session ${id} not found`);
     }
 
     return session;
   }
 
-  async update(id: string, updateSessionDto: UpdateSessionDto, user: any): Promise<Session> {
+  async create(dto: CreateSessionDto): Promise<Session> {
+    const topic = dto.topicId ? await this.findTopic(dto.topicId) : undefined;
+    const incentives = dto.incentiveIds?.length
+      ? await this.incentivesRepository.find({ where: { id: In(dto.incentiveIds) } })
+      : [];
+
+    const session = this.sessionsRepository.create({
+      title: dto.title,
+      subtitle: dto.subtitle,
+      audience: dto.audience,
+      objective: dto.objective,
+      status: dto.status ?? SessionStatus.DRAFT,
+      readinessScore: dto.readinessScore ?? 0,
+      topic,
+      incentives,
+    });
+
+    return this.sessionsRepository.save(session);
+  }
+
+  async update(id: string, dto: UpdateSessionDto): Promise<Session> {
     const session = await this.findOne(id);
+    const previousStatus = session.status;
 
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
+    if (dto.topicId) {
+      session.topic = await this.findTopic(dto.topicId);
     }
 
-    // Validate times if they're being updated
-    const startTime = updateSessionDto.startTime || session.startTime;
-    const endTime = updateSessionDto.endTime || session.endTime;
-
-    if (endTime <= startTime) {
-      throw new BadRequestException('End time must be after start time');
+    if (dto.incentiveIds) {
+      session.incentives = await this.incentivesRepository.find({ where: { id: In(dto.incentiveIds) } });
     }
 
-    // Validate max registrations if being updated
-    if (updateSessionDto.maxRegistrations !== undefined && updateSessionDto.maxRegistrations < 1) {
-      throw new BadRequestException('Maximum registrations must be at least 1');
-    }
+    if (dto.title !== undefined) session.title = dto.title;
+    if (dto.subtitle !== undefined) session.subtitle = dto.subtitle;
+    if (dto.audience !== undefined) session.audience = dto.audience;
+    if (dto.objective !== undefined) session.objective = dto.objective;
+    if (dto.status !== undefined) session.status = dto.status;
+    if (dto.readinessScore !== undefined) session.readinessScore = dto.readinessScore;
 
-    // Extract topicIds from DTO and remove it from session data
-    const { topicIds, ...sessionData } = updateSessionDto;
-
-    // Handle topic relationships if topicIds are provided
-    if (topicIds !== undefined) {
-      if (topicIds.length > 0) {
-        const topics = await this.topicRepository.findByIds(topicIds);
-        if (topics.length !== topicIds.length) {
-          throw new BadRequestException('One or more topic IDs are invalid');
-        }
-        session.topics = topics;
-      } else {
-        // If empty array is provided, clear all topics
-        session.topics = [];
+    let readiness: ReadinessScore | null = null;
+    if (dto.status !== undefined && dto.status !== previousStatus) {
+      this.applyPublishTimestamp(session, previousStatus);
+      readiness = await this.readinessScoringService.calculateReadinessScore(session);
+      if (dto.readinessScore === undefined) {
+        session.readinessScore = readiness.percentage;
       }
     }
 
-    Object.assign(session, sessionData);
-    return this.sessionRepository.save(session);
-  }
+    const saved = await this.sessionsRepository.save(session);
 
-  async remove(id: string, user: any): Promise<void> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to delete this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only delete sessions you created');
+    if (readiness) {
+      await this.recordStatusTransition(saved, previousStatus, readiness);
     }
 
-    // Soft delete by setting isActive to false
-    session.isActive = false;
-    await this.sessionRepository.save(session);
+    return saved;
   }
 
-  // Draft-specific operations for Story 2.2
-  async saveDraft(id: string, updateSessionDto: UpdateSessionDto, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
-    }
-
-    // Ensure session remains in draft status
-    if (updateSessionDto.hasOwnProperty('status') && updateSessionDto.status !== SessionStatus.DRAFT) {
-      delete updateSessionDto.status;
-    }
-
-    // For drafts, we're more lenient with validation - allow partial data
-    Object.assign(session, updateSessionDto);
-    session.status = SessionStatus.DRAFT;
-
-    return this.sessionRepository.save(session);
+  async createContentVersion(sessionId: string, payload: CreateContentVersionDto) {
+    const session = await this.findOne(sessionId);
+    const version = this.contentRepository.create({ ...payload, session });
+    return this.contentRepository.save(version);
   }
 
-  async getDraftsByAuthor(authorId: string): Promise<Session[]> {
-    // Return a minimal, robust projection to avoid any serialization issues
-    // or legacy column mismatches during drafts loading.
-    return this.sessionRepository.find({
-      where: {
-        authorId,
-        isActive: true,
-        status: SessionStatus.DRAFT
+  async suggestOutline(payload: SuggestOutlineDto): Promise<SuggestOutlineResponse> {
+    const now = new Date();
+    const sections: SuggestedSessionSection[] = [
+      {
+        id: `intro-${now.getTime()}`,
+        type: 'opener',
+        position: 0,
+        title: 'Welcome & Context Setting',
+        duration: 10,
+        description: `Open the ${payload.sessionType} with a quick framing that highlights why ${payload.category.toLowerCase()} matters right now.`,
+        learningObjectives: ['Establish psychological safety', 'Align on session outcomes'],
       },
-      // Only select fields needed by the drafts list
-      // Avoid loading eager relations for stability
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        startTime: true,
-        endTime: true,
-        status: true,
-        updatedAt: true,
-        locationId: true,
-        trainerId: true,
-      } as any,
-      loadEagerRelations: false,
-      order: { updatedAt: 'DESC' },
-    }) as any;
+      {
+        id: `core-${now.getTime() + 1}`,
+        type: 'topic',
+        position: 1,
+        title: 'Core Concepts & Stories',
+        duration: 25,
+        description: `Introduce the primary frameworks and reference recent examples that map to the desired outcome: ${payload.desiredOutcome}.`,
+        learningObjectives: payload.specificTopics
+          ? payload.specificTopics.split(',').map((topic) => topic.trim()).filter(Boolean)
+          : undefined,
+      },
+      {
+        id: `apply-${now.getTime() + 2}`,
+        type: 'exercise',
+        position: 2,
+        title: 'Application Lab',
+        duration: 20,
+        description: 'Move the group into pairs or triads to translate the ideas into their current challenges.',
+        suggestedActivities: ['Role-play scenarios', 'Case study walk-through', 'Peer feedback loops'],
+      },
+      {
+        id: `close-${now.getTime() + 3}`,
+        type: 'closing',
+        position: 3,
+        title: 'Commitments & Next Actions',
+        duration: 10,
+        description: 'Capture top takeaways and individual commitments; reference support assets available post-session.',
+      },
+    ];
+
+    const totalDuration = sections.reduce((acc, section) => acc + section.duration, 0);
+    const sessionTitle = `${payload.category} ${payload.sessionType === 'workshop' ? 'Workshop' : 'Session'}`;
+
+    return {
+      outline: {
+        sections,
+        totalDuration,
+        suggestedSessionTitle: sessionTitle,
+        suggestedDescription:
+          payload.currentProblem
+            ? `Equip participants to address ${payload.currentProblem.toLowerCase()} while progressing toward ${payload.desiredOutcome}.`
+            : `Guide participants toward ${payload.desiredOutcome} with practical tools they can deploy immediately.`,
+        difficulty: 'Intermediate',
+        recommendedAudienceSize: '8-20',
+        fallbackUsed: false,
+        generatedAt: now.toISOString(),
+      },
+      relevantTopics: [],
+      ragAvailable: false,
+      generationMetadata: {
+        processingTime: 320,
+        ragQueried: false,
+        fallbackUsed: false,
+        topicsFound: sections[1].learningObjectives?.length ?? 0,
+      },
+    };
   }
 
-  async autoSaveDraft(id: string, partialData: Partial<UpdateSessionDto>, user: any): Promise<{ success: boolean; lastSaved: Date }> {
-    try {
-      const session = await this.findOne(id);
+  async getBuilderCompleteData(sessionId: string) {
+    const session = await this.findOne(sessionId);
+    const draft = await this.draftsRepository.findOne({ where: { draftKey: sessionId } });
+    const payload = draft?.payload ?? null;
+    const metadata = (payload?.metadata as Record<string, any>) ?? {};
+    const outline = payload?.outline ?? null;
 
-      // Extract user info using helper method
-      const { id: userId, roleName } = this.extractUserInfo(user);
-
-      // Check if user is authorized
-      if (session.authorId !== userId && roleName !== 'Broker') {
-        throw new ForbiddenException('You can only update sessions you created');
-      }
-
-      // Only update non-empty fields for auto-save
-      const updateData: Partial<UpdateSessionDto> = {};
-      Object.keys(partialData).forEach(key => {
-        const value = partialData[key as keyof UpdateSessionDto];
-        // For most fields, only update if value is provided and not empty
-        if (value !== undefined && value !== null && value !== '') {
-          (updateData as any)[key] = value;
-        }
-        // For AI content fields, preserve explicit values including null
-        const aiContentFields = [
-          'aiGeneratedContent', 'promotionalHeadline', 'promotionalSummary',
-          'keyBenefits', 'callToAction', 'socialMediaContent', 'emailMarketingContent'
-        ];
-        if (aiContentFields.includes(key) && partialData.hasOwnProperty(key)) {
-          (updateData as any)[key] = value;
-        }
-      });
-
-      if (Object.keys(updateData).length > 0) {
-        Object.assign(session, updateData);
-        session.status = SessionStatus.DRAFT;
-        await this.sessionRepository.save(session);
-      }
-
-      return {
-        success: true,
-        lastSaved: new Date()
-      };
-    } catch (error) {
-      return {
-        success: false,
-        lastSaved: new Date()
-      };
-    }
-  }
-
-  async isDraftSaveable(id: string, user: any): Promise<boolean> {
-    try {
-      const session = await this.findOne(id);
-      const { id: userId, roleName } = this.extractUserInfo(user);
-      return session.authorId === userId || roleName === 'Broker';
-    } catch {
-      return false;
-    }
-  }
-
-  // AI Prompt-specific operations for Story 2.3
-  async savePrompt(id: string, savePromptDto: SavePromptDto, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
-    }
-
-    // Save the AI prompt to the session
-    session.aiPrompt = savePromptDto.prompt;
-
-    // Keep the session as draft when saving prompts
-    session.status = SessionStatus.DRAFT;
-
-    return this.sessionRepository.save(session);
-  }
-
-  async getPrompt(id: string, user: any): Promise<{ prompt: string | null; hasPrompt: boolean }> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to view this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only view sessions you created');
+    const sessionStart = metadata.startTime ?? session.scheduledAt?.toISOString() ?? null;
+    let sessionEnd: string | null = metadata.endTime ?? null;
+    if (!sessionEnd && session.scheduledAt && session.durationMinutes) {
+      sessionEnd = new Date(
+        session.scheduledAt.getTime() + session.durationMinutes * 60 * 1000,
+      ).toISOString();
     }
 
     return {
-      prompt: session.aiPrompt,
-      hasPrompt: !!session.aiPrompt
-    };
-  }
-
-  async clearPrompt(id: string, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
-    }
-
-    // Clear the AI prompt
-    session.aiPrompt = null;
-
-    return this.sessionRepository.save(session);
-  }
-
-  // Get sessions that have AI prompts (ready for content generation)
-  async getSessionsWithPrompts(authorId: string): Promise<Session[]> {
-    return this.sessionRepository.find({
-      where: {
-        authorId,
-        isActive: true,
-        aiPrompt: Not(IsNull()) // TypeORM syntax for NOT NULL
-      },
-      relations: ['author', 'location', 'trainer', 'audience', 'tone', 'category', 'topics'],
-      order: { updatedAt: 'DESC' },
-    });
-  }
-
-  // AI Generated Content methods for Story 2.4
-  async saveGeneratedContent(id: string, content: object, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
-    }
-
-    // Handle content versioning for Story 2.5
-    if (session.aiGeneratedContent) {
-      const currentContent = session.aiGeneratedContent as any;
-      const newContent = content as any;
-
-      // Store previous version if it exists
-      if (!newContent.previousVersions) {
-        newContent.previousVersions = [];
-      }
-
-      // Add current content as previous version
-      newContent.previousVersions.unshift({
-        ...currentContent,
-        versionTimestamp: new Date()
-      });
-
-      // Limit to last 5 versions
-      if (newContent.previousVersions.length > 5) {
-        newContent.previousVersions = newContent.previousVersions.slice(0, 5);
-      }
-
-      session.aiGeneratedContent = newContent;
-    } else {
-      session.aiGeneratedContent = content;
-    }
-
-    return this.sessionRepository.save(session);
-  }
-
-  async getGeneratedContent(id: string, user: any): Promise<{ content: object | null; hasContent: boolean }> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to view this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only view sessions you created');
-    }
-
-    return {
-      content: session.aiGeneratedContent,
-      hasContent: !!session.aiGeneratedContent
-    };
-  }
-
-  async clearGeneratedContent(id: string, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
-    }
-
-    session.aiGeneratedContent = null;
-    return this.sessionRepository.save(session);
-  }
-
-  async getSessionsWithGeneratedContent(authorId: string): Promise<Session[]> {
-    return this.sessionRepository.find({
-      where: {
-        authorId,
-        isActive: true,
-        aiGeneratedContent: Not(IsNull())
-      },
-      relations: ['author', 'location', 'trainer', 'audience', 'tone', 'category', 'topics'],
-      order: { updatedAt: 'DESC' },
-    });
-  }
-
-  // Content versioning methods for Story 2.5
-  async getContentVersions(id: string, user: any): Promise<{ versions: any[]; hasVersions: boolean }> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to view this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only view sessions you created');
-    }
-
-    try {
-      const content = session.aiGeneratedContent as any;
-      const versions = content.previousVersions || [];
-
-      return {
-        versions: versions.map((version, index) => ({
-          index,
-          ...version,
-          isSelected: false
-        })),
-        hasVersions: versions.length > 0
-      };
-    } catch (error) {
-      console.error('Error parsing content versions:', error);
-      return { versions: [], hasVersions: false };
-    }
-  }
-
-  async restoreContentVersion(id: string, versionIndex: number, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
-    }
-
-    if (!session.aiGeneratedContent) {
-      throw new BadRequestException('No content found to restore from');
-    }
-
-    try {
-      const content = session.aiGeneratedContent as any;
-      const versions = content.previousVersions || [];
-
-      if (versionIndex < 0 || versionIndex >= versions.length) {
-        throw new BadRequestException('Invalid version index');
-      }
-
-      const versionToRestore = versions[versionIndex];
-
-      // Move current content to versions and restore selected version
-      const updatedVersions = [...versions];
-      updatedVersions.splice(versionIndex, 1); // Remove the version we're restoring
-      updatedVersions.unshift({
-        ...content,
-        versionTimestamp: new Date()
-      });
-
-      const restoredContent = {
-        ...versionToRestore,
-        previousVersions: updatedVersions.slice(0, 5), // Keep only last 5 versions
-        version: (content.version || 1) + 1,
-        generatedAt: new Date()
-      };
-
-      session.aiGeneratedContent = restoredContent;
-      return this.sessionRepository.save(session);
-    } catch (error) {
-      console.error('Error restoring content version:', error);
-      throw new BadRequestException('Failed to restore content version');
-    }
-  }
-
-  // AI Content Integration methods for Story 2.6
-  async integrateAIContentToDraft(id: string, integrateDto: IntegrateAIContentDto, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
-    }
-
-    if (!session.aiGeneratedContent) {
-      throw new BadRequestException('No AI content found to integrate');
-    }
-
-    try {
-      // Parse the AI generated content
-      const aiContent = session.aiGeneratedContent as any;
-      const updateData: Partial<Session> = {};
-
-      // Map AI content to session fields based on user selections
-      if (integrateDto.selectedHeadline) {
-        updateData.promotionalHeadline = integrateDto.selectedHeadline;
-
-        // Optionally update the main title if requested
-        if (integrateDto.overrideExistingTitle) {
-          updateData.title = integrateDto.selectedHeadline;
-        }
-      }
-
-      if (integrateDto.selectedDescription) {
-        updateData.promotionalSummary = integrateDto.selectedDescription;
-
-        // Optionally update the main description if requested
-        if (integrateDto.overrideExistingDescription) {
-          updateData.description = integrateDto.selectedDescription;
-        }
-      }
-
-      if (integrateDto.selectedKeyBenefits) {
-        updateData.keyBenefits = integrateDto.selectedKeyBenefits;
-      }
-
-      if (integrateDto.selectedCallToAction) {
-        updateData.callToAction = integrateDto.selectedCallToAction;
-      }
-
-      if (integrateDto.selectedSocialMedia) {
-        updateData.socialMediaContent = integrateDto.selectedSocialMedia;
-      }
-
-      if (integrateDto.selectedEmailCopy) {
-        updateData.emailMarketingContent = integrateDto.selectedEmailCopy;
-      }
-
-      // If preserveAIContent is false, clear the AI content after integration
-      if (!integrateDto.preserveAIContent) {
-        updateData.aiGeneratedContent = null;
-      }
-
-      // Update the session with integrated content
-      Object.assign(session, updateData);
-      return this.sessionRepository.save(session);
-
-    } catch (error) {
-      console.error('Error integrating AI content:', error);
-      throw new BadRequestException('Failed to integrate AI content to session');
-    }
-  }
-
-  async previewSessionWithAIContent(id: string, user: any): Promise<{
-    session: Session;
-    aiContent: any;
-    previewData: {
-      title: string;
-      description: string;
-      promotionalHeadline?: string;
-      promotionalSummary?: string;
-      keyBenefits?: string;
-      callToAction?: string;
-      socialMediaContent?: string;
-      emailMarketingContent?: string;
-    };
-  }> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to view this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only view sessions you created');
-    }
-
-    let aiContent = null;
-    const previewData = {
+      id: session.id,
       title: session.title,
-      description: session.description || '',
-      promotionalHeadline: session.promotionalHeadline,
-      promotionalSummary: session.promotionalSummary,
-      keyBenefits: session.keyBenefits,
-      callToAction: session.callToAction,
-      socialMediaContent: session.socialMediaContent,
-      emailMarketingContent: session.emailMarketingContent
+      subtitle: session.subtitle,
+      readinessScore: session.readinessScore,
+      status: session.status,
+      sessionType: metadata.sessionType ?? 'workshop',
+      category: session.topic
+        ? {
+            id: session.topic.id,
+            name: session.topic.name,
+          }
+        : metadata.category
+        ? { name: metadata.category }
+        : null,
+      desiredOutcome: metadata.desiredOutcome ?? session.objective ?? '',
+      currentProblem: metadata.currentProblem ?? '',
+      specificTopics: metadata.specificTopics ?? '',
+      startTime: sessionStart,
+      endTime: sessionEnd,
+      timezone: metadata.timezone ?? null,
+      locationId: metadata.locationId ?? null,
+      audienceId: metadata.audienceId ?? null,
+      toneId: metadata.toneId ?? null,
+      aiGeneratedContent: outline
+        ? {
+            outline,
+            prompt: payload?.aiPrompt ?? '',
+            versions: payload?.aiVersions ?? [],
+            acceptedVersionId: payload?.acceptedVersionId,
+          }
+        : null,
+      builderDraft: payload,
+      lastAutosaveAt: draft?.savedAt ? draft.savedAt.toISOString() : null,
     };
+  }
 
-    if (session.aiGeneratedContent) {
-      try {
-        aiContent = session.aiGeneratedContent as any;
+  async autosaveBuilderDraft(
+    sessionId: string,
+    payload: BuilderAutosaveDto,
+  ): Promise<{ savedAt: string }> {
+    const savedAt = new Date();
+    let session: Session | undefined;
 
-        // If no promotional content exists, suggest AI content as preview
-        if (!session.promotionalHeadline && aiContent.contents) {
-          const headlineContent = aiContent.contents.find(c => c.type === 'headline');
-          if (headlineContent) {
-            previewData.promotionalHeadline = headlineContent.content;
-          }
-        }
-
-        if (!session.promotionalSummary && aiContent.contents) {
-          const descriptionContent = aiContent.contents.find(c => c.type === 'description');
-          if (descriptionContent) {
-            previewData.promotionalSummary = descriptionContent.content;
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing AI content for preview:', error);
+    if (sessionId !== 'new') {
+      session = await this.sessionsRepository.findOne({ where: { id: sessionId } });
+      if (!session) {
+        throw new NotFoundException(`Session ${sessionId} not found`);
       }
     }
 
+    await this.draftsRepository.upsert(
+      {
+        draftKey: sessionId,
+        session: session ?? null,
+        payload: { ...payload },
+        savedAt,
+      },
+      {
+        conflictPaths: ['draftKey'],
+      },
+    );
+
+    return { savedAt: savedAt.toISOString() };
+  }
+
+  async bulkUpdateStatus(sessionIds: string[], status: SessionStatus): Promise<{ updated: number }> {
+    if (sessionIds.length === 0) {
+      return { updated: 0 };
+    }
+
+    const sessions = await this.sessionsRepository.find({
+      where: { id: In(sessionIds) },
+      relations: ['contentVersions', 'agendaItems', 'trainerAssignments', 'landingPage', 'incentives'],
+    });
+
+    const previousStatusMap = new Map<string, SessionStatus>();
+    const readinessMap = new Map<string, ReadinessScore>();
+    const updates: Session[] = [];
+
+    for (const session of sessions) {
+      if (session.status === status) {
+        continue;
+      }
+
+      const previousStatus = session.status;
+      session.status = status;
+      this.applyPublishTimestamp(session, previousStatus);
+
+      const readiness = await this.readinessScoringService.calculateReadinessScore(session);
+      session.readinessScore = readiness.percentage;
+
+      previousStatusMap.set(session.id, previousStatus);
+      readinessMap.set(session.id, readiness);
+      updates.push(session);
+    }
+
+    if (updates.length === 0) {
+      return { updated: 0 };
+    }
+
+    await this.sessionsRepository.save(updates);
+
+    for (const session of updates) {
+      const previousStatus = previousStatusMap.get(session.id);
+      const readiness = readinessMap.get(session.id);
+      if (previousStatus && readiness) {
+        await this.recordStatusTransition(session, previousStatus, readiness);
+      }
+    }
+
+    return { updated: updates.length };
+  }
+
+  async bulkArchive(sessionIds: string[]): Promise<{ archived: number }> {
+    const result = await this.bulkUpdateStatus(sessionIds, SessionStatus.RETIRED);
+    return { archived: result.updated };
+  }
+
+  async bulkPublish(sessionIds: string[]): Promise<{ published: number; failed: string[] }> {
+    if (sessionIds.length === 0) {
+      return { published: 0, failed: [] };
+    }
+
+    const sessions = await this.sessionsRepository.find({
+      where: { id: In(sessionIds) },
+      relations: ['contentVersions', 'agendaItems', 'trainerAssignments', 'landingPage', 'incentives'],
+    });
+
+    const foundIds = new Set(sessions.map((session) => session.id));
+    const missingIds = sessionIds.filter((id) => !foundIds.has(id));
+
+    const publishable: Session[] = [];
+    const readinessMap = new Map<string, ReadinessScore>();
+    const previousStatusMap = new Map<string, SessionStatus>();
+    const failed: string[] = [...missingIds];
+
+    for (const session of sessions) {
+      const readiness = await this.readinessScoringService.calculateReadinessScore(session);
+      if (readiness.canPublish) {
+        const previousStatus = session.status;
+        previousStatusMap.set(session.id, previousStatus);
+        session.status = SessionStatus.PUBLISHED;
+        this.applyPublishTimestamp(session, previousStatus);
+        session.readinessScore = readiness.percentage;
+        readinessMap.set(session.id, readiness);
+        publishable.push(session);
+      } else {
+        failed.push(session.id);
+      }
+    }
+
+    if (publishable.length === 0) {
+      return { published: 0, failed };
+    }
+
+    await this.sessionsRepository.save(publishable);
+
+    for (const session of publishable) {
+      const previousStatus = previousStatusMap.get(session.id);
+      const readiness = readinessMap.get(session.id);
+      if (previousStatus && readiness) {
+        await this.recordStatusTransition(session, previousStatus, readiness);
+      }
+    }
+
+    return { published: publishable.length, failed };
+  }
+
+  async publishSession(id: string): Promise<Session> {
+    const session = await this.findOne(id);
+    const readiness = await this.readinessScoringService.calculateReadinessScore(session);
+
+    if (!readiness.canPublish) {
+      throw new ForbiddenException(
+        `Session is not ready for publishing (${readiness.percentage}% complete, ${this.readinessScoringService.getReadinessThreshold()}% required). ` +
+          `Required actions: ${readiness.recommendedActions.join('; ')}`
+      );
+    }
+
+    const previousStatus = session.status;
+    session.status = SessionStatus.PUBLISHED;
+    session.readinessScore = readiness.percentage;
+    this.applyPublishTimestamp(session, previousStatus);
+
+    const saved = await this.sessionsRepository.save(session);
+    await this.recordStatusTransition(saved, previousStatus, readiness);
+
+    return saved;
+  }
+
+  async getReadinessScore(id: string) {
+    const session = await this.findOne(id);
+    return this.readinessScoringService.calculateReadinessScore(session);
+  }
+
+  async getReadinessChecklist(category?: string) {
+    if (category) {
+      return this.readinessScoringService.getChecklistForCategory(category);
+    }
+
     return {
-      session,
-      aiContent,
-      previewData
+      metadata: this.readinessScoringService.getChecklistForCategory('metadata'),
+      content: this.readinessScoringService.getChecklistForCategory('content'),
+      assignment: this.readinessScoringService.getChecklistForCategory('assignment'),
+      integration: this.readinessScoringService.getChecklistForCategory('integration'),
     };
   }
 
-  async finalizeSessionDraft(id: string, user: any): Promise<Session> {
-    const session = await this.findOne(id);
-
-    // Extract user info using helper method
-    const { id: userId, roleName } = this.extractUserInfo(user);
-
-    // Check if user is authorized to update this session
-    if (session.authorId !== userId && roleName !== 'Broker') {
-      throw new ForbiddenException('You can only update sessions you created');
+  private async findTopic(topicId: string): Promise<Topic> {
+    const topic = await this.topicsRepository.findOne({ where: { id: topicId } });
+    if (!topic) {
+      throw new NotFoundException(`Topic ${topicId} not found`);
     }
-
-    // Validate that session has required content for finalization
-    if (!session.title || !session.description) {
-      throw new BadRequestException('Session must have title and description to finalize');
-    }
-
-    // Mark session as ready for publishing workflow
-    session.status = SessionStatus.DRAFT; // Keep as draft until publishing workflow
-
-    return this.sessionRepository.save(session);
-  }
-
-  // Public session methods for Story 5.1-5.2
-  async findPublishedSessions(): Promise<Session[]> {
-    return this.sessionRepository.find({
-      where: {
-        isActive: true,
-        status: SessionStatus.PUBLISHED
-      },
-      relations: ['location', 'trainer'],
-      order: { startTime: 'ASC' },
-    });
-  }
-
-  async findPublicSession(id: string): Promise<Session> {
-    const session = await this.sessionRepository.findOne({
-      where: {
-        id,
-        isActive: true,
-        status: SessionStatus.PUBLISHED
-      },
-      relations: ['location', 'trainer'],
-    });
-
-    if (!session) {
-      throw new NotFoundException(`Published session with ID ${id} not found`);
-    }
-
-    return session;
-  }
-
-  // Registration methods for Story 5.3
-  async registerForSession(sessionId: string, createRegistrationDto: CreateRegistrationDto): Promise<{
-    success: boolean;
-    message: string;
-    registrationId?: string;
-  }> {
-    // Find and validate session
-    const session = await this.sessionRepository.findOne({
-      where: {
-        id: sessionId,
-        isActive: true,
-        status: SessionStatus.PUBLISHED
-      },
-      relations: ['registrations'],
-    });
-
-    if (!session) {
-      throw new NotFoundException('Session not found or registration is closed');
-    }
-
-    // Check if session is accepting registrations
-    const currentRegistrations = session.registrations?.length || 0;
-    if (currentRegistrations >= session.maxRegistrations) {
-      throw new BadRequestException('Registration is full for this session');
-    }
-
-    // Check for duplicate registration (same email for same session)
-    const existingRegistration = await this.registrationRepository.findOne({
-      where: {
-        sessionId,
-        email: createRegistrationDto.email.toLowerCase(),
-      },
-    });
-
-    if (existingRegistration) {
-      throw new ConflictException('You are already registered for this session');
-    }
-
-    try {
-      // Create registration with pending sync status
-      const registration = this.registrationRepository.create({
-        sessionId,
-        name: createRegistrationDto.name.trim(),
-        email: createRegistrationDto.email.toLowerCase().trim(),
-        referredBy: createRegistrationDto.referredBy?.trim() || null,
-        syncStatus: SyncStatus.PENDING,
-        syncAttempts: 0,
-      });
-
-      const savedRegistration = await this.registrationRepository.save(registration);
-
-      return {
-        success: true,
-        message: 'Registration successful! You will receive a confirmation email shortly.',
-        registrationId: savedRegistration.id,
-      };
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw new BadRequestException('Registration failed. Please try again later.');
-    }
-  }
-
-  async getRegistrationsBySession(sessionId: string): Promise<Registration[]> {
-    return this.registrationRepository.find({
-      where: { sessionId },
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  async getRegistrationCount(sessionId: string): Promise<number> {
-    return this.registrationRepository.count({
-      where: { sessionId },
-    });
-  }
-
-  // Internal update method that bypasses user authorization - for system operations
-  async internalUpdate(id: string, updateData: Partial<Session>): Promise<Session> {
-    const session = await this.findOne(id);
-    Object.assign(session, updateData);
-    return this.sessionRepository.save(session);
+    return topic;
   }
 }

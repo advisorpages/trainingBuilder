@@ -1,194 +1,86 @@
-# Leadership Training App
+# Leadership Training App – AI Session Builder Reboot
 
-A mobile-first platform for creating and promoting training sessions, built with React, NestJS, and PostgreSQL.
+This repository is being overhauled so the AI Session Builder becomes the heart of the product. Every supporting workflow (topics, incentives, landing pages, trainer tools, public pages) will orbit the builder and consume its session-centric domain model.
 
-## Story 1.1: Project & Docker Setup ✅
+## 🔭 Current Focus
+- **Phase 1 – Foundation Reset**: archive legacy scope, document the new blueprint, and prepare skeletons for the rebuild.
+- Follow the documentation in `docs/` for detailed phase plans and test expectations.
 
-This repository implements the foundational development environment for the Leadership Training App.
+## 🏗️ Architecture (Target)
+- **Frontend**: React 18 + TypeScript + Vite, feature-driven structure under `packages/frontend/src/features`.
+- **Backend**: NestJS + TypeScript + PostgreSQL, modularized by feature with a unified session domain.
+- **Shared**: `packages/shared` for types, constants, and utilities shared across services.
+- **AI Layer**: Central service providing prompt orchestration, provider adapters, and output moderation.
 
-## 🏗️ Architecture
-
-- **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: NestJS + TypeScript + PostgreSQL
-- **Database**: PostgreSQL 15
-- **Development**: Docker Compose
-- **Repository**: Monorepo with shared packages
-
-## 🚀 Quick Start
-
+## 🚀 Development Workflow
 ### Prerequisites
+- Docker & Docker Compose
+- Node.js 18+
 
-- Docker and Docker Compose
-- Node.js 18+ (for local development)
-- Git
-
-### 1. Clone and Setup
-
+### Commands
 ```bash
-git clone <repository-url>
-cd TrainingBuilderv4
-```
+# Install dependencies
+yarn install # or npm run install:all
 
-### 2. Start Development Environment
-
-```bash
-# Start all services (database, backend, frontend)
+# Start the stack (frontend + backend + db)
 npm run dev
 
-# Or start in detached mode
-npm run dev:detached
-```
-
-### 3. Access the Application
-
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:3001/api
-- **Health Check**: http://localhost:3001/api/health
-- **Database**: PostgreSQL on localhost:5432
-
-### 4. Stop Services
-
-```bash
-# Stop all services
-npm run down
-
-# Stop and remove volumes (clean slate)
-npm run clean
-```
-
-## 📁 Project Structure
-
-```
-/
-├── packages/
-│   ├── frontend/          # React + TypeScript SPA
-│   │   ├── src/
-│   │   │   ├── components/
-│   │   │   ├── pages/
-│   │   │   └── services/
-│   │   └── Dockerfile
-│   ├── backend/           # NestJS + TypeScript API
-│   │   ├── src/
-│   │   │   ├── modules/
-│   │   │   │   ├── auth/
-│   │   │   │   ├── sessions/
-│   │   │   │   └── users/
-│   │   │   └── services/
-│   │   └── Dockerfile
-│   └── shared/            # Common types & utilities
-│       └── src/
-│           ├── types/
-│           ├── constants/
-│           └── utils/
-├── database/
-│   └── init/              # Database initialization scripts
-├── docker-compose.yml
-└── package.json           # Workspace configuration
-```
-
-## 🔧 Development Commands
-
-```bash
-# Install all dependencies
-npm run install:all
-
-# Build all packages
-npm run build
-
-# Run linting
+# Lint & tests
 npm run lint
-
-# Run type checking
-npm run typecheck
-
-# Run tests
 npm run test
 ```
 
-## 🧪 Testing Integration
+> **Tip:** During the reboot many modules are placeholders. Expect tests to be incomplete until later phases.
 
-1. **Database Health**: Check PostgreSQL connection
-2. **Backend Health**: GET http://localhost:3001/api/health
-3. **Frontend Connection**: Verify frontend can reach backend
-4. **Hot Reloading**: Test development workflow
-
-## 📊 Current Implementation Status
-
-### ✅ Completed (Story 1.1)
-- [x] Monorepo structure with workspaces
-- [x] Docker Compose environment
-- [x] PostgreSQL database with initialization
-- [x] React frontend with TypeScript
-- [x] NestJS backend with TypeScript
-- [x] Shared package for types/constants
-- [x] Basic routing and pages
-- [x] Health check endpoints
-- [x] Hot-reloading development setup
-
-### 🔄 Coming Next
-- **Story 1.2**: Database Schema & Roles
-- **Story 1.3**: User Authentication
-- **Story 1.4**: Location Management
-- **Story 1.5**: Trainer Resource Management
-
-## 🌟 Epic Progress
-
-**Epic 1: Foundation, Auth, & Resource Management**
-- Story 1.1: Project & Docker Setup ✅
-- Story 1.2: Database Schema & Roles ⏳
-- Story 1.3: User Authentication ⏳
-- Story 1.4: Location Management ⏳
-- Story 1.5: Trainer Resource Management ⏳
-- Story 1.6: System Configuration Management ⏳
-- Story 1.7: Attribute Management ⏳
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Port conflicts**: Ensure ports 3000, 3001, and 5432 are available
-2. **Docker issues**: Try `npm run clean` to reset containers
-3. **Dependencies**: Run `npm run install:all` to reinstall packages
-4. **Database**: Check database logs with `docker-compose logs database`
-
-### Useful Commands
-
-```bash
-# View service logs
-docker-compose logs frontend
-docker-compose logs backend
-docker-compose logs database
-
-# Restart specific service
-docker-compose restart backend
-
-# Rebuild containers
-docker-compose up --build
+## 📁 Repository Layout (In Transition)
+```
+packages/
+  backend/            # NestJS API (modules currently being refactored)
+  frontend/           # React app (feature directories under reconstruction)
+  shared/             # Shared types/utilities
+.archive/             # Archived legacy code kept for reference
 ```
 
-## 📝 Development Notes
+Refer to the inventory in `docs/phase1-inventory.md` to understand what was moved and why.
 
-- Database schema is initialized automatically on first run
-- Sample data is inserted for development
-- Environment variables are configured in `.env`
-- Frontend uses Vite for fast development builds
-- Backend uses NestJS watch mode for hot reloading
+## 🧭 Roadmap
+- [x] Document blueprint and phases (`docs/blueprint-overview.md`)
+- [x] Phase 1: Foundation Reset
+- [x] Phase 2: Domain & Backend Core
+- [x] Phase 3: Frontend Builder Core
+- [x] Phase 4: Supporting Modules Integration
+- [x] Phase 5: AI Experience & Quality Gates ✨
 
-## 🔗 API Endpoints
+## ✨ AI Features & Quality Gates
 
-### Current Endpoints (Story 1.1)
-- `GET /api/health` - Application health check
-- `GET /api` - Application information
-- `GET /api/auth/status` - Auth module status
-- `GET /api/users/status` - Users module status
-- `GET /api/sessions/status` - Sessions module status
+The application now includes advanced AI capabilities with comprehensive quality controls:
 
-### Coming Soon
-- Authentication endpoints (Story 1.3)
-- User management (Story 1.3)
-- Session management (Epic 2)
-- Resource management (Stories 1.4-1.7)
+### 🤖 AI Session Builder
+- **Contextual Content Generation**: AI adapts to session metadata (topic, audience, objectives)
+- **Smart Prompt Enhancement**: Automatically enriches user prompts with relevant context
+- **Quality Moderation**: Real-time validation for tone, length, structure, and professional appropriateness
+- **Multi-format Support**: Generate outlines, openers, activities, and structured content
 
----
+### 📊 Analytics & Telemetry
+- **Real-time Usage Tracking**: Monitor AI interactions, builder usage, and content performance
+- **Quality Metrics Dashboard**: Track success rates, processing times, and content quality scores
+- **Builder Analytics**: Session creation patterns, AI adoption rates, and user behavior insights
 
-**Generated with BMad Master for Story 1.1: Project & Docker Setup**
+### ✅ Publish Readiness Engine
+- **Automated Scoring**: 100-point readiness assessment across content, metadata, assignments, and integrations
+- **Quality Gates**: Prevent publishing of incomplete or low-quality sessions (80% minimum threshold)
+- **Actionable Feedback**: Specific recommendations for improving session readiness
+
+### 📖 Developer Resources
+- **AI Guidelines**: Comprehensive documentation at `docs/ai-guidelines.md`
+- **API Documentation**: Full endpoint reference for AI services and analytics
+- **Best Practices**: Quality standards, error handling, and performance optimization guides
+
+Each phase includes success criteria and test plans inside `docs/phase-*.md`.
+
+## 🤝 Contributing
+1. Review the relevant phase document before starting work.
+2. Avoid deleting legacy code; move out-of-scope assets into `.archive/` with an explanatory README.
+3. Keep documentation in sync with code changes—especially domain contracts and API definitions.
+
+Questions or issues? Capture them in `docs/phase-issues.md` (create if it does not yet exist) so the next contributor can pick up smoothly. See `docs/contributing.md` for workflow expectations.

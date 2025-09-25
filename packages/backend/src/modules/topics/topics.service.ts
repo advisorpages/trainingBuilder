@@ -1,144 +1,82 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Topic } from '../../entities/topic.entity';
+import { Topic, Session } from '../../entities';
 import { CreateTopicDto } from './dto/create-topic.dto';
-import { UpdateTopicDto } from './dto/update-topic.dto';
-import { TopicQueryDto } from './dto/topic-query.dto';
-
-export interface PaginatedTopics {
-  topics: Topic[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
 
 @Injectable()
 export class TopicsService {
   constructor(
     @InjectRepository(Topic)
-    private topicsRepository: Repository<Topic>,
+    private readonly topicRepository: Repository<Topic>,
+    @InjectRepository(Session)
+    private readonly sessionRepository: Repository<Session>,
   ) {}
 
-  async create(createTopicDto: CreateTopicDto): Promise<Topic> {
-    // Check for duplicate name
-    const existingTopic = await this.topicsRepository.findOne({
-      where: { name: createTopicDto.name }
-    });
-
-    if (existingTopic) {
-      throw new BadRequestException('A topic with this name already exists');
-    }
-
-    const topic = this.topicsRepository.create(createTopicDto);
-    return await this.topicsRepository.save(topic);
-  }
-
-  async findAll(query: TopicQueryDto): Promise<PaginatedTopics> {
-    const { page = 1, limit = 10, search, isActive } = query;
-    const skip = (page - 1) * limit;
-
-    const queryBuilder = this.topicsRepository.createQueryBuilder('topic');
-
-    if (search) {
-      queryBuilder.where(
-        'topic.name ILIKE :search OR topic.description ILIKE :search',
-        { search: `%${search}%` }
-      );
-    }
-
-    if (isActive !== undefined) {
-      queryBuilder.andWhere('topic.isActive = :isActive', { isActive });
-    }
-
-    queryBuilder
+  async findAll(): Promise<(Topic & { sessionCount: number })[]> {
+    const topics = await this.topicRepository
+      .createQueryBuilder('topic')
+      .leftJoin('topic.sessions', 'session')
+      .addSelect('COUNT(session.id)', 'sessionCount')
+      .groupBy('topic.id')
       .orderBy('topic.name', 'ASC')
-      .skip(skip)
-      .take(limit);
+      .getRawAndEntities();
 
-    const [topics, total] = await queryBuilder.getManyAndCount();
-
-    return {
-      topics,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-    };
+    return topics.entities.map((topic, index) => ({
+      ...topic,
+      sessionCount: parseInt(topics.raw[index].sessionCount) || 0,
+    }));
   }
 
-  async findActiveTopics(): Promise<Topic[]> {
-    return await this.topicsRepository.find({
-      where: { isActive: true },
-      order: { name: 'ASC' }
-    });
-  }
-
-  async findOne(id: number): Promise<Topic> {
-    const topic = await this.topicsRepository.findOne({
+  async findOne(id: string): Promise<Topic> {
+    const topic = await this.topicRepository.findOne({
       where: { id },
       relations: ['sessions']
     });
 
     if (!topic) {
-      throw new NotFoundException(`Topic with ID ${id} not found`);
+      throw new NotFoundException(`Topic ${id} not found`);
     }
 
     return topic;
   }
 
-  async update(id: number, updateTopicDto: UpdateTopicDto): Promise<Topic> {
+  async create(dto: CreateTopicDto): Promise<Topic> {
+    const topic = this.topicRepository.create({
+      name: dto.name,
+      description: dto.description,
+      tags: dto.tags ? dto.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : undefined,
+    });
+
+    return this.topicRepository.save(topic);
+  }
+
+  async update(id: string, dto: Partial<CreateTopicDto>): Promise<Topic> {
     const topic = await this.findOne(id);
 
-    // Check for duplicate name if name is being updated
-    if (updateTopicDto.name && updateTopicDto.name !== topic.name) {
-      const existingTopic = await this.topicsRepository.findOne({
-        where: { name: updateTopicDto.name }
-      });
-
-      if (existingTopic) {
-        throw new BadRequestException('A topic with this name already exists');
-      }
+    if (dto.name !== undefined) topic.name = dto.name;
+    if (dto.description !== undefined) topic.description = dto.description;
+    if (dto.tags !== undefined) {
+      topic.tags = dto.tags ? dto.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [];
     }
 
-    Object.assign(topic, updateTopicDto);
-    return await this.topicsRepository.save(topic);
+    return this.topicRepository.save(topic);
   }
 
-  async remove(id: number): Promise<void> {
-    const topic = await this.topicsRepository.findOne({
-      where: { id },
-      relations: ['sessions']
-    });
+  async remove(id: string): Promise<{ deleted: boolean; message?: string }> {
+    const topic = await this.findOne(id);
 
-    if (!topic) {
-      throw new NotFoundException(`Topic with ID ${id} not found`);
+    // Check if topic is used by any sessions
+    const sessionCount = await this.sessionRepository.count({ where: { topic: { id } } });
+
+    if (sessionCount > 0) {
+      return {
+        deleted: false,
+        message: `Cannot delete topic "${topic.name}" as it is used by ${sessionCount} session(s)`,
+      };
     }
 
-    // Check if topic is in use by sessions
-    if (topic.sessions && topic.sessions.length > 0) {
-      throw new BadRequestException(
-        `Cannot delete topic "${topic.name}" as it is referenced by ${topic.sessions.length} session(s). Please remove it from all sessions first.`
-      );
-    }
-
-    await this.topicsRepository.remove(topic);
-  }
-
-  async checkTopicInUse(id: number): Promise<{ inUse: boolean; sessionCount: number }> {
-    const topic = await this.topicsRepository.findOne({
-      where: { id },
-      relations: ['sessions']
-    });
-
-    if (!topic) {
-      throw new NotFoundException(`Topic with ID ${id} not found`);
-    }
-
-    const sessionCount = topic.sessions ? topic.sessions.length : 0;
-
-    return {
-      inUse: sessionCount > 0,
-      sessionCount
-    };
+    await this.topicRepository.remove(topic);
+    return { deleted: true };
   }
 }

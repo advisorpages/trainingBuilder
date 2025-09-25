@@ -1,26 +1,26 @@
-import { IsNotEmpty, IsString, MaxLength, IsDateString, IsOptional } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class CreateIncentiveDto {
-  @IsNotEmpty()
   @IsString()
-  @MaxLength(255)
-  title: string;
+  name: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
-  description?: string;
+  overview?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
-  rules?: string;
+  terms?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsDateString()
-  startDate: Date;
+  startDate?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsDateString()
-  endDate: Date;
+  endDate?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

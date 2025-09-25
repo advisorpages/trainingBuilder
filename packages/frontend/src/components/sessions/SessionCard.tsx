@@ -7,7 +7,7 @@ interface SessionCardProps {
 }
 
 const SessionCard = ({ session }: SessionCardProps) => {
-  const formatDateTime = (dateTime: Date) => {
+  const formatDateTime = (dateTime: Date | string) => {
     const date = new Date(dateTime)
     return {
       date: date.toLocaleDateString('en-US', {

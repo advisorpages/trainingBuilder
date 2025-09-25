@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
-import { AIService } from './ai.service';
-import { AIController } from './ai.controller';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AiController } from './ai.controller';
+import { AiService } from './ai.service';
+import { AnalyticsTelemetryService } from '../../services/analytics-telemetry.service';
+import { Session, Topic } from '../../entities';
 
 @Module({
-  controllers: [AIController],
-  providers: [AIService],
-  exports: [AIService],
+  imports: [TypeOrmModule.forFeature([Session, Topic])],
+  controllers: [AiController],
+  providers: [AiService, AnalyticsTelemetryService],
+  exports: [AiService],
 })
 export class AIModule {}

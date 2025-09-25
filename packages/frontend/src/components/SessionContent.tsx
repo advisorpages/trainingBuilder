@@ -6,7 +6,7 @@ interface SessionContentProps {
 }
 
 const SessionContent = ({ session }: SessionContentProps) => {
-  const formatDuration = (startTime: Date, endTime: Date) => {
+  const formatDuration = (startTime: Date | string, endTime: Date | string) => {
     const start = new Date(startTime)
     const end = new Date(endTime)
     const durationMs = end.getTime() - start.getTime()
@@ -22,16 +22,20 @@ const SessionContent = ({ session }: SessionContentProps) => {
     }
   }
 
-  const parseAIContent = (aiGeneratedContent?: string) => {
+  const parseAIContent = (aiGeneratedContent?: string | Record<string, any> | null) => {
     if (!aiGeneratedContent) return null
 
-    try {
-      const content = JSON.parse(aiGeneratedContent)
-      return content
-    } catch {
-      // If it's not JSON, treat as plain text
-      return { description: aiGeneratedContent }
+    if (typeof aiGeneratedContent === 'string') {
+      try {
+        const content = JSON.parse(aiGeneratedContent)
+        return content
+      } catch {
+        // If it's not JSON, treat as plain text
+        return { description: aiGeneratedContent }
+      }
     }
+
+    return aiGeneratedContent
   }
 
   const aiContent = parseAIContent(session.aiGeneratedContent)

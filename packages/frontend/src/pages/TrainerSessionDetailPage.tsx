@@ -1,633 +1,454 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
 
 interface SessionDetail {
   id: string;
   title: string;
-  description?: string;
-  startTime: string;
-  endTime: string;
-  status: string;
-  location?: {
-    id: number;
-    name: string;
-    address?: string;
-  };
-  trainer?: {
-    id: number;
-    name: string;
-    email?: string;
-  };
-  author: {
+  subtitle?: string;
+  objective?: string;
+  audience?: string;
+  status: 'draft' | 'review' | 'ready' | 'published' | 'retired';
+  scheduledAt?: string;
+  durationMinutes?: number;
+  readinessScore?: number;
+  topic?: {
     id: string;
-    email: string;
+    name: string;
+    description?: string;
   };
-  audience?: { id: number; name: string };
-  tone?: { id: number; name: string };
-  category?: { id: number; name: string };
-  topics?: Array<{ id: number; name: string }>;
-  registrations?: any[];
-  coachingTips?: any[];
-  promotionalHeadline?: string;
-  promotionalSummary?: string;
-  keyBenefits?: string;
-  callToAction?: string;
-  socialMediaContent?: string;
-  emailMarketingContent?: string;
+  agendaItems?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    duration: number;
+    position: number;
+    type: 'opener' | 'topic' | 'activity' | 'closer';
+  }>;
+  trainerAssignments?: Array<{
+    id: string;
+    status: 'pending' | 'acknowledged' | 'prepared' | 'completed';
+    acknowledgedAt?: string;
+    preparedAt?: string;
+  }>;
 }
 
-interface CoachingTip {
+interface TrainerAsset {
   id: string;
-  sessionId: string;
-  status: string;
+  type: 'coaching_tips' | 'handout' | 'slides' | 'notes';
+  title: string;
+  content?: any;
+  fileUrl?: string;
   createdAt: string;
-  coachingTip: {
-    id: number;
-    text: string;
-    category?: string;
-    difficultyLevel?: string;
-  };
 }
 
-const TrainerSessionDetailPage: React.FC = () => {
+const CoachingTips: React.FC<{ tips: string[] }> = ({ tips }) => {
+  return (
+    <Card className="p-6">
+      <h3 className="text-lg font-semibold mb-4 text-slate-900">AI Coaching Tips</h3>
+      <div className="space-y-3">
+        {tips.map((tip, index) => (
+          <div key={index} className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium">
+              {index + 1}
+            </div>
+            <p className="text-sm text-slate-700">{tip}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
+const SessionAgenda: React.FC<{ agendaItems: SessionDetail['agendaItems'] }> = ({ agendaItems }) => {
+  if (!agendaItems?.length) {
+    return (
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold mb-4 text-slate-900">Session Agenda</h3>
+        <p className="text-slate-500 text-sm">No agenda items available yet.</p>
+      </Card>
+    );
+  }
+
+  const totalDuration = agendaItems.reduce((sum, item) => sum + item.duration, 0);
+
+  const typeColors = {
+    opener: 'bg-green-100 text-green-700',
+    topic: 'bg-blue-100 text-blue-700',
+    activity: 'bg-purple-100 text-purple-700',
+    closer: 'bg-orange-100 text-orange-700',
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-slate-900">Session Agenda</h3>
+        <span className="text-sm text-slate-500">Total: {totalDuration} minutes</span>
+      </div>
+
+      <div className="space-y-4">
+        {agendaItems.map((item, index) => (
+          <div key={item.id} className="flex gap-4 p-4 bg-slate-50 rounded-lg">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-slate-200 text-slate-600 rounded-full flex items-center justify-center text-sm font-medium">
+                {index + 1}
+              </div>
+            </div>
+
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h4 className="font-medium text-slate-900">{item.title}</h4>
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${typeColors[item.type]}`}>
+                  {item.type}
+                </span>
+                <span className="text-xs text-slate-500">{item.duration} min</span>
+              </div>
+              {item.description && (
+                <p className="text-sm text-slate-600">{item.description}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
+const MaterialsSection: React.FC<{ assets: TrainerAsset[] }> = ({ assets }) => {
+  const handleDownload = (asset: TrainerAsset) => {
+    if (asset.fileUrl) {
+      window.open(asset.fileUrl, '_blank');
+    } else {
+      // For demo purposes, create a blob with content
+      const content = JSON.stringify(asset.content, null, 2);
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${asset.title}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const typeIcons = {
+    coaching_tips: '💡',
+    handout: '📄',
+    slides: '📊',
+    notes: '📝',
+  };
+
+  return (
+    <Card className="p-6">
+      <h3 className="text-lg font-semibold mb-4 text-slate-900">Training Materials</h3>
+
+      {assets.length === 0 ? (
+        <p className="text-slate-500 text-sm">No materials available yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {assets.map((asset) => (
+            <div key={asset.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <span className="text-lg">{typeIcons[asset.type]}</span>
+                <div>
+                  <h4 className="text-sm font-medium text-slate-900">{asset.title}</h4>
+                  <p className="text-xs text-slate-500 capitalize">{asset.type.replace('_', ' ')}</p>
+                </div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => handleDownload(asset)}>
+                Download
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+export const TrainerSessionDetailPage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const { user } = useAuth();
+  const navigate = useNavigate();
   const [session, setSession] = useState<SessionDetail | null>(null);
-  const [coachingTips, setCoachingTips] = useState<CoachingTip[]>([]);
+  const [assets, setAssets] = useState<TrainerAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [generatingTips, setGeneratingTips] = useState(false);
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'materials' | 'coaching-tips'>('overview');
 
   useEffect(() => {
-    if (user && user.role.name === 'Trainer' && sessionId) {
-      fetchSessionDetail();
-      fetchCoachingTips();
+    if (sessionId) {
+      fetchSessionDetails(sessionId);
     }
-  }, [user, sessionId]);
+  }, [sessionId]);
 
-  const fetchSessionDetail = async () => {
+  const fetchSessionDetails = async (id: string) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/trainer-dashboard/sessions/${sessionId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
+      setLoading(true);
+
+      // Mock data for development
+      const mockSession: SessionDetail = {
+        id,
+        title: 'Leadership Communication Fundamentals',
+        subtitle: 'Building trust through effective communication',
+        objective: 'Develop core communication skills for team leadership',
+        audience: 'Mid-level managers and team leads',
+        status: 'published',
+        scheduledAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        durationMinutes: 120,
+        readinessScore: 85,
+        topic: {
+          id: 'topic-1',
+          name: 'Leadership Communication',
+          description: 'Essential communication skills for effective leadership',
         },
-      });
+        agendaItems: [
+          {
+            id: '1',
+            title: 'Welcome & Context Setting',
+            description: 'Open the workshop with a quick framing that highlights why communication matters right now.',
+            duration: 10,
+            position: 0,
+            type: 'opener',
+          },
+          {
+            id: '2',
+            title: 'Core Communication Principles',
+            description: 'Introduce the primary frameworks and reference recent examples.',
+            duration: 30,
+            position: 1,
+            type: 'topic',
+          },
+          {
+            id: '3',
+            title: 'Interactive Exercise: Active Listening',
+            description: 'Hands-on practice with active listening techniques in pairs.',
+            duration: 25,
+            position: 2,
+            type: 'activity',
+          },
+          {
+            id: '4',
+            title: 'Communication Styles Assessment',
+            description: 'Individual and group discussion on different communication preferences.',
+            duration: 30,
+            position: 3,
+            type: 'topic',
+          },
+          {
+            id: '5',
+            title: 'Action Planning & Wrap-up',
+            description: 'Participants create personal action plans and share key takeaways.',
+            duration: 25,
+            position: 4,
+            type: 'closer',
+          },
+        ],
+        trainerAssignments: [
+          {
+            id: 'assignment-1',
+            status: 'acknowledged',
+            acknowledgedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          },
+        ],
+      };
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('Session not found or not assigned to you');
-        }
-        throw new Error('Failed to fetch session details');
-      }
+      const mockAssets: TrainerAsset[] = [
+        {
+          id: '1',
+          type: 'coaching_tips',
+          title: 'Session Coaching Tips',
+          content: {
+            tips: [
+              'Start with a personal story to create connection',
+              'Use the 3-2-1 technique for managing nervous energy',
+              'Watch for non-verbal cues that indicate disengagement',
+              'Have backup activities ready if discussions finish early',
+            ],
+          },
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          type: 'slides',
+          title: 'Presentation Slides',
+          fileUrl: '/assets/leadership-communication-slides.pptx',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '3',
+          type: 'handout',
+          title: 'Participant Workbook',
+          fileUrl: '/assets/communication-workbook.pdf',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '4',
+          type: 'notes',
+          title: 'Facilitator Notes',
+          content: {
+            notes: [
+              'Key points to emphasize during each section',
+              'Common questions and recommended answers',
+              'Troubleshooting guide for difficult participants',
+            ],
+          },
+          createdAt: new Date().toISOString(),
+        },
+      ];
 
-      const data = await response.json();
-      setSession(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setSession(mockSession);
+      setAssets(mockAssets);
+    } catch (error) {
+      console.error('Failed to fetch session details:', error);
+      setError('Failed to load session details');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchCoachingTips = async () => {
-    try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/trainer-dashboard/sessions/${sessionId}/coaching-tips`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCoachingTips(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch coaching tips:', err);
-    }
+  const handleBackToDashboard = () => {
+    navigate('/trainer/dashboard');
   };
 
-  const generateCoachingTips = async () => {
-    if (!sessionId) return;
+  const handleMarkPrepared = async () => {
+    if (!session?.trainerAssignments?.[0]) return;
 
     try {
-      setGeneratingTips(true);
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/trainer-dashboard/sessions/${sessionId}/coaching-tips/generate`, {
+      await fetch(`/api/trainer/assignments/${session.trainerAssignments[0].id}/prepared`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          focusArea: 'general',
-          difficultyLevel: 'intermediate',
-        }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to generate coaching tips');
-      }
-
-      await response.json();
-      // Refresh coaching tips
-      await fetchCoachingTips();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate coaching tips');
-    } finally {
-      setGeneratingTips(false);
+      setSession(prev => prev ? {
+        ...prev,
+        trainerAssignments: prev.trainerAssignments?.map(assignment => ({
+          ...assignment,
+          status: 'prepared' as const,
+          preparedAt: new Date().toISOString(),
+        })),
+      } : null);
+    } catch (error) {
+      console.error('Failed to mark as prepared:', error);
+      // For demo, update local state anyway
+      setSession(prev => prev ? {
+        ...prev,
+        trainerAssignments: prev.trainerAssignments?.map(assignment => ({
+          ...assignment,
+          status: 'prepared' as const,
+          preparedAt: new Date().toISOString(),
+        })),
+      } : null);
     }
   };
-
-  const sendTrainerKitEmail = async () => {
-    if (!sessionId) return;
-
-    try {
-      setSendingEmail(true);
-      setEmailStatus(null);
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/trainer-dashboard/sessions/${sessionId}/send-trainer-kit`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setEmailStatus('Trainer kit email sent successfully! 📧');
-      } else {
-        setEmailStatus(result.message || 'Failed to send email');
-      }
-    } catch (err) {
-      setEmailStatus('Error sending email: ' + (err instanceof Error ? err.message : 'Unknown error'));
-    } finally {
-      setSendingEmail(false);
-      // Clear status after 5 seconds
-      setTimeout(() => setEmailStatus(null), 5000);
-    }
-  };
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return {
-      date: date.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      }),
-      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'published':
-        return '#28a745';
-      case 'draft':
-        return '#ffc107';
-      case 'cancelled':
-        return '#dc3545';
-      default:
-        return '#6c757d';
-    }
-  };
-
-  if (!user || user.role.name !== 'Trainer') {
-    return (
-      <div className="page">
-        <h2>Access Denied</h2>
-        <p>This page is only accessible to trainers.</p>
-        <Link to="/dashboard">
-          <button className="btn">Back to Dashboard</button>
-        </Link>
-      </div>
-    );
-  }
 
   if (loading) {
     return (
-      <div className="page">
-        <h2>Session Details</h2>
-        <p>Loading session details...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="page">
-        <h2>Session Details</h2>
-        <div style={{ color: '#dc3545', marginBottom: '1rem' }}>
-          Error: {error}
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-slate-600">Loading session details...</div>
+          </div>
         </div>
-        <Link to="/trainer/dashboard">
-          <button className="btn">Back to Trainer Dashboard</button>
-        </Link>
       </div>
     );
   }
 
-  if (!session) {
+  if (error || !session) {
     return (
-      <div className="page">
-        <h2>Session Not Found</h2>
-        <p>The requested session could not be found.</p>
-        <Link to="/trainer/dashboard">
-          <button className="btn">Back to Trainer Dashboard</button>
-        </Link>
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <Card className="p-8 text-center">
+            <div className="text-red-600 mb-4">{error || 'Session not found'}</div>
+            <Button onClick={handleBackToDashboard}>Back to Dashboard</Button>
+          </Card>
+        </div>
       </div>
     );
   }
 
-  const dateTime = formatDateTime(session.startTime);
-  const endTime = formatDateTime(session.endTime);
+  const coachingTips = assets
+    .find(a => a.type === 'coaching_tips')
+    ?.content?.tips || [
+      'Start with a personal story to create connection',
+      'Use the 3-2-1 technique for managing nervous energy',
+      'Watch for non-verbal cues that indicate disengagement',
+      'Have backup activities ready if discussions finish early',
+    ];
+
+  const assignment = session.trainerAssignments?.[0];
 
   return (
-    <div className="page">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <div>
-          <h2>{session.title}</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.9rem', color: '#6c757d' }}>
-            <span>{dateTime.date} at {dateTime.time}</span>
-            <span style={{ color: getStatusColor(session.status) }}>
-              ● {session.status}
-            </span>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button
-            onClick={sendTrainerKitEmail}
-            disabled={sendingEmail}
-            className="btn"
-            style={{ backgroundColor: '#28a745' }}
-          >
-            {sendingEmail ? 'Sending...' : '📧 Send Trainer Kit Email'}
-          </button>
-          <Link to="/trainer/dashboard">
-            <button className="btn">← Back to Dashboard</button>
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <Button variant="outline" onClick={handleBackToDashboard} className="mb-4">
+            ← Back to Dashboard
+          </Button>
 
-      {/* Email Status */}
-      {emailStatus && (
-        <div style={{
-          backgroundColor: emailStatus.includes('successfully') ? '#d4edda' : '#f8d7da',
-          color: emailStatus.includes('successfully') ? '#155724' : '#721c24',
-          padding: '1rem',
-          borderRadius: '8px',
-          marginBottom: '2rem',
-          border: `1px solid ${emailStatus.includes('successfully') ? '#c3e6cb' : '#f5c6cb'}`,
-        }}>
-          {emailStatus}
-        </div>
-      )}
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">{session.title}</h1>
+              {session.subtitle && (
+                <p className="text-lg text-slate-600 mb-2">{session.subtitle}</p>
+              )}
 
-      {/* Tab Navigation */}
-      <div style={{
-        borderBottom: '1px solid #dee2e6',
-        marginBottom: '2rem',
-        display: 'flex',
-        gap: '2rem'
-      }}>
-        {(['overview', 'materials', 'coaching-tips'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: '1rem 0',
-              borderBottom: activeTab === tab ? '2px solid #007bff' : '2px solid transparent',
-              color: activeTab === tab ? '#007bff' : '#6c757d',
-              fontWeight: activeTab === tab ? 'bold' : 'normal',
-              cursor: 'pointer',
-              textTransform: 'capitalize',
-            }}
-          >
-            {tab.replace('-', ' ')}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'overview' && (
-        <div>
-          {/* Session Overview */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem'
-          }}>
-            <h3>Session Overview</h3>
-            <p style={{ fontSize: '1.1rem', marginBottom: '1.5rem' }}>
-              {session.description || 'No description available'}
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              <div>
-                <strong>Start Time:</strong><br />
-                {dateTime.date}<br />
-                {dateTime.time}
-              </div>
-              <div>
-                <strong>End Time:</strong><br />
-                {endTime.time}
-              </div>
-              <div>
-                <strong>Location:</strong><br />
-                {session.location?.name || 'TBD'}<br />
-                {session.location?.address && (
-                  <span style={{ fontSize: '0.9rem', color: '#6c757d' }}>
-                    {session.location.address}
+              <div className="flex items-center gap-4 text-sm text-slate-500">
+                {session.scheduledAt && (
+                  <span>
+                    📅 {new Date(session.scheduledAt).toLocaleString()}
                   </span>
                 )}
-              </div>
-              <div>
-                <strong>Trainer:</strong><br />
-                {session.trainer?.name || 'Not assigned'}<br />
-                {session.trainer?.email && (
-                  <span style={{ fontSize: '0.9rem', color: '#6c757d' }}>
-                    {session.trainer.email}
-                  </span>
+                {session.durationMinutes && (
+                  <span>⏱️ {session.durationMinutes} minutes</span>
+                )}
+                {session.topic && (
+                  <span>🏷️ {session.topic.name}</span>
                 )}
               </div>
             </div>
-          </div>
 
-          {/* Session Metadata */}
-          <div style={{
-            backgroundColor: '#fff',
-            border: '1px solid #dee2e6',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem'
-          }}>
-            <h3>Session Metadata</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              <div>
-                <strong>Audience:</strong><br />
-                {session.audience?.name || 'Not specified'}
-              </div>
-              <div>
-                <strong>Tone:</strong><br />
-                {session.tone?.name || 'Not specified'}
-              </div>
-              <div>
-                <strong>Category:</strong><br />
-                {session.category?.name || 'Not specified'}
-              </div>
-              <div>
-                <strong>Registrations:</strong><br />
-                {session.registrations?.length || 0} participants
-              </div>
-            </div>
-
-            {session.topics && session.topics.length > 0 && (
-              <div style={{ marginTop: '1rem' }}>
-                <strong>Topics:</strong><br />
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                  {session.topics.map((topic) => (
-                    <span
-                      key={topic.id}
-                      style={{
-                        backgroundColor: '#e7f3ff',
-                        color: '#0066cc',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '4px',
-                        fontSize: '0.9rem',
-                      }}
-                    >
-                      {topic.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Author Information */}
-          <div style={{
-            backgroundColor: '#fff',
-            border: '1px solid #dee2e6',
-            padding: '1.5rem',
-            borderRadius: '8px'
-          }}>
-            <h3>Content Developer</h3>
-            <p>
-              <strong>Created by:</strong> {session.author.email}
-            </p>
-            <p style={{ fontSize: '0.9rem', color: '#6c757d' }}>
-              Contact your content developer if you have questions about the session content or need additional materials.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'materials' && (
-        <div>
-          {/* Promotional Content */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem'
-          }}>
-            <h3>Session Materials</h3>
-            <p style={{ color: '#6c757d', marginBottom: '1.5rem' }}>
-              Review the promotional content and key messaging for this session.
-            </p>
-
-            {session.promotionalHeadline && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4>Promotional Headline</h4>
-                <p style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#007bff' }}>
-                  {session.promotionalHeadline}
-                </p>
-              </div>
-            )}
-
-            {session.promotionalSummary && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4>Promotional Summary</h4>
-                <p>{session.promotionalSummary}</p>
-              </div>
-            )}
-
-            {session.keyBenefits && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4>Key Benefits</h4>
-                <div style={{ whiteSpace: 'pre-line' }}>{session.keyBenefits}</div>
-              </div>
-            )}
-
-            {session.callToAction && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4>Call to Action</h4>
-                <p style={{ fontWeight: 'bold', color: '#28a745' }}>{session.callToAction}</p>
-              </div>
-            )}
-          </div>
-
-          {/* Marketing Content */}
-          {(session.socialMediaContent || session.emailMarketingContent) && (
-            <div style={{
-              backgroundColor: '#fff',
-              border: '1px solid #dee2e6',
-              padding: '1.5rem',
-              borderRadius: '8px'
-            }}>
-              <h3>Marketing Content</h3>
-
-              {session.socialMediaContent && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <h4>Social Media Content</h4>
-                  <div style={{
-                    backgroundColor: '#f8f9fa',
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    whiteSpace: 'pre-line'
-                  }}>
-                    {session.socialMediaContent}
-                  </div>
-                </div>
+            <div className="ml-6 space-y-2">
+              {assignment?.status === 'acknowledged' && (
+                <Button onClick={handleMarkPrepared}>
+                  Mark as Prepared
+                </Button>
               )}
-
-              {session.emailMarketingContent && (
-                <div>
-                  <h4>Email Marketing Content</h4>
-                  <div style={{
-                    backgroundColor: '#f8f9fa',
-                    padding: '1rem',
-                    borderRadius: '4px',
-                    whiteSpace: 'pre-line'
-                  }}>
-                    {session.emailMarketingContent}
-                  </div>
+              {assignment?.status === 'prepared' && (
+                <div className="text-sm text-green-600 font-medium">
+                  ✅ Marked as Prepared
                 </div>
               )}
             </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'coaching-tips' && (
-        <div>
-          {/* Coaching Tips Section */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '1.5rem',
-            borderRadius: '8px',
-            marginBottom: '2rem'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3>AI Coaching Tips</h3>
-              <button
-                onClick={generateCoachingTips}
-                disabled={generatingTips}
-                className="btn"
-                style={{ backgroundColor: '#28a745' }}
-              >
-                {generatingTips ? 'Generating...' : '✨ Generate New Tips'}
-              </button>
-            </div>
-            <p style={{ color: '#6c757d' }}>
-              AI-powered coaching tips to help you deliver an outstanding session.
-            </p>
           </div>
 
-          {coachingTips.length === 0 ? (
-            <div style={{
-              backgroundColor: '#fff',
-              border: '1px solid #dee2e6',
-              padding: '2rem',
-              borderRadius: '8px',
-              textAlign: 'center'
-            }}>
-              <h4>No Coaching Tips Yet</h4>
-              <p style={{ color: '#6c757d', marginBottom: '1.5rem' }}>
-                Generate AI-powered coaching tips tailored to this specific session.
-              </p>
-              <button
-                onClick={generateCoachingTips}
-                disabled={generatingTips}
-                className="btn"
-                style={{ backgroundColor: '#28a745' }}
-              >
-                {generatingTips ? 'Generating...' : '✨ Generate Coaching Tips'}
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: '1rem' }}>
-              {coachingTips.map((tip) => (
-                <div
-                  key={tip.id}
-                  style={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #dee2e6',
-                    borderRadius: '8px',
-                    padding: '1.5rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'between', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                      {tip.coachingTip.category && (
-                        <span style={{
-                          backgroundColor: '#e7f3ff',
-                          color: '#0066cc',
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '4px',
-                          fontSize: '0.8rem',
-                          textTransform: 'capitalize'
-                        }}>
-                          {tip.coachingTip.category}
-                        </span>
-                      )}
-                      {tip.coachingTip.difficultyLevel && (
-                        <span style={{
-                          backgroundColor: '#f0f0f0',
-                          color: '#666',
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '4px',
-                          fontSize: '0.8rem',
-                          textTransform: 'capitalize'
-                        }}>
-                          {tip.coachingTip.difficultyLevel}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p style={{ fontSize: '1rem', lineHeight: '1.5' }}>
-                    {tip.coachingTip.text}
-                  </p>
-                  <div style={{
-                    fontSize: '0.8rem',
-                    color: '#6c757d',
-                    marginTop: '1rem',
-                    paddingTop: '1rem',
-                    borderTop: '1px solid #dee2e6'
-                  }}>
-                    Generated on {new Date(tip.createdAt).toLocaleDateString()}
-                  </div>
-                </div>
-              ))}
-            </div>
+          {session.objective && (
+            <Card className="p-4 mt-4 bg-blue-50 border-blue-200">
+              <h3 className="font-medium text-blue-900 mb-1">Session Objective</h3>
+              <p className="text-sm text-blue-700">{session.objective}</p>
+            </Card>
           )}
         </div>
-      )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Column */}
+          <div className="space-y-6">
+            <SessionAgenda agendaItems={session.agendaItems} />
+            <CoachingTips tips={coachingTips} />
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-6">
+            <MaterialsSection assets={assets} />
+
+            {session.audience && (
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-2 text-slate-900">Target Audience</h3>
+                <p className="text-sm text-slate-600">{session.audience}</p>
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

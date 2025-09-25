@@ -2,13 +2,12 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { IncentivesController } from './incentives.controller';
 import { IncentivesService } from './incentives.service';
-import { IncentiveExpirationScheduler } from './schedulers/incentive-expiration.scheduler';
-import { Incentive } from '../../entities/incentive.entity';
+import { Incentive } from '../../entities';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Incentive])],
   controllers: [IncentivesController],
-  providers: [IncentivesService, IncentiveExpirationScheduler],
+  providers: [IncentivesService],
   exports: [IncentivesService],
 })
 export class IncentivesModule {}

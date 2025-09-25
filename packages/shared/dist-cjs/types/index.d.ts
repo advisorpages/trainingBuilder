@@ -25,8 +25,10 @@ export interface Session {
     id: string;
     title: string;
     description?: string;
-    startTime: Date;
-    endTime: Date;
+    subtitle?: string;
+    objective?: string;
+    startTime: Date | string;
+    endTime: Date | string;
     status: SessionStatus;
     qrCodeUrl?: string;
     authorId: string;
@@ -37,10 +39,21 @@ export interface Session {
     categoryId?: number;
     maxRegistrations: number;
     aiPrompt?: string;
-    aiGeneratedContent?: string;
+    aiGeneratedContent?: Record<string, any> | string | null;
+    promotionalHeadline?: string | null;
+    promotionalSummary?: string | null;
+    keyBenefits?: string | string[] | null;
+    callToAction?: string | null;
+    socialMediaContent?: string | string[] | null;
+    emailMarketingContent?: string | null;
+    publishingStatus?: string | null;
+    readinessScore?: number;
+    builderGenerated?: boolean;
+    sessionOutlineData?: Record<string, any> | null;
+    lastAutosaveAt?: Date | string | null;
     isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: Date | string;
+    updatedAt: Date | string;
     author: User;
     location?: Location;
     trainer?: Trainer;
@@ -73,6 +86,8 @@ export interface Trainer {
     email?: string;
     bio?: string;
     expertise?: string;
+    specialization?: string;
+    specializations?: string[];
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -183,14 +198,14 @@ export interface Incentive {
     title: string;
     description?: string;
     rules?: string;
-    startDate: Date;
-    endDate: Date;
+    startDate: Date | string;
+    endDate: Date | string;
     status: IncentiveStatus;
     authorId: string;
     aiGeneratedContent?: string;
     isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: Date | string;
+    updatedAt: Date | string;
     author: User;
 }
 export declare enum IncentiveStatus {

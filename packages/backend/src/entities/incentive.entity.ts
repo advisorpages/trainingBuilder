@@ -1,70 +1,42 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { IsNotEmpty, MaxLength, IsOptional, IsUUID, IsIn } from 'class-validator';
+import { Column, Entity, JoinTable, ManyToMany, ManyToOne } from 'typeorm';
+import { BaseEntity } from './base.entity';
 import { User } from './user.entity';
+import { Session } from './session.entity';
 
-export enum IncentiveStatus {
-  DRAFT = 'draft',
-  PUBLISHED = 'published',
-  EXPIRED = 'expired',
-  CANCELLED = 'cancelled'
-}
-
-@Entity('incentives')
-export class Incentive {
-  @PrimaryGeneratedColumn('uuid')
-  @IsUUID()
-  id: string;
-
-  @Column({ length: 255 })
-  @IsNotEmpty()
-  @MaxLength(255)
-  title: string;
+@Entity({ name: 'incentives' })
+export class Incentive extends BaseEntity {
+  @Column()
+  name: string;
 
   @Column({ type: 'text', nullable: true })
-  @IsOptional()
-  @MaxLength(2000)
-  description?: string;
+  overview?: string;
 
   @Column({ type: 'text', nullable: true })
-  @IsOptional()
-  @MaxLength(2000)
-  rules?: string;
+  terms?: string;
 
-  @Column({ name: 'start_date', type: 'timestamp' })
-  @IsNotEmpty()
-  startDate: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  startDate?: Date;
 
-  @Column({ name: 'end_date', type: 'timestamp' })
-  @IsNotEmpty()
-  endDate: Date;
+  @Column({ type: 'timestamptz', nullable: true })
+  endDate?: Date;
 
-  @Column({
-    type: 'varchar',
-    length: 20,
-    default: IncentiveStatus.DRAFT
-  })
-  @IsIn(Object.values(IncentiveStatus))
-  status: IncentiveStatus;
-
-  @Column({ name: 'author_id' })
-  @IsUUID()
-  authorId: string;
-
-  @Column({ name: 'ai_generated_content', type: 'jsonb', nullable: true })
-  @IsOptional()
-  aiGeneratedContent?: object;
-
-  @Column({ name: 'is_active', default: true })
+  @Column({ default: true })
   isActive: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  @Column({ type: 'jsonb', nullable: true })
+  aiMessaging?: Record<string, unknown>;
 
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  @ManyToOne(() => User, (user) => user.createdIncentives, { nullable: true, onDelete: 'SET NULL' })
+  createdBy?: User;
 
-  // Relationships
-  @ManyToOne(() => User, user => user.authoredIncentives, { eager: true })
-  @JoinColumn({ name: 'author_id' })
-  author: User;
+  @ManyToOne(() => User, (user) => user.updatedIncentives, { nullable: true, onDelete: 'SET NULL' })
+  updatedBy?: User;
+
+  @ManyToMany(() => Session, (session) => session.incentives)
+  @JoinTable({
+    name: 'session_incentives',
+    joinColumn: { name: 'incentive_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'session_id', referencedColumnName: 'id' },
+  })
+  sessions: Session[];
 }

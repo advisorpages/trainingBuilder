@@ -1,6 +1,7 @@
 import { api } from './api.service';
 
 export interface SessionBuilderInput {
+  title?: string;
   category: string;
   sessionType: 'event' | 'training' | 'workshop' | 'webinar';
   desiredOutcome: string;
@@ -194,6 +195,19 @@ export interface TopicSuggestion {
   lastUsedDate?: string;
 }
 
+export interface BuilderAutosavePayload {
+  metadata: SessionBuilderInput;
+  outline: SessionOutline | null;
+  aiPrompt: string;
+  aiVersions: any[];
+  acceptedVersionId?: string;
+  readinessScore: number;
+}
+
+interface StoredBuilderDraft extends BuilderAutosavePayload {
+  savedAt: string;
+}
+
 class SessionBuilderService {
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
@@ -253,7 +267,12 @@ class SessionBuilderService {
   async createSessionFromOutline(request: CreateSessionFromOutlineRequest): Promise<any> {
     try {
       // Transform outline into session creation format
-      const sessionData = this.transformOutlineToSession(request.outline, request.input);
+      const topicId = await this.resolveTopicIdByName(request.input.category);
+      const sessionData = this.transformOutlineToSession(
+        request.outline,
+        request.input,
+        topicId,
+      );
 
       // Include customization metadata inside aiGeneratedContent to conform to DTO
       if (request.customizations) {
@@ -315,14 +334,11 @@ class SessionBuilderService {
     }
   }
 
-  async saveOutlineDraft(outlineId: string, outline: SessionOutline, input: SessionBuilderInput): Promise<void> {
+  async saveOutlineDraft(outlineId: string, payload: BuilderAutosavePayload): Promise<void> {
     try {
-      // Save to localStorage for now, could be enhanced to save to backend
-      const draftData = {
-        outlineId,
-        outline,
-        input,
-        savedAt: new Date().toISOString()
+      const draftData: StoredBuilderDraft = {
+        ...payload,
+        savedAt: new Date().toISOString(),
       };
 
       localStorage.setItem(`sessionBuilder_draft_${outlineId}`, JSON.stringify(draftData));
@@ -331,15 +347,21 @@ class SessionBuilderService {
     }
   }
 
-  async loadOutlineDraft(outlineId: string): Promise<{ outline: SessionOutline; input: SessionBuilderInput } | null> {
+  async loadOutlineDraft(outlineId: string): Promise<(StoredBuilderDraft & { outlineId: string }) | null> {
     try {
       const draftData = localStorage.getItem(`sessionBuilder_draft_${outlineId}`);
       if (draftData) {
         const parsed = JSON.parse(draftData);
         return {
-          outline: parsed.outline,
-          input: parsed.input
-        };
+          outlineId,
+          outline: parsed.outline ?? null,
+          metadata: parsed.metadata ?? parsed.input,
+          aiPrompt: parsed.aiPrompt ?? '',
+          aiVersions: parsed.aiVersions ?? [],
+          acceptedVersionId: parsed.acceptedVersionId,
+          readinessScore: parsed.readinessScore ?? 0,
+          savedAt: parsed.savedAt,
+        } as StoredBuilderDraft & { outlineId: string };
       }
       return null;
     } catch (error) {
@@ -348,7 +370,30 @@ class SessionBuilderService {
     }
   }
 
-  private transformOutlineToSession(outline: SessionOutline, input: SessionBuilderInput): any {
+  async autosaveDraft(
+    sessionId: string,
+    payload: BuilderAutosavePayload
+  ): Promise<{ savedAt: string; viaFallback?: boolean }> {
+    try {
+      const response = await api.post(`/sessions/builder/${sessionId}/autosave`, payload);
+      const savedAt = (response.data as any)?.savedAt ?? new Date().toISOString();
+      await this.saveOutlineDraft(sessionId, payload);
+      return { savedAt };
+    } catch (error: any) {
+      await this.saveOutlineDraft(sessionId, payload);
+      const fallbackSavedAt = new Date().toISOString();
+      if (error?.response) {
+        throw new Error(error.response?.data?.message || 'Failed to autosave draft');
+      }
+      return { savedAt: fallbackSavedAt, viaFallback: true };
+    }
+  }
+
+  private transformOutlineToSession(
+    outline: SessionOutline,
+    input: SessionBuilderInput,
+    topicId?: string,
+  ): any {
     // Create session data structure that matches existing CreateSessionDto
     return {
       title: outline.suggestedSessionTitle,
@@ -358,7 +403,7 @@ class SessionBuilderService {
       locationId: input.locationId,
       audienceId: input.audienceId,
       toneId: input.toneId,
-      categoryId: this.findCategoryIdByName(input.category), // Helper method needed
+      topicId,
       maxRegistrations: 25, // Default value, could be made configurable
 
       // AI-related fields
@@ -382,10 +427,40 @@ class SessionBuilderService {
     ${input.specificTopics ? `Specific topics: ${input.specificTopics}` : ''}`;
   }
 
-  private findCategoryIdByName(categoryName: string): number | undefined {
-    // This would need to be implemented based on your category data structure
-    // For now, return undefined and handle in backend
-    return undefined;
+  private topicLookupCache: { map: Map<string, string>; fetchedAt: number } | null = null;
+
+  private async resolveTopicIdByName(name?: string): Promise<string | undefined> {
+    if (!name) {
+      return undefined;
+    }
+
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+
+    const needsRefresh =
+      !this.topicLookupCache || Date.now() - this.topicLookupCache.fetchedAt > 5 * 60 * 1000;
+
+    if (needsRefresh) {
+      try {
+        const response = await api.get('/topics');
+        const topics = Array.isArray(response.data) ? response.data : [];
+        const map = new Map<string, string>();
+        topics.forEach((topic: any) => {
+          if (topic?.name && topic?.id) {
+            map.set(String(topic.name).toLowerCase(), String(topic.id));
+          }
+        });
+        this.topicLookupCache = { map, fetchedAt: Date.now() };
+      } catch (error: any) {
+        console.warn('Failed to refresh topic cache', error);
+        this.topicLookupCache = null;
+        return undefined;
+      }
+    }
+
+    return this.topicLookupCache?.map.get(normalized);
   }
 
   // PHASE 5: Training Kit and Marketing Kit Methods

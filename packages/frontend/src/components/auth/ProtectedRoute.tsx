@@ -1,12 +1,18 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserRole } from '../../types/auth.types';
+import { UserRole, UserRoleKey } from '../../types/auth.types';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRoles?: UserRole[];
 }
+
+const ROLE_NAME_BY_KEY: Record<UserRoleKey, UserRole> = {
+  broker: UserRole.BROKER,
+  content_developer: UserRole.CONTENT_DEVELOPER,
+  trainer: UserRole.TRAINER,
+};
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
@@ -15,47 +21,35 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { user, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
 
-  // Show loading while checking authentication
+  // Show loading spinner while checking authentication
   if (isLoading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '200px'
-      }}>
-        <div>Loading...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   // Redirect to login if not authenticated
   if (!isAuthenticated || !user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  // Check role permissions if required
+  // Check role-based access if roles are specified
   if (requiredRoles.length > 0) {
-    const userRoleName = (user?.role as any)?.name || (user as any)?.roleName || (typeof (user as any)?.role === 'string' ? (user as any).role : undefined);
-    const hasRequiredRole = !!userRoleName && requiredRoles.includes(userRoleName as UserRole);
+    const userRoleName = user.role?.name as UserRole | undefined;
+    const userRoleKey = user.role?.key;
+    const effectiveRole = userRoleName ?? (userRoleKey ? ROLE_NAME_BY_KEY[userRoleKey] : undefined);
+    const hasRequiredRole = effectiveRole ? requiredRoles.includes(effectiveRole) : false;
 
     if (!hasRequiredRole) {
-      return (
-        <div style={{
-          padding: '2rem',
-          textAlign: 'center',
-          color: '#721c24',
-          backgroundColor: '#f8d7da',
-          border: '1px solid #f5c6cb',
-          borderRadius: '4px',
-          margin: '1rem'
-        }}>
-          <h3>Access Denied</h3>
-          <p>You don't have permission to access this page.</p>
-          <p>Required roles: {requiredRoles.join(', ')}</p>
-          <p>Your role: {userRoleName || 'unknown'}</p>
-        </div>
-      );
+      // Redirect to appropriate dashboard based on user's role
+      const isTrainer = effectiveRole === UserRole.TRAINER || userRoleKey === 'trainer';
+      const redirectPath = isTrainer
+        ? '/trainer/dashboard'
+        : '/dashboard';
+
+      return <Navigate to={redirectPath} replace />;
     }
   }
 

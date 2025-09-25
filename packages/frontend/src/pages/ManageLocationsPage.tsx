@@ -1,249 +1,221 @@
-import React, { useState } from 'react';
-import { Location } from '@leadership-training/shared';
-import { locationService, CreateLocationRequest, UpdateLocationRequest } from '../services/location.service';
-import { LocationList } from '../components/locations/LocationList';
-import { LocationForm } from '../components/locations/LocationForm';
-import { DeleteLocationModal } from '../components/locations/DeleteLocationModal';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { BuilderLayout } from '../layouts/BuilderLayout';
+import { Button } from '../ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
+import { Input } from '../ui/input';
 
-type ViewMode = 'list' | 'create' | 'edit';
+interface Location {
+  id: string;
+  name: string;
+  address: string;
+  capacity: number;
+  facilities: string[];
+  contactPerson: string;
+  contactEmail: string;
+  isActive: boolean;
+}
 
-export const ManageLocationsPage: React.FC = () => {
-  const { user } = useAuth();
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
-  const [locationToDelete, setLocationToDelete] = useState<Location | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [notification, setNotification] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+const ManageLocationsPage: React.FC = () => {
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingLocation, setEditingLocation] = useState<Location | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Check if user is Content Developer or Broker
-  const canManageLocations = user?.role?.name === 'Content Developer' || user?.role?.name === 'Broker';
+  useEffect(() => {
+    // Mock data - replace with actual API call
+    setTimeout(() => {
+      setLocations([
+        {
+          id: '1',
+          name: 'Downtown Conference Center',
+          address: '123 Business Ave, Downtown',
+          capacity: 50,
+          facilities: ['Projector', 'WiFi', 'Catering', 'Parking'],
+          contactPerson: 'John Smith',
+          contactEmail: 'john@conference.com',
+          isActive: true,
+        },
+        {
+          id: '2',
+          name: 'Corporate Training Hub',
+          address: '456 Corporate Blvd, Business District',
+          capacity: 30,
+          facilities: ['WiFi', 'Whiteboard', 'Coffee Station'],
+          contactPerson: 'Sarah Johnson',
+          contactEmail: 'sarah@corporate.com',
+          isActive: true,
+        },
+        {
+          id: '3',
+          name: 'Community Learning Center',
+          address: '789 Community St, Suburb',
+          capacity: 25,
+          facilities: ['Basic AV', 'WiFi'],
+          contactPerson: 'Mike Davis',
+          contactEmail: 'mike@community.org',
+          isActive: false,
+        },
+      ]);
+      setLoading(false);
+    }, 1000);
+  }, []);
 
-  const showNotification = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message });
-    setTimeout(() => setNotification(null), 5000);
-  };
-
-  const handleCreateLocation = async (data: CreateLocationRequest) => {
-    try {
-      setIsSubmitting(true);
-      await locationService.createLocation(data);
-      showNotification('success', 'Location created successfully');
-      setViewMode('list');
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to create location');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUpdateLocation = async (data: UpdateLocationRequest) => {
-    if (!selectedLocation) return;
-
-    try {
-      setIsSubmitting(true);
-      await locationService.updateLocation(selectedLocation.id, data);
-      showNotification('success', 'Location updated successfully');
-      setViewMode('list');
-      setSelectedLocation(null);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to update location');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteLocation = async () => {
-    if (!locationToDelete) return;
-
-    try {
-      setIsDeleting(true);
-      await locationService.deleteLocation(locationToDelete.id);
-      showNotification('success',
-        locationToDelete.isActive
-          ? 'Location deactivated successfully'
-          : 'Location deleted successfully'
-      );
-      setLocationToDelete(null);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to delete location');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  const filteredLocations = locations.filter(location =>
+    location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    location.address.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleEdit = (location: Location) => {
-    setSelectedLocation(location);
-    setViewMode('edit');
+    setEditingLocation(location);
+    setShowAddForm(false);
   };
 
-  const handleDelete = (location: Location) => {
-    setLocationToDelete(location);
+  const handleAddNew = () => {
+    setEditingLocation(null);
+    setShowAddForm(true);
   };
 
   const handleCancel = () => {
-    setViewMode('list');
-    setSelectedLocation(null);
+    setEditingLocation(null);
+    setShowAddForm(false);
   };
 
-  if (!canManageLocations) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">Access Restricted</h3>
-                <p className="mt-1 text-sm text-yellow-700">
-                  You need Content Developer or Broker permissions to manage locations.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const toggleStatus = (id: string) => {
+    setLocations(prev => prev.map(loc => 
+      loc.id === id ? { ...loc, isActive: !loc.isActive } : loc
+    ));
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Manage Locations</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Create and manage training locations for your sessions
-              </p>
-            </div>
-
-            {viewMode === 'list' && (
-              <button
-                onClick={() => setViewMode('create')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Add New Location
-              </button>
-            )}
+    <BuilderLayout
+      title="Manage Locations"
+      subtitle="Training venues and facilities"
+      statusSlot={
+        <Button onClick={handleAddNew}>
+          ➕ Add Location
+        </Button>
+      }
+    >
+      <div className="space-y-6 max-w-6xl">
+        {/* Search */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
+            <Input
+              placeholder="Search locations by name or address..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-
-          {/* Breadcrumb */}
-          <nav className="flex mt-4" aria-label="Breadcrumb">
-            <ol className="flex items-center space-x-2">
-              <li>
-                <a href="/dashboard" className="text-blue-600 hover:text-blue-800">
-                  Dashboard
-                </a>
-              </li>
-              <li>
-                <span className="text-gray-400">/</span>
-              </li>
-              <li>
-                <span className="text-gray-500">Locations</span>
-              </li>
-              {viewMode !== 'list' && (
-                <>
-                  <li>
-                    <span className="text-gray-400">/</span>
-                  </li>
-                  <li>
-                    <span className="text-gray-500">
-                      {viewMode === 'create' ? 'Create' : 'Edit'}
-                    </span>
-                  </li>
-                </>
-              )}
-            </ol>
-          </nav>
         </div>
 
-        {/* Notification */}
-        {notification && (
-          <div className={`mb-4 p-4 rounded-md ${
-            notification.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}>
-            <div className="flex">
-              <div className="flex-shrink-0">
-                {notification.type === 'success' ? (
-                  <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                )}
+        {/* Add/Edit Form */}
+        {(showAddForm || editingLocation) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{editingLocation ? 'Edit Location' : 'Add New Location'}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input placeholder="Location name" />
+                <Input placeholder="Contact person" />
+                <Input placeholder="Full address" className="md:col-span-2" />
+                <Input placeholder="Capacity" type="number" />
+                <Input placeholder="Contact email" type="email" />
+                <Input placeholder="Facilities (comma-separated)" className="md:col-span-2" />
               </div>
-              <div className="ml-3">
-                <p className="text-sm">{notification.message}</p>
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+                <Button>Save Location</Button>
               </div>
-              <div className="ml-auto pl-3">
-                <button
-                  onClick={() => setNotification(null)}
-                  className="inline-flex text-sm"
-                >
-                  <span className="sr-only">Dismiss</span>
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Locations Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                    <div className="h-3 bg-slate-200 rounded w-full"></div>
+                    <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredLocations.map((location) => (
+              <Card key={location.id} className={!location.isActive ? 'opacity-60' : ''}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold text-slate-900">{location.name}</h3>
+                      <p className="text-sm text-slate-600 mt-1">{location.address}</p>
+                    </div>
+                    <div className={`w-3 h-3 rounded-full ${
+                      location.isActive ? 'bg-green-500' : 'bg-red-500'
+                    }`}></div>
+                  </div>
+
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Capacity:</span>
+                      <span className="font-medium">{location.capacity} people</span>
+                    </div>
+                    
+                    <div>
+                      <span className="text-slate-500">Facilities:</span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {location.facilities.map((facility, index) => (
+                          <span key={index} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+                            {facility}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100">
+                      <p className="text-slate-600">{location.contactPerson}</p>
+                      <p className="text-slate-500 text-xs">{location.contactEmail}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(location)}>
+                      Edit
+                    </Button>
+                    <Button 
+                      variant={location.isActive ? "destructive" : "default"}
+                      size="sm"
+                      onClick={() => toggleStatus(location.id)}
+                    >
+                      {location.isActive ? 'Deactivate' : 'Activate'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
 
-        {/* Main Content */}
-        {viewMode === 'list' && (
-          <LocationList
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            key={refreshTrigger}
-          />
-        )}
-
-        {viewMode === 'create' && (
-          <LocationForm
-            onSubmit={handleCreateLocation}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
-        )}
-
-        {viewMode === 'edit' && selectedLocation && (
-          <LocationForm
-            location={selectedLocation}
-            onSubmit={handleUpdateLocation}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
-        )}
-
-        {/* Delete Modal */}
-        {locationToDelete && (
-          <DeleteLocationModal
-            location={locationToDelete}
-            onConfirm={handleDeleteLocation}
-            onCancel={() => setLocationToDelete(null)}
-            isDeleting={isDeleting}
-          />
+        {!loading && filteredLocations.length === 0 && (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <div className="text-4xl mb-4">🏢</div>
+              <h3 className="text-lg font-medium text-slate-900 mb-2">No locations found</h3>
+              <p className="text-slate-600 mb-4">Start by adding your first training location.</p>
+              <Button onClick={handleAddNew}>Add Location</Button>
+            </CardContent>
+          </Card>
         )}
       </div>
-    </div>
+    </BuilderLayout>
   );
 };
+
+export default ManageLocationsPage;

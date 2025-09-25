@@ -1,11 +1,12 @@
+import { describe, it, expect, vi } from 'vitest';
 import { aiTopicService } from '../../../services/aiTopicService';
 import { TopicEnhancementInput, TopicAIContent } from '@leadership-training/shared';
 
 // Mock the API module
-jest.mock('../../../services/api.service', () => ({
+vi.mock('../../../services/api.service', () => ({
   api: {
-    post: jest.fn(),
-    get: jest.fn(),
+    post: vi.fn(),
+    get: vi.fn(),
   }
 }));
 

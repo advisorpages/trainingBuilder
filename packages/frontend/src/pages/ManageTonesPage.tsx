@@ -1,249 +1,211 @@
-import React, { useState } from 'react';
-import { Tone } from '@leadership-training/shared';
-import { toneService, CreateToneRequest, UpdateToneRequest } from '../services/tone.service';
-import { ToneList } from '../components/tones/ToneList';
-import { ToneForm } from '../components/tones/ToneForm';
-import { DeleteToneModal } from '../components/tones/DeleteToneModal';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { BuilderLayout } from '../layouts/BuilderLayout';
+import { Button } from '../ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
+import { Input } from '../ui/input';
 
-type ViewMode = 'list' | 'create' | 'edit';
+interface Tone {
+  id: string;
+  name: string;
+  description: string;
+  characteristics: string[];
+  voiceAttributes: string[];
+  examples: string[];
+  suitableFor: string[];
+  colorScheme: string;
+  isActive: boolean;
+}
 
-export const ManageTonesPage: React.FC = () => {
-  const { user } = useAuth();
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedTone, setSelectedTone] = useState<Tone | null>(null);
-  const [toneToDelete, setToneToDelete] = useState<Tone | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [notification, setNotification] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+const ManageTonesPage: React.FC = () => {
+  const [tones, setTones] = useState<Tone[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Check if user is Content Developer or Broker
-  const canManageTones = user?.role?.name === 'Content Developer' || user?.role?.name === 'Broker';
+  useEffect(() => {
+    setTimeout(() => {
+      setTones([
+        {
+          id: '1',
+          name: 'Professional & Authoritative',
+          description: 'Formal, confident tone for executive audiences',
+          characteristics: ['Direct communication', 'Evidence-based', 'Strategic focus'],
+          voiceAttributes: ['Confident', 'Clear', 'Decisive'],
+          examples: ['Board presentations', 'Strategic planning', 'Policy updates'],
+          suitableFor: ['C-Suite', 'Senior Management', 'Board Members'],
+          colorScheme: 'blue',
+          isActive: true,
+        },
+        {
+          id: '2',
+          name: 'Collaborative & Supportive',
+          description: 'Warm, encouraging tone for team development',
+          characteristics: ['Inclusive language', 'Growth mindset', 'Team-oriented'],
+          voiceAttributes: ['Encouraging', 'Empathetic', 'Motivating'],
+          examples: ['Team building', 'Skill development', 'Mentoring sessions'],
+          suitableFor: ['New Managers', 'Team Leads', 'Individual Contributors'],
+          colorScheme: 'green',
+          isActive: true,
+        },
+        {
+          id: '3',
+          name: 'Innovative & Dynamic',
+          description: 'Creative, forward-thinking tone for change initiatives',
+          characteristics: ['Future-focused', 'Creative thinking', 'Change-positive'],
+          voiceAttributes: ['Energetic', 'Visionary', 'Adaptable'],
+          examples: ['Innovation workshops', 'Change management', 'Digital transformation'],
+          suitableFor: ['Innovation Teams', 'Change Agents', 'Tech Leaders'],
+          colorScheme: 'purple',
+          isActive: true,
+        },
+        {
+          id: '4',
+          name: 'Technical & Analytical',
+          description: 'Data-driven, precise tone for technical subjects',
+          characteristics: ['Fact-based', 'Logical flow', 'Detail-oriented'],
+          voiceAttributes: ['Precise', 'Methodical', 'Objective'],
+          examples: ['Technical training', 'Process improvement', 'Quality assurance'],
+          suitableFor: ['Engineers', 'Analysts', 'Technical Specialists'],
+          colorScheme: 'slate',
+          isActive: false,
+        },
+      ]);
+      setLoading(false);
+    }, 1000);
+  }, []);
 
-  const showNotification = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message });
-    setTimeout(() => setNotification(null), 5000);
-  };
+  const filteredTones = tones.filter(tone =>
+    tone.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    tone.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const handleCreateTone = async (data: CreateToneRequest) => {
-    try {
-      setIsSubmitting(true);
-      await toneService.createTone(data);
-      showNotification('success', 'Tone created successfully');
-      setViewMode('list');
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to create tone');
-    } finally {
-      setIsSubmitting(false);
+  const getColorClasses = (colorScheme: string, isActive: boolean = true) => {
+    const opacity = isActive ? '100' : '50';
+    switch (colorScheme) {
+      case 'blue':
+        return `bg-blue-${opacity} text-blue-700 border-blue-200`;
+      case 'green':
+        return `bg-green-${opacity} text-green-700 border-green-200`;
+      case 'purple':
+        return `bg-purple-${opacity} text-purple-700 border-purple-200`;
+      case 'slate':
+        return `bg-slate-${opacity} text-slate-700 border-slate-200`;
+      default:
+        return `bg-gray-${opacity} text-gray-700 border-gray-200`;
     }
   };
-
-  const handleUpdateTone = async (data: UpdateToneRequest) => {
-    if (!selectedTone) return;
-
-    try {
-      setIsSubmitting(true);
-      await toneService.updateTone(selectedTone.id, data);
-      showNotification('success', 'Tone updated successfully');
-      setViewMode('list');
-      setSelectedTone(null);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to update tone');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteTone = async () => {
-    if (!toneToDelete) return;
-
-    try {
-      setIsDeleting(true);
-      await toneService.deleteTone(toneToDelete.id);
-      showNotification('success',
-        toneToDelete.isActive
-          ? 'Tone deactivated successfully'
-          : 'Tone deleted successfully'
-      );
-      setToneToDelete(null);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to delete tone');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleEdit = (tone: Tone) => {
-    setSelectedTone(tone);
-    setViewMode('edit');
-  };
-
-  const handleDelete = (tone: Tone) => {
-    setToneToDelete(tone);
-  };
-
-  const handleCancel = () => {
-    setViewMode('list');
-    setSelectedTone(null);
-  };
-
-  if (!canManageTones) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">Access Restricted</h3>
-                <p className="mt-1 text-sm text-yellow-700">
-                  You need Content Developer or Broker permissions to manage tones.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Manage Tones</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Create and manage AI content generation tones for your sessions
-              </p>
-            </div>
-
-            {viewMode === 'list' && (
-              <button
-                onClick={() => setViewMode('create')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Add New Tone
-              </button>
-            )}
-          </div>
-
-          {/* Breadcrumb */}
-          <nav className="flex mt-4" aria-label="Breadcrumb">
-            <ol className="flex items-center space-x-2">
-              <li>
-                <a href="/dashboard" className="text-blue-600 hover:text-blue-800">
-                  Dashboard
-                </a>
-              </li>
-              <li>
-                <span className="text-gray-400">/</span>
-              </li>
-              <li>
-                <span className="text-gray-500">Tones</span>
-              </li>
-              {viewMode !== 'list' && (
-                <>
-                  <li>
-                    <span className="text-gray-400">/</span>
-                  </li>
-                  <li>
-                    <span className="text-gray-500">
-                      {viewMode === 'create' ? 'Create' : 'Edit'}
-                    </span>
-                  </li>
-                </>
-              )}
-            </ol>
-          </nav>
+    <BuilderLayout
+      title="Manage Tones"
+      subtitle="Content voice and communication styles"
+      statusSlot={<Button>🎨 Add Tone</Button>}
+    >
+      <div className="space-y-6 max-w-6xl">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Input
+            placeholder="Search tones..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1"
+          />
         </div>
 
-        {/* Notification */}
-        {notification && (
-          <div className={`mb-4 p-4 rounded-md ${
-            notification.type === 'success'
-              ? 'bg-green-50 border border-green-200 text-green-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}>
-            <div className="flex">
-              <div className="flex-shrink-0">
-                {notification.type === 'success' ? (
-                  <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-              <div className="ml-3">
-                <p className="text-sm">{notification.message}</p>
-              </div>
-              <div className="ml-auto pl-3">
-                <button
-                  onClick={() => setNotification(null)}
-                  className="inline-flex text-sm"
-                >
-                  <span className="sr-only">Dismiss</span>
-                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="animate-pulse space-y-4">
+                    <div className="h-5 bg-slate-200 rounded w-3/4"></div>
+                    <div className="h-4 bg-slate-200 rounded w-full"></div>
+                    <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredTones.map((tone) => (
+              <Card key={tone.id} className={!tone.isActive ? 'opacity-75' : ''}>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="font-semibold text-slate-900">{tone.name}</h3>
+                        <div className={`w-3 h-3 rounded-full ${
+                          tone.isActive ? 'bg-green-500' : 'bg-gray-400'
+                        }`}></div>
+                      </div>
+                      <p className="text-sm text-slate-600">{tone.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">Characteristics</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {tone.characteristics.map((char, index) => (
+                          <span key={index} className={`px-2 py-1 text-xs rounded-full border ${getColorClasses(tone.colorScheme, tone.isActive)}`}>
+                            {char}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">Voice Attributes</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {tone.voiceAttributes.map((attr, index) => (
+                          <span key={index} className="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded">
+                            {attr}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">Best For</h4>
+                      <p className="text-sm text-slate-600">{tone.suitableFor.join(', ')}</p>
+                    </div>
+
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 mb-2">Example Use Cases</h4>
+                      <ul className="text-sm text-slate-600">
+                        {tone.examples.slice(0, 2).map((example, index) => (
+                          <li key={index} className="flex items-center gap-2">
+                            <span className="w-1 h-1 bg-slate-400 rounded-full"></span>
+                            {example}
+                          </li>
+                        ))}
+                        {tone.examples.length > 2 && (
+                          <li className="text-slate-500 text-xs">+{tone.examples.length - 2} more examples</li>
+                        )}\n                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center mt-6 pt-4 border-t border-slate-100">
+                    <Button variant="outline" size="sm">Edit</Button>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" className="text-slate-500">
+                        Preview
+                      </Button>
+                      <Button
+                        variant={tone.isActive ? "destructive" : "default"}
+                        size="sm"
+                      >
+                        {tone.isActive ? 'Deactivate' : 'Activate'}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
-
-        {/* Main Content */}
-        {viewMode === 'list' && (
-          <ToneList
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            key={refreshTrigger}
-          />
-        )}
-
-        {viewMode === 'create' && (
-          <ToneForm
-            onSubmit={handleCreateTone}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
-        )}
-
-        {viewMode === 'edit' && selectedTone && (
-          <ToneForm
-            tone={selectedTone}
-            onSubmit={handleUpdateTone}
-            onCancel={handleCancel}
-            isSubmitting={isSubmitting}
-          />
-        )}
-
-        {/* Delete Modal */}
-        {toneToDelete && (
-          <DeleteToneModal
-            tone={toneToDelete}
-            onConfirm={handleDeleteTone}
-            onCancel={() => setToneToDelete(null)}
-            isDeleting={isDeleting}
-          />
-        )}
       </div>
-    </div>
+    </BuilderLayout>
   );
 };
+
+export default ManageTonesPage;

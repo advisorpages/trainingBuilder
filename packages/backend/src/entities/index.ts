@@ -1,57 +1,41 @@
-// Core entities
-export { Role } from './role.entity';
-export { User } from './user.entity';
-export { SystemSetting, SettingDataType } from './system-setting.entity';
-
-// Resource entities (brownfield)
-export { Location } from './location.entity';
-export { Trainer } from './trainer.entity';
-export { Topic } from './topic.entity';
-
-// Attribute entities
-export { Audience } from './audience.entity';
-export { Tone } from './tone.entity';
-export { Category } from './category.entity';
-
-// Feature entities
-export { Session, SessionStatus } from './session.entity';
-export { SessionStatusHistory } from './session-status-history.entity';
-export { Incentive, IncentiveStatus } from './incentive.entity';
-export { Registration, SyncStatus } from './registration.entity';
-export { CoachingTip, DifficultyLevel } from './coaching-tip.entity';
-export { SessionCoachingTip, SessionCoachingTipStatus } from './session-coaching-tip.entity';
-
-// Entity array for TypeORM configuration
-import { Role } from './role.entity';
-import { User } from './user.entity';
-import { Location } from './location.entity';
-import { Trainer } from './trainer.entity';
-import { Topic } from './topic.entity';
-import { Audience } from './audience.entity';
-import { Tone } from './tone.entity';
-import { Category } from './category.entity';
 import { Session } from './session.entity';
-import { SessionStatusHistory } from './session-status-history.entity';
+import { SessionAgendaItem } from './session-agenda-item.entity';
+import { SessionContentVersion } from './session-content-version.entity';
+import { SessionStatusLog } from './session-status-log.entity';
+import { SessionBuilderDraft } from './session-builder-draft.entity';
+import { Topic } from './topic.entity';
 import { Incentive } from './incentive.entity';
-import { Registration } from './registration.entity';
-import { CoachingTip } from './coaching-tip.entity';
-import { SessionCoachingTip } from './session-coaching-tip.entity';
-import { SystemSetting } from './system-setting.entity';
+import { LandingPage } from './landing-page.entity';
+import { Trainer } from './trainer.entity';
+import { TrainerAssignment } from './trainer-assignment.entity';
+import { TrainerAsset } from './trainer-asset.entity';
+import { User } from './user.entity';
+
+export * from './base.entity';
+export * from './session.entity';
+export * from './session-agenda-item.entity';
+export * from './session-content-version.entity';
+export * from './session-status-log.entity';
+export * from './session-builder-draft.entity';
+export * from './topic.entity';
+export * from './incentive.entity';
+export * from './landing-page.entity';
+export * from './trainer.entity';
+export * from './trainer-assignment.entity';
+export * from './trainer-asset.entity';
+export * from './user.entity';
 
 export const entities = [
-  Role,
-  User,
-  SystemSetting,
-  Location,
-  Trainer,
-  Topic,
-  Audience,
-  Tone,
-  Category,
   Session,
-  SessionStatusHistory,
+  SessionAgendaItem,
+  SessionContentVersion,
+  SessionStatusLog,
+  SessionBuilderDraft,
+  Topic,
   Incentive,
-  Registration,
-  CoachingTip,
-  SessionCoachingTip,
+  LandingPage,
+  Trainer,
+  TrainerAssignment,
+  TrainerAsset,
+  User,
 ];

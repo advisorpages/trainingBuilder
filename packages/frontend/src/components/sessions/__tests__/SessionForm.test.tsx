@@ -19,15 +19,27 @@ vi.mock('@/services/session.service', () => ({
   sessionService: {
     getDrafts: vi.fn().mockResolvedValue([]),
     saveDraft: vi.fn().mockResolvedValue({ id: 1 }),
-    getTopics: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Test Topic' }
-    ]),
-    getLocations: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Test Location' }
-    ]),
-    getTrainers: vi.fn().mockResolvedValue([
+  },
+}));
+
+vi.mock('@/services/trainer.service', () => ({
+  trainerService: {
+    getActiveTrainers: vi.fn().mockResolvedValue([
       { id: 1, firstName: 'John', lastName: 'Doe' }
     ]),
+  },
+}));
+
+vi.mock('@/services/location.service', () => ({
+  locationService: {
+    getActiveLocations: vi.fn().mockResolvedValue([
+      { id: 1, name: 'Test Location' }
+    ]),
+  },
+}));
+
+vi.mock('@/services/attributes.service', () => ({
+  attributesService: {
     getAudiences: vi.fn().mockResolvedValue([
       { id: 1, name: 'Test Audience' }
     ]),
@@ -40,9 +52,28 @@ vi.mock('@/services/session.service', () => ({
   },
 }));
 
+vi.mock('@/services/topic.service', () => ({
+  topicService: {
+    getActiveTopics: vi.fn().mockResolvedValue([
+      { id: 1, name: 'Test Topic' }
+    ]),
+  },
+}));
+
 const renderWithContext = (component: React.ReactElement) => {
   const authValue = {
-    user: { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' },
+    user: {
+      id: 1,
+      email: 'test@example.com',
+      role: {
+        id: 2,
+        name: 'Content Developer',
+        key: 'content_developer'
+      },
+      isActive: true,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
+    },
     loading: false,
     login: vi.fn(),
     logout: vi.fn(),

@@ -1,318 +1,418 @@
-import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-import { UserRole } from '../types/auth.types'
-import { UnifiedDraftsList } from '../components/common/UnifiedDraftsList'
-import { IncentiveDraftsList } from '../components/incentives/IncentiveDraftsList'
-import { Session, Incentive } from '@leadership-training/shared'
-import { useState } from 'react'
-import { sessionService } from '../services/session.service'
-import { incentiveService } from '../services/incentive.service'
-import { Icon } from '../components/ui/Icon'
-import { Button } from '../components/ui/Button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/Card"
-import { cn } from "../lib/utils"
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { BuilderLayout } from '../layouts/BuilderLayout';
+import { Button } from '../ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
+import { useAuth } from '../contexts/AuthContext';
+import { UserRole } from '../types/auth.types';
 
-const DashboardPage = () => {
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const [refreshDrafts, setRefreshDrafts] = useState(0)
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+interface DashboardStats {
+  totalSessions: number;
+  activeSessions: number;
+  totalTrainers: number;
+  upcomingSessions: number;
+  publishedSessions: number;
+  draftSessions: number;
+}
 
-  console.log('DASHBOARD DEBUG: Page loaded, user:', user);
+interface RecentActivity {
+  id: string;
+  type: 'session_created' | 'session_published' | 'trainer_assigned' | 'session_updated';
+  title: string;
+  description: string;
+  timestamp: string;
+  user?: string;
+}
 
-  if (!user) {
-    console.log('DASHBOARD DEBUG: No user, showing loading...');
-    return <div>Loading...</div>
-  }
-
-  console.log('DASHBOARD DEBUG: User found, role check:', {
-    userRole: user.role.name,
-    contentDeveloperConst: UserRole.CONTENT_DEVELOPER,
-    isMatch: user.role.name === UserRole.CONTENT_DEVELOPER
+const DashboardPage: React.FC = () => {
+  const { user } = useAuth();
+  const [stats, setStats] = useState<DashboardStats>({
+    totalSessions: 0,
+    activeSessions: 0,
+    totalTrainers: 0,
+    upcomingSessions: 0,
+    publishedSessions: 0,
+    draftSessions: 0,
   });
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const showNotification = (type: 'success' | 'error', message: string) => {
-    setNotification({ type, message });
-    setTimeout(() => setNotification(null), 5000);
+  useEffect(() => {
+    // Simulate API call for dashboard data
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+
+        // Mock data - replace with actual API calls
+        setTimeout(() => {
+          setStats({
+            totalSessions: 24,
+            activeSessions: 8,
+            totalTrainers: 12,
+            upcomingSessions: 5,
+            publishedSessions: 16,
+            draftSessions: 8,
+          });
+
+          setRecentActivity([
+            {
+              id: '1',
+              type: 'session_created',
+              title: 'New Session Created',
+              description: 'Leadership Fundamentals session created by John Doe',
+              timestamp: '2 minutes ago',
+              user: 'John Doe',
+            },
+            {
+              id: '2',
+              type: 'session_published',
+              title: 'Session Published',
+              description: 'Effective Communication session is now live',
+              timestamp: '1 hour ago',
+              user: 'Sarah Smith',
+            },
+            {
+              id: '3',
+              type: 'trainer_assigned',
+              title: 'Trainer Assigned',
+              description: 'Mike Johnson assigned to Team Building workshop',
+              timestamp: '3 hours ago',
+              user: 'Admin',
+            },
+            {
+              id: '4',
+              type: 'session_updated',
+              title: 'Session Updated',
+              description: 'Strategic Planning session content revised',
+              timestamp: '1 day ago',
+              user: 'Jane Wilson',
+            },
+          ]);
+
+          setLoading(false);
+        }, 1000);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const getActivityIcon = (type: RecentActivity['type']) => {
+    switch (type) {
+      case 'session_created':
+        return '✨';
+      case 'session_published':
+        return '🚀';
+      case 'trainer_assigned':
+        return '👨‍🏫';
+      case 'session_updated':
+        return '📝';
+      default:
+        return '📋';
+    }
   };
 
-  // Handlers for drafts actions
-  const handleEditSessionDraft = (session: Session) => {
-    navigate(`/sessions/worksheet?edit=${session.id}`)
-  }
-
-  const handleDeleteSessionDraft = async (session: Session) => {
-    if (confirm(`Are you sure you want to delete the draft "${session.title || 'Untitled Session'}"?`)) {
-      try {
-        await sessionService.deleteSession(session.id)
-        showNotification('success', 'Session draft deleted successfully')
-        setRefreshDrafts(prev => prev + 1)
-      } catch (error: any) {
-        showNotification('error', error.response?.data?.message || 'Failed to delete session draft')
-      }
-    }
-  }
-
-  const handleEditIncentiveDraft = (incentive: Incentive) => {
-    navigate(`/incentives/worksheet?edit=${incentive.id}`)
-  }
-
-  const handleDeleteIncentiveDraft = async (incentive: Incentive) => {
-    if (confirm(`Are you sure you want to delete the draft "${incentive.title || 'Untitled Incentive'}"?`)) {
-      try {
-        await incentiveService.deleteIncentive(incentive.id)
-        showNotification('success', 'Incentive draft deleted successfully')
-        setRefreshDrafts(prev => prev + 1)
-      } catch (error: any) {
-        showNotification('error', error.response?.data?.message || 'Failed to delete incentive draft')
-      }
-    }
-  }
-
-  const handlePublishIncentive = async (incentive: Incentive) => {
-    try {
-      await incentiveService.publish(incentive.id)
-      showNotification('success', 'Incentive published successfully')
-      setRefreshDrafts(prev => prev + 1)
-    } catch (error: any) {
-      showNotification('error', error.response?.data?.message || 'Failed to publish incentive')
-    }
-  }
-
-  const handleUnpublishIncentive = async (incentive: Incentive) => {
-    if (confirm(`Are you sure you want to unpublish "${incentive.title}"? It will no longer be visible to the public.`)) {
-      try {
-        await incentiveService.unpublish(incentive.id)
-        showNotification('success', 'Incentive unpublished successfully')
-        setRefreshDrafts(prev => prev + 1)
-      } catch (error: any) {
-        showNotification('error', error.response?.data?.message || 'Failed to unpublish incentive')
-      }
-    }
-  }
-
-  const getRoleBasedContent = () => {
-    console.log('DEBUG: User object:', user);
-    console.log('DEBUG: User role:', user.role);
-    console.log('DEBUG: User role name:', user.role.name);
-    console.log('DEBUG: UserRole.CONTENT_DEVELOPER:', UserRole.CONTENT_DEVELOPER);
-    console.log('DEBUG: Role comparison:', user.role.name === UserRole.CONTENT_DEVELOPER);
-
-    switch (user.role.name) {
-      case UserRole.CONTENT_DEVELOPER:
-      case UserRole.BROKER:
-        return (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Content & Session Management</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                <li>
-                  <Link to="/sessions/builder" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="squares-plus" size="sm" className="mr-2" />
-                    Session Builder (Phase 5) - Complete Training Kit Workflow
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/sessions/worksheet" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="document-text" size="sm" className="mr-2" />
-                    Session Worksheet (Legacy)
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/sessions/manage" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="clipboard-document-list" size="sm" className="mr-2" />
-                    Manage Sessions
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/admin/topics" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="academic-cap" size="sm" className="mr-2" />
-                    Manage Topics
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/admin/trainers" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="users" size="sm" className="mr-2" />
-                    Manage Trainers
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/admin/locations" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="map-pin" size="sm" className="mr-2" />
-                    Manage Locations
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/admin/settings" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="cog" size="sm" className="mr-2" />
-                    System Settings
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/incentives/worksheet" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="trophy" size="sm" className="mr-2" />
-                    Incentive Worksheet
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/analytics" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="chart-bar" size="sm" className="mr-2" />
-                    Analytics Dashboard
-                  </Link>
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-        )
-
-      case UserRole.TRAINER:
-        return (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Trainer Dashboard</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                <li>
-                  <Link to="/trainer/dashboard" className="flex items-center text-primary-600 hover:text-primary-700 transition-colors">
-                    <Icon name="calendar" size="sm" className="mr-2" />
-                    Trainer Dashboard - My Sessions & Materials
-                  </Link>
-                </li>
-                <li className="flex items-center text-muted-foreground">
-                  <Icon name="clipboard-document-list" size="sm" className="mr-2" />
-                  Session Details & Coaching Tips ✅
-                </li>
-                <li className="flex items-center text-muted-foreground">
-                  <Icon name="light-bulb" size="sm" className="mr-2" />
-                  AI Coaching Tips Generation ✅
-                </li>
-                <li className="flex items-center text-muted-foreground">
-                  <Icon name="envelope" size="sm" className="mr-2" />
-                  Trainer Kit Notifications (Coming in Story 4.5)
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
-        )
-
+  const getActivityColor = (type: RecentActivity['type']) => {
+    switch (type) {
+      case 'session_created':
+        return 'text-blue-600';
+      case 'session_published':
+        return 'text-green-600';
+      case 'trainer_assigned':
+        return 'text-purple-600';
+      case 'session_updated':
+        return 'text-orange-600';
       default:
-        return <div>Unknown role</div>
+        return 'text-slate-600';
     }
-  }
+  };
+
+  const isContentDeveloper = user?.role.name === UserRole.CONTENT_DEVELOPER;
+  const isBroker = user?.role.name === UserRole.BROKER;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">Dashboard</h2>
-          <Button
-            onClick={() => logout()}
-            variant="destructive"
-            size="sm"
-          >
-            Logout
+    <BuilderLayout
+      title="Dashboard"
+      subtitle="Overview of your training management platform"
+    >
+      <div className="space-y-6 max-w-7xl">
+        {/* Welcome Section */}
+        <div className="bg-gradient-to-r from-blue-50 to-slate-50 rounded-xl p-4 sm:p-6 border border-slate-200">
+          <h2 className="text-lg sm:text-xl font-semibold text-slate-900 mb-2">
+            Welcome back, {user?.email.split('@')[0]}!
+          </h2>
+          <p className="text-sm sm:text-base text-slate-600 mb-4">
+            {isContentDeveloper
+              ? "Ready to create impactful training experiences? Your content development tools are at your fingertips."
+              : isBroker
+              ? "Manage your training sessions and track engagement across your network."
+              : "Your comprehensive training management dashboard is ready to use."
+            }
+          </p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Button asChild className="h-auto p-4 justify-start">
+            <Link to="/sessions/builder/new">
+              <div className="text-left">
+                <div className="text-lg mb-1">🎯</div>
+                <div className="font-medium">New Session</div>
+                <div className="text-xs opacity-80">Create with AI</div>
+              </div>
+            </Link>
+          </Button>
+
+          <Button asChild variant="outline" className="h-auto p-4 justify-start">
+            <Link to="/sessions">
+              <div className="text-left">
+                <div className="text-lg mb-1">📋</div>
+                <div className="font-medium">Manage Sessions</div>
+                <div className="text-xs text-slate-500">View all sessions</div>
+              </div>
+            </Link>
+          </Button>
+
+          <Button asChild variant="outline" className="h-auto p-4 justify-start">
+            <Link to="/topics">
+              <div className="text-left">
+                <div className="text-lg mb-1">🏷️</div>
+                <div className="font-medium">Topics</div>
+                <div className="text-xs text-slate-500">Manage content</div>
+              </div>
+            </Link>
+          </Button>
+
+          <Button asChild variant="outline" className="h-auto p-4 justify-start">
+            <Link to="/analytics">
+              <div className="text-left">
+                <div className="text-lg mb-1">📊</div>
+                <div className="font-medium">Analytics</div>
+                <div className="text-xs text-slate-500">View insights</div>
+              </div>
+            </Link>
           </Button>
         </div>
 
-        {/* Notification */}
-        {notification && (
-          <Card className={cn("mb-4", {
-            "bg-success-50 border-success-200 text-success-800": notification.type === 'success',
-            "bg-destructive/10 border-destructive-200 text-destructive-foreground": notification.type === 'error',
-          })}>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <Card>
             <CardContent className="p-4">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  {notification.type === 'success' ? (
-                    <svg className="h-5 w-5 text-success-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5 text-destructive" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  )}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Total Sessions
+                  </p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {loading ? '-' : stats.totalSessions}
+                  </p>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm">{notification.message}</p>
-                </div>
-                <div className="ml-auto pl-3">
-                  <Button
-                    onClick={() => setNotification(null)}
-                    variant="ghost"
-                    size="icon"
-                  >
-                    <span className="sr-only">Dismiss</span>
-                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </Button>
-                </div>
+                <div className="text-2xl">📚</div>
               </div>
             </CardContent>
           </Card>
-        )}
 
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Welcome, {user.email}!</CardTitle>
-            <CardDescription>
-              <strong>Role:</strong> {user.role.name}<br />
-              <strong>Account Status:</strong> {user.isActive ? 'Active' : 'Inactive'}
-            </CardDescription>
-          </CardHeader>
-        </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Published
+                  </p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {loading ? '-' : stats.publishedSessions}
+                  </p>
+                </div>
+                <div className="text-2xl">🚀</div>
+              </div>
+            </CardContent>
+          </Card>
 
-        {/* Show Drafts for Content Developers and Brokers */}
-        {(user.role.name === UserRole.CONTENT_DEVELOPER || user.role.name === UserRole.BROKER) && (
-          <div className="mb-8 space-y-6">
-            <UnifiedDraftsList
-              onEditSessionDraft={handleEditSessionDraft}
-              onDeleteSessionDraft={handleDeleteSessionDraft}
-              onEditIncentiveDraft={handleEditIncentiveDraft}
-              onDeleteIncentiveDraft={handleDeleteIncentiveDraft}
-              refreshTrigger={refreshDrafts}
-            />
-            <IncentiveDraftsList
-              onEditDraft={handleEditIncentiveDraft}
-              onDeleteDraft={handleDeleteIncentiveDraft}
-              onPublishIncentive={handlePublishIncentive}
-              onUnpublishIncentive={handleUnpublishIncentive}
-              refreshTrigger={refreshDrafts}
-            />
-          </div>
-        )}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Drafts
+                  </p>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {loading ? '-' : stats.draftSessions}
+                  </p>
+                </div>
+                <div className="text-2xl">📝</div>
+              </div>
+            </CardContent>
+          </Card>
 
-        {getRoleBasedContent()}
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Active Trainers
+                  </p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {loading ? '-' : stats.totalTrainers}
+                  </p>
+                </div>
+                <div className="text-2xl">👥</div>
+              </div>
+            </CardContent>
+          </Card>
 
-        <div className="mt-8">
-          <Link to="/">
-            <Button variant="secondary" size="default">
-              Back to Home
-            </Button>
-          </Link>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Upcoming
+                  </p>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {loading ? '-' : stats.upcomingSessions}
+                  </p>
+                </div>
+                <div className="text-2xl">⏰</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                    Active Now
+                  </p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {loading ? '-' : stats.activeSessions}
+                  </p>
+                </div>
+                <div className="text-2xl">🔴</div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <Card className="mt-8">
-          <CardContent className="text-sm text-muted-foreground">
-            <p>
-              <strong>Current Story:</strong> 6.4 - Incentive Publishing and Public Display ✅<br />
-              <strong>Status:</strong> Complete - Incentives can be published, unpublished, and displayed publicly with automated expiration
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Activity */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+                <CardDescription>
+                  Latest updates and changes in your training platform
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="space-y-4">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="animate-pulse flex items-center space-x-4">
+                        <div className="w-8 h-8 bg-slate-200 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-slate-200 rounded w-3/4 mb-2"></div>
+                          <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex items-start space-x-3 pb-4 border-b border-slate-100 last:border-b-0 last:pb-0">
+                        <div className={`text-xl ${getActivityColor(activity.type)}`}>
+                          {getActivityIcon(activity.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900">
+                            {activity.title}
+                          </p>
+                          <p className="text-sm text-slate-600 mt-1">
+                            {activity.description}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-2">
+                            {activity.timestamp}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-export default DashboardPage
+          {/* System Status */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>System Status</CardTitle>
+                <CardDescription>
+                  Current platform health
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">API Services</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-xs text-green-600 font-medium">Online</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Database</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-xs text-green-600 font-medium">Connected</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">AI Services</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-xs text-green-600 font-medium">Available</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">Storage</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      <span className="text-xs text-yellow-600 font-medium">75% Used</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Quick Tips</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4 text-sm">
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-blue-800">
+                      💡 <strong>Pro Tip:</strong> Use the AI session builder to quickly create engaging content templates.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-green-800">
+                      ✨ <strong>New Feature:</strong> Bulk actions are now available in session management.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </BuilderLayout>
+  );
+};
+
+export default DashboardPage;

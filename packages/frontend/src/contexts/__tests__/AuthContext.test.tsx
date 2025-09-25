@@ -57,7 +57,18 @@ describe('AuthContext', () => {
   });
 
   it('loads user on initialization', async () => {
-    const mockUser = { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' };
+    const mockUser = {
+      id: 1,
+      email: 'test@example.com',
+      role: {
+        id: 2,
+        name: 'Content Developer',
+        key: 'content_developer'
+      },
+      isActive: true,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
+    };
     mockAuthService.getCurrentUser.mockResolvedValue(mockUser);
 
     renderWithRouter(<TestComponent />);
@@ -68,7 +79,18 @@ describe('AuthContext', () => {
   });
 
   it('handles login successfully', async () => {
-    const mockUser = { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' };
+    const mockUser = {
+      id: 1,
+      email: 'test@example.com',
+      role: {
+        id: 2,
+        name: 'Content Developer',
+        key: 'content_developer'
+      },
+      isActive: true,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
+    };
     mockAuthService.login.mockResolvedValue({
       user: mockUser,
       token: 'mock-token',
@@ -89,7 +111,18 @@ describe('AuthContext', () => {
   });
 
   it('handles logout', async () => {
-    const mockUser = { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' };
+    const mockUser = {
+      id: 1,
+      email: 'test@example.com',
+      role: {
+        id: 2,
+        name: 'Content Developer',
+        key: 'content_developer'
+      },
+      isActive: true,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
+    };
     mockAuthService.getCurrentUser.mockResolvedValue(mockUser);
     mockAuthService.logout.mockResolvedValue(undefined);
 

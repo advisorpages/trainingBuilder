@@ -1,53 +1,58 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
-import { IsEmail, IsNotEmpty, MaxLength, IsUUID } from 'class-validator';
-import { Role } from './role.entity';
+import { Column, Entity, OneToMany } from 'typeorm';
+import { BaseEntity } from './base.entity';
 import { Session } from './session.entity';
+import { SessionContentVersion } from './session-content-version.entity';
+import { SessionStatusLog } from './session-status-log.entity';
+import { Topic } from './topic.entity';
 import { Incentive } from './incentive.entity';
-import { CoachingTip } from './coaching-tip.entity';
 
-// Re-export UserRole from shared types for backward compatibility
-export { UserRole } from '@leadership-training/shared';
+export enum UserRole {
+  BROKER = 'broker',
+  CONTENT_DEVELOPER = 'content_developer',
+  TRAINER = 'trainer',
+}
 
-@Entity('users')
-export class User {
-  @PrimaryGeneratedColumn('uuid')
-  @IsUUID()
-  id: string;
-
-  @Column({ unique: true, length: 255 })
-  @IsEmail()
-  @IsNotEmpty()
-  @MaxLength(255)
+@Entity({ name: 'users' })
+export class User extends BaseEntity {
+  @Column({ unique: true })
   email: string;
 
-  @Column({ name: 'password_hash', length: 255 })
-  @IsNotEmpty()
-  @MaxLength(255)
+  @Column({ name: 'password_hash' })
   passwordHash: string;
 
-  @Column({ name: 'role_id' })
-  roleId: number;
+  @Column({ type: 'enum', enum: UserRole, enumName: 'user_role_enum' })
+  role: UserRole;
 
-  @Column({ name: 'is_active', default: true })
+  @Column({ nullable: true })
+  displayName?: string;
+
+  @Column({ default: true })
   isActive: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
+  @OneToMany(() => Session, (session) => session.createdBy)
+  createdSessions: Session[];
 
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  @OneToMany(() => Session, (session) => session.updatedBy)
+  updatedSessions: Session[];
 
-  // Relationships
-  @ManyToOne(() => Role, role => role.users, { eager: true })
-  @JoinColumn({ name: 'role_id' })
-  role: Role;
+  @OneToMany(() => SessionContentVersion, (version) => version.createdBy)
+  createdContentVersions: SessionContentVersion[];
 
-  @OneToMany(() => Session, session => session.author)
-  authoredSessions: Session[];
+  @OneToMany(() => SessionContentVersion, (version) => version.acceptedBy)
+  acceptedContentVersions: SessionContentVersion[];
 
-  @OneToMany(() => Incentive, incentive => incentive.author)
-  authoredIncentives: Incentive[];
+  @OneToMany(() => SessionStatusLog, (log) => log.changedBy)
+  statusLogs: SessionStatusLog[];
 
-  @OneToMany(() => CoachingTip, tip => tip.createdByUser)
-  createdCoachingTips: CoachingTip[];
+  @OneToMany(() => Topic, (topic) => topic.createdBy)
+  createdTopics: Topic[];
+
+  @OneToMany(() => Topic, (topic) => topic.updatedBy)
+  updatedTopics: Topic[];
+
+  @OneToMany(() => Incentive, (incentive) => incentive.createdBy)
+  createdIncentives: Incentive[];
+
+  @OneToMany(() => Incentive, (incentive) => incentive.updatedBy)
+  updatedIncentives: Incentive[];
 }

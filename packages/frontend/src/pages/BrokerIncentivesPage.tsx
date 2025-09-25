@@ -1,99 +1,87 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { Incentive } from '@leadership-training/shared'
-import { incentiveService } from '../services/incentive.service'
-import IncentiveCard from '../components/incentives/IncentiveCard'
+import React, { useState, useEffect } from 'react';
+import { BuilderLayout } from '../layouts/BuilderLayout';
+import { Button } from '../ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 
-const BrokerIncentivesPage = () => {
-  const [incentives, setIncentives] = useState<Incentive[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchActiveIncentives = async () => {
-      try {
-        setLoading(true)
-        const activeIncentives = await incentiveService.getActiveIncentives()
-
-        // Sort incentives by end date (expiring soon first)
-        const sortedIncentives = activeIncentives.sort((a, b) => {
-          const dateA = new Date(a.endDate).getTime()
-          const dateB = new Date(b.endDate).getTime()
-          return dateA - dateB
-        })
-
-        setIncentives(sortedIncentives)
-      } catch (err) {
-        console.error('Error fetching active incentives:', err)
-        setError('Unable to load incentives. Please try again later.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchActiveIncentives()
-  }, [])
-
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-3xl font-bold text-gray-900">Available Incentives & Offers</h2>
-          <Link
-            to="/dashboard"
-            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
-          >
-            Back to Dashboard
-          </Link>
-        </div>
-
-        {loading && (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Loading incentives...</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md mb-6">
-            <p>{error}</p>
-            <button
-              className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-              onClick={() => window.location.reload()}
-            >
-              Try Again
-            </button>
-          </div>
-        )}
-
-        {!loading && !error && (
-          <>
-            {incentives.length > 0 ? (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {incentives.map((incentive) => (
-                  <IncentiveCard key={incentive.id} incentive={incentive} />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-lg shadow p-8 text-center">
-                <h4 className="text-lg font-medium text-gray-900 mb-2">No active incentives</h4>
-                <p className="text-gray-600">Check back soon for new offers and incentives!</p>
-              </div>
-            )}
-          </>
-        )}
-
-        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-lg font-medium text-blue-900 mb-2">About Incentives</h3>
-          <p className="text-blue-700">
-            These incentives are special offers and rewards available to participants.
-            Each incentive has specific eligibility criteria and expiration dates.
-            Contact your training coordinator for more information on how to qualify.
-          </p>
-        </div>
-      </div>
-    </div>
-  )
+interface BrokerIncentive {
+  id: string;
+  title: string;
+  description: string;
+  discount: number;
+  validUntil: string;
+  applicableSessions: string[];
+  used: boolean;
+  code: string;
 }
 
-export default BrokerIncentivesPage
+const BrokerIncentivesPage: React.FC = () => {
+  const [incentives, setIncentives] = useState<BrokerIncentive[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setTimeout(() => {
+      setIncentives([
+        {
+          id: '1',
+          title: 'Early Bird Discount',
+          description: '15% off sessions booked 2+ weeks in advance',
+          discount: 15,
+          validUntil: '2024-12-31',
+          applicableSessions: ['Leadership Fundamentals', 'Team Management'],
+          used: false,
+          code: 'EARLY15'
+        },
+        {
+          id: '2',
+          title: 'Volume Discount',
+          description: '20% off when booking 5+ sessions',
+          discount: 20,
+          validUntil: '2024-06-30',
+          applicableSessions: ['All Sessions'],
+          used: true,
+          code: 'VOLUME20'
+        }
+      ]);
+      setLoading(false);
+    }, 1000);
+  }, []);
+
+  return (
+    <BuilderLayout
+      title="Available Incentives"
+      subtitle="Discounts and special offers for your bookings"
+    >
+      <div className="space-y-6 max-w-4xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {incentives.map(incentive => (
+            <Card key={incentive.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="font-semibold text-slate-900">{incentive.title}</h3>
+                  <div className="text-2xl font-bold text-green-600">
+                    {incentive.discount}% OFF
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600 mb-4">{incentive.description}</p>
+                <div className="space-y-2 text-sm">
+                  <p>🏷️ Code: <span className="font-mono bg-slate-100 px-2 py-1 rounded">{incentive.code}</span></p>
+                  <p>⏰ Valid until: {new Date(incentive.validUntil).toLocaleDateString()}</p>
+                  <p>📚 Applies to: {incentive.applicableSessions.join(', ')}</p>
+                </div>
+                <Button
+                  className="w-full mt-4"
+                  variant={incentive.used ? "outline" : "default"}
+                  disabled={incentive.used}
+                >
+                  {incentive.used ? 'Already Used' : 'Apply Code'}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </BuilderLayout>
+  );
+};
+
+export default BrokerIncentivesPage;

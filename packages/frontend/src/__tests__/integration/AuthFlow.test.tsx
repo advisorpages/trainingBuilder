@@ -45,7 +45,18 @@ describe('Authentication Flow Integration', () => {
   });
 
   it('completes successful login flow', async () => {
-    const mockUser = { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' };
+    const mockUser = {
+      id: 1,
+      email: 'test@example.com',
+      role: {
+        id: 2,
+        name: 'Content Developer',
+        key: 'content_developer'
+      },
+      isActive: true,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
+    };
 
     mockAuthService.getCurrentUser.mockResolvedValue(null);
     mockAuthService.login.mockResolvedValue({
@@ -117,7 +128,18 @@ describe('Authentication Flow Integration', () => {
   });
 
   it('redirects authenticated users away from login page', async () => {
-    const mockUser = { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' };
+    const mockUser = {
+      id: 1,
+      email: 'test@example.com',
+      role: {
+        id: 2,
+        name: 'Content Developer',
+        key: 'content_developer'
+      },
+      isActive: true,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
+    };
     mockAuthService.getCurrentUser.mockResolvedValue(mockUser);
     mockAuthService.isAuthenticated.mockReturnValue(true);
 
@@ -129,7 +151,18 @@ describe('Authentication Flow Integration', () => {
   });
 
   it('maintains authentication state across page refreshes', async () => {
-    const mockUser = { id: 1, email: 'test@example.com', role: 'CONTENT_DEVELOPER' };
+    const mockUser = {
+      id: 1,
+      email: 'test@example.com',
+      role: {
+        id: 2,
+        name: 'Content Developer',
+        key: 'content_developer'
+      },
+      isActive: true,
+      createdAt: '2023-01-01T00:00:00Z',
+      updatedAt: '2023-01-01T00:00:00Z'
+    };
     mockAuthService.getCurrentUser.mockResolvedValue(mockUser);
 
     const TestComponent = () => {

@@ -1,280 +1,96 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
-import { Public } from '../../common/decorators/public.decorator';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
-import { SessionStatusService } from './services/session-status.service';
-import { ContentValidationService } from './services/content-validation.service';
-import { PublishingAutomationService } from './services/publishing-automation.service';
-import { WorkflowMonitoringService } from './services/workflow-monitoring.service';
-import { CreateSessionDto, UpdateSessionDto, SavePromptDto, IntegrateAIContentDto, StatusUpdateDto, CreateRegistrationDto } from './dto';
-import { Session } from '../../entities/session.entity';
+import { CreateSessionDto } from './dto/create-session.dto';
+import { UpdateSessionDto } from './dto/update-session.dto';
+import { CreateContentVersionDto } from './dto/create-content-version.dto';
+import { BuilderAutosaveDto } from './dto/builder-autosave.dto';
+import { SuggestOutlineDto } from './dto/suggest-outline.dto';
+import { SessionStatus } from '../../entities';
 
-@ApiTags('sessions')
-@ApiBearerAuth('JWT-auth')
 @Controller('sessions')
 export class SessionsController {
-  constructor(
-    private readonly sessionsService: SessionsService,
-    private readonly sessionStatusService: SessionStatusService,
-    private readonly contentValidationService: ContentValidationService,
-    private readonly publishingAutomationService: PublishingAutomationService,
-    private readonly workflowMonitoringService: WorkflowMonitoringService,
-  ) {}
-
-  @Get('status')
-  getSessionsStatus(): object {
-    return this.sessionsService.getStatus();
-  }
-
-  @Post()
-  create(@Body() createSessionDto: CreateSessionDto, @Request() req): Promise<Session> {
-    return this.sessionsService.create(createSessionDto, req.user);
-  }
+  constructor(private readonly sessionsService: SessionsService) {}
 
   @Get()
-  findAll(): Promise<Session[]> {
-    return this.sessionsService.findAll();
+  async list(
+    @Query('status') status?: SessionStatus,
+    @Query('topicId') topicId?: string,
+    @Query('trainerId') trainerId?: string,
+  ) {
+    return this.sessionsService.findAll({ status, topicId, trainerId });
   }
 
-  @Get('author/:authorId')
-  findByAuthor(@Param('authorId') authorId: string, @Request() req): Promise<Session[]> {
-    const resolvedAuthorId = authorId === 'me' ? req.user.id : authorId;
-    return this.sessionsService.findByAuthor(resolvedAuthorId);
+  @Post('builder/:id/autosave')
+  async autosave(
+    @Param('id') id: string,
+    @Body() dto: BuilderAutosaveDto,
+  ) {
+    return this.sessionsService.autosaveBuilderDraft(id, dto);
   }
 
-  // Public endpoints (no authentication required) - Must be defined before parameterized routes
-
-  @Public()
-  @Get('public')
-  findPublishedSessions(): Promise<Session[]> {
-    return this.sessionsService.findPublishedSessions();
+  @Get('builder/:id/complete-data')
+  async builderCompleteData(@Param('id') id: string) {
+    return this.sessionsService.getBuilderCompleteData(id);
   }
 
-  @Public()
-  @Get('public/:id')
-  findPublicSession(@Param('id') id: string): Promise<Session> {
-    return this.sessionsService.findPublicSession(id);
-  }
-
-  @Public()
-  @Post(':id/register')
-  registerForSession(
-    @Param('id') sessionId: string,
-    @Body() createRegistrationDto: CreateRegistrationDto
-  ): Promise<{ success: boolean; message: string; registrationId?: string }> {
-    return this.sessionsService.registerForSession(sessionId, createRegistrationDto);
+  @Post('builder/suggest-outline')
+  async suggestOutline(@Body() dto: SuggestOutlineDto) {
+    return this.sessionsService.suggestOutline(dto);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<Session> {
+  async detail(@Param('id') id: string) {
     return this.sessionsService.findOne(id);
   }
 
+  @Post()
+  async create(@Body() dto: CreateSessionDto) {
+    return this.sessionsService.create(dto);
+  }
+
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updateSessionDto: UpdateSessionDto,
-    @Request() req
-  ): Promise<Session> {
-    return this.sessionsService.update(id, updateSessionDto, req.user);
+  async update(@Param('id') id: string, @Body() dto: UpdateSessionDto) {
+    return this.sessionsService.update(id, dto);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string, @Request() req): Promise<{ success: boolean }> {
-    return this.sessionsService.remove(id, req.user).then(() => ({ success: true }));
-  }
-
-  // Draft-specific endpoints for Story 2.2
-  @Patch(':id/draft')
-  saveDraft(
-    @Param('id') id: string,
-    @Body() updateSessionDto: UpdateSessionDto,
-    @Request() req
-  ): Promise<Session> {
-    return this.sessionsService.saveDraft(id, updateSessionDto, req.user);
-  }
-
-  @Get('drafts/my')
-  getMyDrafts(@Request() req): Promise<Session[]> {
-    return this.sessionsService.getDraftsByAuthor(req.user.id);
-  }
-
-  @Post(':id/auto-save')
-  autoSaveDraft(
-    @Param('id') id: string,
-    @Body() partialData: Partial<UpdateSessionDto>,
-    @Request() req
-  ): Promise<{ success: boolean; lastSaved: Date }> {
-    return this.sessionsService.autoSaveDraft(id, partialData, req.user);
-  }
-
-  @Get(':id/saveable')
-  isDraftSaveable(@Param('id') id: string, @Request() req): Promise<{ saveable: boolean }> {
-    return this.sessionsService.isDraftSaveable(id, req.user).then(saveable => ({ saveable }));
-  }
-
-  // AI Prompt endpoints for Story 2.3
-  @Post(':id/prompt')
-  savePrompt(
-    @Param('id') id: string,
-    @Body() savePromptDto: SavePromptDto,
-    @Request() req
-  ): Promise<Session> {
-    return this.sessionsService.savePrompt(id, savePromptDto, req.user);
-  }
-
-  @Get(':id/prompt')
-  getPrompt(@Param('id') id: string, @Request() req): Promise<{ prompt: string | null; hasPrompt: boolean }> {
-    return this.sessionsService.getPrompt(id, req.user);
-  }
-
-  @Delete(':id/prompt')
-  clearPrompt(@Param('id') id: string, @Request() req): Promise<Session> {
-    return this.sessionsService.clearPrompt(id, req.user);
-  }
-
-  @Get('prompts/ready')
-  getSessionsWithPrompts(@Request() req): Promise<Session[]> {
-    return this.sessionsService.getSessionsWithPrompts(req.user.id);
-  }
-
-  // AI Generated Content endpoints for Story 2.4
   @Post(':id/content')
-  saveGeneratedContent(
+  async createContent(
     @Param('id') id: string,
-    @Body() contentData: { content: object },
-    @Request() req
-  ): Promise<Session> {
-    return this.sessionsService.saveGeneratedContent(id, contentData.content, req.user);
+    @Body() dto: CreateContentVersionDto,
+  ) {
+    return this.sessionsService.createContentVersion(id, dto);
   }
 
-  @Get(':id/content')
-  getGeneratedContent(@Param('id') id: string, @Request() req): Promise<{ content: object | null; hasContent: boolean }> {
-    return this.sessionsService.getGeneratedContent(id, req.user);
+  @Post('bulk/publish')
+  async bulkPublish(@Body('sessionIds') sessionIds: string[]) {
+    return this.sessionsService.bulkPublish(sessionIds);
   }
 
-  @Delete(':id/content')
-  clearGeneratedContent(@Param('id') id: string, @Request() req): Promise<Session> {
-    return this.sessionsService.clearGeneratedContent(id, req.user);
+  @Post('bulk/archive')
+  async bulkArchive(@Body('sessionIds') sessionIds: string[]) {
+    return this.sessionsService.bulkArchive(sessionIds);
   }
 
-  @Get('content/ready')
-  getSessionsWithGeneratedContent(@Request() req): Promise<Session[]> {
-    return this.sessionsService.getSessionsWithGeneratedContent(req.user.id);
-  }
-
-  // Content versioning endpoints for Story 2.5
-  @Get(':id/content/versions')
-  getContentVersions(@Param('id') id: string, @Request() req): Promise<{ versions: any[]; hasVersions: boolean }> {
-    return this.sessionsService.getContentVersions(id, req.user);
-  }
-
-  @Post(':id/content/restore/:versionIndex')
-  restoreContentVersion(
-    @Param('id') id: string,
-    @Param('versionIndex') versionIndex: string,
-    @Request() req
-  ): Promise<Session> {
-    return this.sessionsService.restoreContentVersion(id, parseInt(versionIndex), req.user);
-  }
-
-  // AI Content Integration endpoints for Story 2.6
-  @Post(':id/integrate-ai-content')
-  integrateAIContentToDraft(
-    @Param('id') id: string,
-    @Body() integrateDto: IntegrateAIContentDto,
-    @Request() req
-  ): Promise<Session> {
-    return this.sessionsService.integrateAIContentToDraft(id, integrateDto, req.user);
-  }
-
-  @Get(':id/preview-with-ai')
-  previewSessionWithAIContent(@Param('id') id: string, @Request() req): Promise<{
-    session: Session;
-    aiContent: any;
-    previewData: {
-      title: string;
-      description: string;
-      promotionalHeadline?: string;
-      promotionalSummary?: string;
-      keyBenefits?: string;
-      callToAction?: string;
-      socialMediaContent?: string;
-      emailMarketingContent?: string;
-    };
-  }> {
-    return this.sessionsService.previewSessionWithAIContent(id, req.user);
-  }
-
-  @Post(':id/finalize-draft')
-  finalizeSessionDraft(@Param('id') id: string, @Request() req): Promise<Session> {
-    return this.sessionsService.finalizeSessionDraft(id, req.user);
-  }
-
-  // Publishing Logic endpoints for Story 3.3
-  @Patch(':id/status')
-  async updateSessionStatus(
-    @Param('id') id: string,
-    @Body() statusUpdateDto: StatusUpdateDto,
-    @Request() req
-  ): Promise<Session> {
-    return this.sessionStatusService.updateSessionStatus(
-      id,
-      statusUpdateDto.status,
-      req.user.id,
-      false, // not automated
-      statusUpdateDto.reason
-    );
-  }
-
-  @Get(':id/status-history')
-  async getSessionStatusHistory(@Param('id') id: string) {
-    return this.sessionStatusService.getSessionStatusHistory(id);
-  }
-
-  @Get(':id/validation')
-  async validateSessionContent(@Param('id') id: string) {
-    return this.contentValidationService.validateSessionContent(id);
-  }
-
-  @Get(':id/publishing-rules')
-  async validatePublishingRules(@Param('id') id: string) {
-    return this.publishingAutomationService.validatePublishingRules(id);
+  @Post('bulk/status')
+  async bulkUpdateStatus(
+    @Body('sessionIds') sessionIds: string[],
+    @Body('status') status: SessionStatus,
+  ) {
+    return this.sessionsService.bulkUpdateStatus(sessionIds, status);
   }
 
   @Post(':id/publish')
-  async publishSession(@Param('id') id: string, @Request() req): Promise<Session> {
-    // Validate publishing rules first
-    const validation = await this.publishingAutomationService.validatePublishingRules(id);
-
-    if (!validation.canPublish) {
-      throw new Error(`Cannot publish session: ${validation.reason}`);
-    }
-
-    return this.sessionStatusService.updateSessionStatus(
-      id,
-      'published' as any,
-      req.user.id,
-      false,
-      'Session published by user'
-    );
+  async publishSession(@Param('id') id: string) {
+    return this.sessionsService.publishSession(id);
   }
 
-  @Post('bulk/validate')
-  async validateMultipleSessions(@Body() sessionIds: string[]) {
-    const results = await this.publishingAutomationService.validateMultipleSessions(sessionIds);
-    return Object.fromEntries(results);
+  @Get(':id/readiness')
+  async getReadinessScore(@Param('id') id: string) {
+    return this.sessionsService.getReadinessScore(id);
   }
 
-  // Monitoring and alerting endpoints for Story 3.3
-  @Get('workflow/health')
-  async getWorkflowHealth() {
-    return this.workflowMonitoringService.performHealthCheck();
+  @Get('readiness-checklist')
+  async getReadinessChecklist(@Query('category') category?: string) {
+    return this.sessionsService.getReadinessChecklist(category);
   }
-
-  @Get('workflow/metrics')
-  async getWorkflowMetrics() {
-    return this.workflowMonitoringService.collectWorkflowMetrics();
-  }
-
 }

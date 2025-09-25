@@ -31,22 +31,22 @@ class SessionService {
   private readonly base = `${API_BASE_URL}${API_ENDPOINTS.SESSIONS.BASE}`;
 
   async createSession(data: CreateSessionRequest): Promise<Session> {
-    const response = await api.post(`${this.base}/`, data);
+    const response = await api.post<Session>(`${this.base}/`, data);
     return response.data;
   }
 
   async updateSession(id: string, data: UpdateSessionRequest): Promise<Session> {
-    const response = await api.patch(`${this.base}/${id}`, data);
+    const response = await api.patch<Session>(`${this.base}/${id}`, data);
     return response.data;
   }
 
   async getSession(id: string): Promise<Session> {
-    const response = await api.get(`${this.base}/${id}`);
+    const response = await api.get<Session>(`${this.base}/${id}`);
     return response.data;
   }
 
   async getSessions(): Promise<Session[]> {
-    const response = await api.get(`${this.base}/`);
+    const response = await api.get<Session[]>(`${this.base}/`);
     return response.data;
   }
 
@@ -55,71 +55,80 @@ class SessionService {
   }
 
   async getSessionsByAuthor(authorId: string): Promise<Session[]> {
-    const response = await api.get(`${this.base}/author/${authorId}`);
+    const response = await api.get<Session[]>(`${this.base}/author/${authorId}`);
     return response.data;
   }
 
   // Draft-specific methods for Story 2.2
   async saveDraft(id: string, data: UpdateSessionRequest): Promise<Session> {
-    const response = await api.patch(`${this.base}/${id}/draft`, data);
+    const response = await api.patch<Session>(`${this.base}/${id}/draft`, data);
     return response.data;
   }
 
   async getMyDrafts(): Promise<Session[]> {
-    const response = await api.get(`${this.base}/drafts/my`);
+    const response = await api.get<Session[]>(`${this.base}/drafts/my`);
     return response.data;
   }
 
   async autoSaveDraft(id: string, partialData: Partial<UpdateSessionRequest>): Promise<{ success: boolean; lastSaved: Date }> {
-    const response = await api.post(`${this.base}/${id}/auto-save`, partialData);
-    return response.data;
+    const response = await api.post<{ success: boolean; lastSaved: string }>(
+      `${this.base}/${id}/auto-save`,
+      partialData
+    );
+    return {
+      success: response.data.success,
+      lastSaved: new Date(response.data.lastSaved)
+    };
   }
 
   async isDraftSaveable(id: string): Promise<boolean> {
-    const response = await api.get(`${this.base}/${id}/saveable`);
+    const response = await api.get<{ saveable: boolean }>(`${this.base}/${id}/saveable`);
     return response.data.saveable;
   }
 
   // Status update methods for Story 3.2
   async updateSessionStatus(id: string, statusUpdate: StatusUpdateRequest): Promise<Session> {
-    const response = await api.patch(`${this.base}/${id}/status`, statusUpdate);
+    const response = await api.patch<Session>(`${this.base}/${id}/status`, statusUpdate);
     return response.data;
   }
 
-  async getSessionStatusHistory(id: string): Promise<any[]> {
-    const response = await api.get(`${this.base}/${id}/status-history`);
+  async getSessionStatusHistory(id: string): Promise<Array<Record<string, any>>> {
+    const response = await api.get<Array<Record<string, any>>>(`${this.base}/${id}/status-history`);
     return response.data;
   }
 
-  async validateSessionContent(id: string): Promise<any> {
-    const response = await api.get(`${this.base}/${id}/validation`);
+  async validateSessionContent(id: string): Promise<Record<string, any>> {
+    const response = await api.get<Record<string, any>>(`${this.base}/${id}/validation`);
     return response.data;
   }
 
   async publishSession(id: string): Promise<Session> {
-    const response = await api.post(`${this.base}/${id}/publish`);
+    const response = await api.post<Session>(`${this.base}/${id}/publish`);
     return response.data;
   }
 
   // Public methods for homepage (no auth required)
   async getPublishedSessions(): Promise<Session[]> {
-    const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.SESSIONS.PUBLIC}`);
+    const response = await axios.get<Session[]>(`${API_BASE_URL}${API_ENDPOINTS.SESSIONS.PUBLIC}`);
     return response.data;
   }
 
   async getPublicSession(id: string): Promise<Session> {
-    const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.SESSIONS.PUBLIC}/${id}`);
+    const response = await axios.get<Session>(`${API_BASE_URL}${API_ENDPOINTS.SESSIONS.PUBLIC}/${id}`);
     return response.data;
   }
 
-  async registerForSession(sessionId: string, registrationData: RegistrationRequest): Promise<any> {
-    const response = await axios.post(`${API_BASE_URL}${API_ENDPOINTS.SESSIONS.BASE}/${sessionId}/register`, registrationData);
+  async registerForSession(sessionId: string, registrationData: RegistrationRequest): Promise<Record<string, any>> {
+    const response = await axios.post<Record<string, any>>(
+      `${API_BASE_URL}${API_ENDPOINTS.SESSIONS.BASE}/${sessionId}/register`,
+      registrationData
+    );
     return response.data;
   }
 
   // ADD these methods to existing SessionService class (don't modify existing methods)
 
-  async createSessionFromBuilder(sessionData: any): Promise<any> {
+  async createSessionFromBuilder(sessionData: any): Promise<Session> {
     try {
       // Ensure we mark this as builder-generated
       const builderSessionData = {
@@ -128,16 +137,16 @@ class SessionService {
         sessionOutlineData: sessionData.sessionOutlineData
       };
 
-      const response = await api.post(`${this.base}/`, builderSessionData);
+      const response = await api.post<Session>(`${this.base}/`, builderSessionData);
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to create session from builder');
     }
   }
 
-  async getSessionWithOutline(sessionId: string): Promise<any> {
+  async getSessionWithOutline(sessionId: string): Promise<Record<string, any>> {
     try {
-      const response = await api.get(`${this.base}/${sessionId}?includeOutline=true`);
+      const response = await api.get<Record<string, any>>(`${this.base}/${sessionId}?includeOutline=true`);
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to load session with outline');
@@ -145,12 +154,16 @@ class SessionService {
   }
 
   // Helper method to check if session was created with builder
-  isBuilderGenerated(session: any): boolean {
+  isBuilderGenerated(
+    session: Partial<Session> & { builderGenerated?: boolean; sessionOutlineData?: unknown }
+  ): boolean {
     return session.builderGenerated === true || !!session.sessionOutlineData;
   }
 
   // Get the original outline data if available
-  getSessionOutlineData(session: any): any | null {
+  getSessionOutlineData(
+    session: Partial<Session> & { sessionOutlineData?: unknown }
+  ): any | null {
     return session.sessionOutlineData || null;
   }
 }

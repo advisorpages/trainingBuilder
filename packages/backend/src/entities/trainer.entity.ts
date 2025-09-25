@@ -1,38 +1,30 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
-import { IsNotEmpty, MaxLength, IsOptional, IsEmail } from 'class-validator';
-import { Session } from './session.entity';
+import { Column, Entity, OneToMany } from 'typeorm';
+import { BaseEntity } from './base.entity';
+import { TrainerAssignment } from './trainer-assignment.entity';
 
-@Entity('trainers')
-export class Trainer {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ length: 255 })
-  @IsNotEmpty()
-  @MaxLength(255)
+@Entity({ name: 'trainers' })
+export class Trainer extends BaseEntity {
+  @Column()
   name: string;
 
-  @Column({ unique: true, nullable: true, length: 255 })
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(255)
-  email?: string;
-
   @Column({ type: 'text', nullable: true })
-  @IsOptional()
-  @MaxLength(2000)
   bio?: string;
 
-  @Column({ name: 'is_active', default: true })
+  @Column({ unique: true })
+  email: string;
+
+  @Column({ nullable: true })
+  phone?: string;
+
+  @Column({ type: 'simple-array', nullable: true })
+  expertiseTags?: string[];
+
+  @Column({ nullable: true })
+  timezone?: string;
+
+  @Column({ default: true })
   isActive: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
-  // Relationships
-  @OneToMany(() => Session, session => session.trainer)
-  sessions: Session[];
+  @OneToMany(() => TrainerAssignment, (assignment) => assignment.trainer)
+  assignments: TrainerAssignment[];
 }

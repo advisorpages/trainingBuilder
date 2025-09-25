@@ -1,220 +1,106 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany, ManyToMany, JoinTable } from 'typeorm';
-import { IsNotEmpty, MaxLength, IsOptional, IsUUID, IsInt, Min, IsIn } from 'class-validator';
-import { User } from './user.entity';
-import { Location } from './location.entity';
-import { Trainer } from './trainer.entity';
-import { Audience } from './audience.entity';
-import { Tone } from './tone.entity';
-import { Category } from './category.entity';
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToMany,
+  ManyToOne,
+  OneToMany,
+  OneToOne,
+} from 'typeorm';
+import { BaseEntity } from './base.entity';
 import { Topic } from './topic.entity';
-import { Registration } from './registration.entity';
-import { SessionStatusHistory } from './session-status-history.entity';
-import { SessionCoachingTip } from './session-coaching-tip.entity';
+import { Incentive } from './incentive.entity';
+import { LandingPage } from './landing-page.entity';
+import { SessionAgendaItem } from './session-agenda-item.entity';
+import { SessionContentVersion } from './session-content-version.entity';
+import { TrainerAssignment } from './trainer-assignment.entity';
+import { SessionStatusLog } from './session-status-log.entity';
+import { User } from './user.entity';
 
 export enum SessionStatus {
   DRAFT = 'draft',
+  REVIEW = 'review',
+  READY = 'ready',
   PUBLISHED = 'published',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled'
+  RETIRED = 'retired',
 }
 
-@Entity('sessions')
-export class Session {
-  @PrimaryGeneratedColumn('uuid')
-  @IsUUID()
-  id: string;
-
-  @Column({ length: 255 })
-  @IsNotEmpty()
-  @MaxLength(255)
+@Entity({ name: 'sessions' })
+@Index(['status', 'scheduledAt'])
+export class Session extends BaseEntity {
+  @Column()
   title: string;
 
+  @Column({ nullable: true })
+  subtitle?: string;
+
   @Column({ type: 'text', nullable: true })
-  @IsOptional()
-  @MaxLength(2000)
-  description?: string;
+  audience?: string;
 
-  @Column({ name: 'start_time', type: 'timestamp' })
-  @IsNotEmpty()
-  startTime: Date;
-
-  @Column({ name: 'end_time', type: 'timestamp' })
-  @IsNotEmpty()
-  endTime: Date;
+  @Column({ type: 'text', nullable: true })
+  objective?: string;
 
   @Column({
-    type: 'varchar',
-    length: 20,
-    default: SessionStatus.DRAFT
+    type: 'enum',
+    enum: SessionStatus,
+    enumName: 'session_status_enum',
+    default: SessionStatus.DRAFT,
   })
-  @IsIn(Object.values(SessionStatus))
   status: SessionStatus;
 
-  @Column({ name: 'qr_code_url', type: 'text', nullable: true })
-  @IsOptional()
-  qrCodeUrl?: string;
+  @Column({ type: 'int', default: 0 })
+  readinessScore: number;
 
-  @Column({ name: 'author_id' })
-  @IsUUID()
-  authorId: string;
+  @Column({ type: 'timestamptz', nullable: true })
+  scheduledAt?: Date;
 
-  @Column({ name: 'location_id', nullable: true })
-  @IsOptional()
-  @IsInt()
-  locationId?: number;
+  @Column({ type: 'int', nullable: true })
+  durationMinutes?: number;
 
-  @Column({ name: 'trainer_id', nullable: true })
-  @IsOptional()
-  @IsInt()
-  trainerId?: number;
+  @Column({ type: 'jsonb', nullable: true })
+  aiPromptContext?: Record<string, unknown>;
 
-  @Column({ name: 'audience_id', nullable: true })
-  @IsOptional()
-  @IsInt()
-  audienceId?: number;
+  @Column({ type: 'text', nullable: true })
+  registrationUrl?: string;
 
-  @Column({ name: 'tone_id', nullable: true })
-  @IsOptional()
-  @IsInt()
-  toneId?: number;
+  @Column({ type: 'timestamptz', nullable: true })
+  publishedAt?: Date;
 
-  @Column({ name: 'category_id', nullable: true })
-  @IsOptional()
-  @IsInt()
-  categoryId?: number;
+  @ManyToOne(() => Topic, (topic) => topic.sessions, { nullable: true, onDelete: 'SET NULL' })
+  topic?: Topic;
 
-  @Column({ name: 'max_registrations', default: 50 })
-  @IsInt()
-  @Min(1)
-  maxRegistrations: number;
+  @ManyToMany(() => Incentive, (incentive) => incentive.sessions)
+  incentives: Incentive[];
 
-  @Column({ name: 'ai_prompt', type: 'text', nullable: true })
-  @IsOptional()
-  aiPrompt?: string;
-
-  @Column({ name: 'ai_generated_content', type: 'jsonb', nullable: true })
-  @IsOptional()
-  aiGeneratedContent?: object;
-
-  // Promotional content fields for Story 2.6
-  @Column({ name: 'promotional_headline', type: 'text', nullable: true })
-  @IsOptional()
-  promotionalHeadline?: string;
-
-  @Column({ name: 'promotional_summary', type: 'text', nullable: true })
-  @IsOptional()
-  promotionalSummary?: string;
-
-  @Column({ name: 'key_benefits', type: 'text', nullable: true })
-  @IsOptional()
-  keyBenefits?: string;
-
-  @Column({ name: 'call_to_action', type: 'text', nullable: true })
-  @IsOptional()
-  callToAction?: string;
-
-  @Column({ name: 'social_media_content', type: 'text', nullable: true })
-  @IsOptional()
-  socialMediaContent?: string;
-
-  @Column({ name: 'email_marketing_content', type: 'text', nullable: true })
-  @IsOptional()
-  emailMarketingContent?: string;
-
-  @Column({ name: 'is_active', default: true })
-  isActive: boolean;
-
-  // Publishing logic fields (Story 3.3)
-  @Column({ name: 'status_changed_at', type: 'timestamp', nullable: true })
-  statusChangedAt?: Date;
-
-  @Column({ name: 'status_changed_by', nullable: true })
-  @IsOptional()
-  @IsUUID()
-  statusChangedBy?: string;
-
-  @Column({ name: 'automated_status_change', default: false })
-  automatedStatusChange: boolean;
-
-  @Column({ name: 'content_validation_status', type: 'varchar', length: 20, default: 'pending' })
-  @IsIn(['pending', 'valid', 'invalid'])
-  contentValidationStatus: string;
-
-  @Column({ name: 'content_validation_errors', type: 'json', nullable: true })
-  contentValidationErrors?: string[];
-
-  @Column({ name: 'publication_requirements_met', default: false })
-  publicationRequirementsMet: boolean;
-
-  @Column({ name: 'last_validation_check', type: 'timestamp', nullable: true })
-  lastValidationCheck?: Date;
-
-  // Session Builder fields (Phase 2)
-  @Column({ name: 'marketing_kit_content', type: 'text', nullable: true })
-  @IsOptional()
-  marketingKitContent?: string;
-
-  @Column({ name: 'session_outline_data', type: 'jsonb', nullable: true })
-  @IsOptional()
-  sessionOutlineData?: object;
-
-  @Column({ name: 'builder_generated', default: false })
-  builderGenerated: boolean;
-
-  // Phase 5 fields
-  @Column({ name: 'training_kit_content', type: 'text', nullable: true })
-  @IsOptional()
-  trainingKitContent?: string;
-
-  @Column({ name: 'builder_completion_status', type: 'jsonb', nullable: true })
-  @IsOptional()
-  builderCompletionStatus?: object;
-
-  @CreateDateColumn({ name: 'created_at' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
-
-  // Relationships
-  @ManyToOne(() => User, user => user.authoredSessions, { eager: true })
-  @JoinColumn({ name: 'author_id' })
-  author: User;
-
-  @ManyToOne(() => Location, location => location.sessions, { eager: true })
-  @JoinColumn({ name: 'location_id' })
-  location?: Location;
-
-  @ManyToOne(() => Trainer, trainer => trainer.sessions, { eager: true })
-  @JoinColumn({ name: 'trainer_id' })
-  trainer?: Trainer;
-
-  @ManyToOne(() => Audience, audience => audience.sessions)
-  @JoinColumn({ name: 'audience_id' })
-  audience?: Audience;
-
-  @ManyToOne(() => Tone, tone => tone.sessions)
-  @JoinColumn({ name: 'tone_id' })
-  tone?: Tone;
-
-  @ManyToOne(() => Category, category => category.sessions)
-  @JoinColumn({ name: 'category_id' })
-  category?: Category;
-
-  @ManyToMany(() => Topic, topic => topic.sessions)
-  @JoinTable({
-    name: 'session_topics',
-    joinColumn: { name: 'session_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'topic_id', referencedColumnName: 'id' }
+  @OneToOne(() => LandingPage, (landingPage) => landingPage.session, {
+    cascade: true,
+    eager: false,
   })
-  topics: Topic[];
+  @JoinColumn({ name: 'landing_page_id' })
+  landingPage?: LandingPage;
 
-  @OneToMany(() => Registration, registration => registration.session)
-  registrations: Registration[];
+  @OneToMany(() => SessionAgendaItem, (agenda) => agenda.session, {
+    cascade: true,
+  })
+  agendaItems: SessionAgendaItem[];
 
-  @OneToMany(() => SessionStatusHistory, statusHistory => statusHistory.session)
-  statusHistory: SessionStatusHistory[];
+  @OneToMany(() => SessionContentVersion, (version) => version.session, {
+    cascade: true,
+  })
+  contentVersions: SessionContentVersion[];
 
-  @OneToMany(() => SessionCoachingTip, tip => tip.session)
-  coachingTips: SessionCoachingTip[];
+  @OneToMany(() => TrainerAssignment, (assignment) => assignment.session, {
+    cascade: true,
+  })
+  trainerAssignments: TrainerAssignment[];
+
+  @OneToMany(() => SessionStatusLog, (log) => log.session, { cascade: true })
+  statusLogs: SessionStatusLog[];
+
+  @ManyToOne(() => User, (user) => user.createdSessions, { nullable: true, onDelete: 'SET NULL' })
+  createdBy?: User;
+
+  @ManyToOne(() => User, (user) => user.updatedSessions, { nullable: true, onDelete: 'SET NULL' })
+  updatedBy?: User;
 }

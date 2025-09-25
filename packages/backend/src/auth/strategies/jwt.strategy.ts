@@ -3,12 +3,12 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthService } from '../auth.service';
+import { UserRole } from '../../entities';
 
 export interface JwtPayload {
   sub: string;
   email: string;
-  roleId: number;
-  roleName: string;
+  role: UserRole;
   iat: number;
   exp?: number;
 }
@@ -16,8 +16,8 @@ export interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    private configService: ConfigService,
-    private authService: AuthService,
+    private readonly configService: ConfigService,
+    private readonly authService: AuthService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -27,24 +27,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
-    try {
-      // Verify user still exists and is active
-      const user = await this.authService.getUserProfile(payload.sub);
+    const user = await this.authService.getUserProfile(payload.sub);
 
-      if (!user || !user.isActive) {
-        throw new UnauthorizedException('User not found or inactive');
-      }
-
-      // Attach the full user entity to the request for downstream use
-      // Also merge payload role info to guard against missing relations in edge cases
-      // Many services/controllers expect req.user.id and req.user.role.name
-      return {
-        ...user,
-        roleName: payload.roleName,
-        roleId: payload.roleId,
-      } as any;
-    } catch (error) {
-      throw new UnauthorizedException('Invalid token');
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('User not found or inactive');
     }
+
+    return {
+      id: user.id,
+      email: user.email,
+      role: payload.role,
+    };
   }
 }

@@ -9,41 +9,23 @@ import { AppService } from './app.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
-import { LocationsModule } from './modules/locations/locations.module';
-import { TrainersModule } from './modules/trainers/trainers.module';
-import { SettingsModule } from './modules/settings/settings.module';
-import { AttributesModule } from './modules/attributes/attributes.module';
 import { TopicsModule } from './modules/topics/topics.module';
-import { AudiencesModule } from './modules/audiences/audiences.module';
-import { TonesModule } from './modules/tones/tones.module';
-import { CategoriesModule } from './modules/categories/categories.module';
-import { AIModule } from './modules/ai/ai.module';
-import { TrainerDashboardModule } from './modules/trainer-dashboard/trainer-dashboard.module';
-import { EmailModule } from './modules/email/email.module';
-import { AdminModule } from './modules/admin/admin.module';
 import { IncentivesModule } from './modules/incentives/incentives.module';
+import { TrainersModule } from './modules/trainers/trainers.module';
+import { AIModule } from './modules/ai/ai.module';
+import { EmailModule } from './modules/email/email.module';
 import { HealthModule } from './modules/health/health.module';
-import { DevModule } from './modules/dev/dev.module';
+import { LandingPagesModule } from './modules/landing-pages/landing-pages.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { entities } from './entities';
-import { DatabaseHealthService } from './services/database-health.service';
-import { WebhookSyncService } from './services/webhook-sync.service';
-import { QrCodeService } from './services/qr-code.service';
-import { Registration } from './entities/registration.entity';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { SnakeNamingStrategy } from './config/snake-naming.strategy';
 
 @Module({
   imports: [
-    // Configuration module
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
-
-    // Schedule module for cron jobs
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     ScheduleModule.forRoot(),
-
-    // Database connection
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -53,48 +35,31 @@ import { RolesGuard } from './common/guards/roles.guard';
         username: configService.get('DATABASE_USER', 'postgres'),
         password: configService.get('DATABASE_PASSWORD', 'postgres'),
         database: configService.get('DATABASE_NAME', 'leadership_training'),
-        entities: entities,
+        entities,
         migrations: ['dist/backend/src/migrations/*.js'],
-        // Use migrations as the single source of truth
         synchronize: false,
         migrationsRun: true,
         logging: configService.get('NODE_ENV') === 'development',
+        namingStrategy: new SnakeNamingStrategy(),
       }),
       inject: [ConfigService],
     }),
-
-    // TypeORM for webhook sync service
-    TypeOrmModule.forFeature([Registration]),
-
-    // HTTP module for external API calls
     HttpModule,
-
-    // Feature modules
     AuthModule,
     UsersModule,
     SessionsModule,
-    LocationsModule,
-    TrainersModule,
-    SettingsModule,
-    AttributesModule,
     TopicsModule,
-    AudiencesModule,
-    TonesModule,
-    CategoriesModule,
-    AIModule,
-    TrainerDashboardModule,
-    EmailModule,
-    AdminModule,
     IncentivesModule,
+    TrainersModule,
+    LandingPagesModule,
+    AIModule,
+    EmailModule,
     HealthModule,
-    DevModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    DatabaseHealthService,
-    WebhookSyncService,
-    QrCodeService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

@@ -1,10 +1,16 @@
+export type UserRoleKey = 'broker' | 'content_developer' | 'trainer';
+
+export interface UserRoleInfo {
+  id: number;
+  name: UserRole;
+  key: UserRoleKey;
+}
+
 export interface User {
   id: string;
   email: string;
-  role: {
-    id: number;
-    name: string;
-  };
+  role: UserRoleInfo;
+  displayName?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

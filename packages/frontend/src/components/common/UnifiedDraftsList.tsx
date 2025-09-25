@@ -80,7 +80,7 @@ export const UnifiedDraftsList: React.FC<UnifiedDraftsListProps> = ({
     loadDrafts();
   }, [refreshTrigger]);
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',

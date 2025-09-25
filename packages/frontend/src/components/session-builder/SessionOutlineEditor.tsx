@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { SessionOutline, TopicSuggestion, sessionBuilderService, FlexibleSessionSection, SectionType } from '../../services/session-builder.service';
+import {
+  SessionOutline,
+  SessionOutlineLegacy,
+  TopicSuggestion,
+  sessionBuilderService,
+  FlexibleSessionSection,
+  SectionType
+} from '../../services/session-builder.service';
 import { getSectionTypeOptions, convertSection, addSectionLocal, removeSectionLocal, moveSectionLocal, duplicateSectionLocal } from '../../utils/sectionTypeRegistry';
 
 interface SessionOutlineEditorProps {
-  outline: SessionOutline;
-  onOutlineChange: (outline: SessionOutline) => void;
+  outline: SessionOutline | SessionOutlineLegacy;
+  onOutlineChange: (outline: SessionOutline | SessionOutlineLegacy) => void;
   onSave: () => void;
   onCancel: () => void;
   categoryName?: string;
@@ -59,83 +66,125 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
     }
   };
 
-  // ===== Flexible Outline Editing (new) =====
   const isFlexible = sessionBuilderService.isFlexibleOutline(outline);
+  const flexibleOutline = isFlexible ? (outline as SessionOutline) : null;
+
+  const handleFlexibleSectionEdit = (
+    sectionId: string,
+    field: keyof FlexibleSessionSection,
+    value: any
+  ) => {
+    if (!flexibleOutline) return;
+
+    let processedValue = value;
+    if (
+      field === 'learningOutcomes' ||
+      field === 'trainerNotes' ||
+      field === 'deliveryGuidance'
+    ) {
+      processedValue = limitLines(String(processedValue ?? ''), 3);
+    }
+
+    const updatedSections = flexibleOutline.sections.map((section) =>
+      section.id === sectionId
+        ? {
+            ...section,
+            [field]: processedValue,
+            updatedAt: new Date().toISOString()
+          }
+        : section
+    );
+
+    onOutlineChange({
+      ...flexibleOutline,
+      sections: updatedSections,
+      totalDuration: sessionBuilderService.calculateTotalDuration(updatedSections)
+    });
+  };
+
+  const handleFlexibleArrayEdit = (
+    sectionId: string,
+    field: keyof FlexibleSessionSection,
+    index: number,
+    value: string
+  ) => {
+    if (!flexibleOutline) return;
+    const section = flexibleOutline.sections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    const currentValues = Array.isArray((section as any)[field])
+      ? ([...(section as any)[field]] as string[])
+      : [];
+
+    currentValues[index] = value;
+    handleFlexibleSectionEdit(sectionId, field, currentValues);
+  };
+
+  const addFlexibleArrayItem = (sectionId: string, field: keyof FlexibleSessionSection) => {
+    if (!flexibleOutline) return;
+    const section = flexibleOutline.sections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    const currentValues = Array.isArray((section as any)[field])
+      ? ([...(section as any)[field]] as string[])
+      : [];
+
+    currentValues.push('');
+    handleFlexibleSectionEdit(sectionId, field, currentValues);
+  };
+
+  const removeFlexibleArrayItem = (
+    sectionId: string,
+    field: keyof FlexibleSessionSection,
+    index: number
+  ) => {
+    if (!flexibleOutline) return;
+    const section = flexibleOutline.sections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    const currentValues = Array.isArray((section as any)[field])
+      ? ([...(section as any)[field]] as string[])
+      : [];
+
+    currentValues.splice(index, 1);
+    handleFlexibleSectionEdit(sectionId, field, currentValues);
+  };
+
+  // ===== Flexible Outline Editing (new) =====
   if (isFlexible) {
-    const handleFlexibleSectionEdit = (sectionId: string, field: keyof FlexibleSessionSection, value: any) => {
-      // Enforce 3-line limit for these fields everywhere
-      if (field === 'learningOutcomes' || field === 'trainerNotes' || field === 'deliveryGuidance') {
-        value = limitLines(String(value ?? ''), 3);
-      }
-      const updatedSections = outline.sections.map((s) =>
-        s.id === sectionId ? { ...s, [field]: value, updatedAt: new Date().toISOString() } : s
-      );
-      onOutlineChange({
-        ...outline,
-        sections: updatedSections,
-        totalDuration: sessionBuilderService.calculateTotalDuration(updatedSections),
-      } as SessionOutline);
-    };
-
-    const handleFlexibleArrayEdit = (
-      sectionId: string,
-      field: keyof FlexibleSessionSection,
-      index: number,
-      value: string
-    ) => {
-      const section = outline.sections.find((s) => s.id === sectionId);
-      if (!section) return;
-      const arr = Array.isArray((section as any)[field]) ? ([...(section as any)[field]] as string[]) : [];
-      arr[index] = value;
-      handleFlexibleSectionEdit(sectionId, field, arr);
-    };
-
-    const addFlexibleArrayItem = (sectionId: string, field: keyof FlexibleSessionSection) => {
-      const section = outline.sections.find((s) => s.id === sectionId);
-      if (!section) return;
-      const arr = Array.isArray((section as any)[field]) ? ([...(section as any)[field]] as string[]) : [];
-      arr.push('');
-      handleFlexibleSectionEdit(sectionId, field, arr);
-    };
-
-    const removeFlexibleArrayItem = (sectionId: string, field: keyof FlexibleSessionSection, index: number) => {
-      const section = outline.sections.find((s) => s.id === sectionId);
-      if (!section) return;
-      const arr = Array.isArray((section as any)[field]) ? ([...(section as any)[field]] as string[]) : [];
-      arr.splice(index, 1);
-      handleFlexibleSectionEdit(sectionId, field, arr);
-    };
-
-    const sortedSections = sessionBuilderService.sortSectionsByPosition(outline.sections);
+    const outlineForRender = flexibleOutline!;
+    const sortedSections = sessionBuilderService.sortSectionsByPosition(outlineForRender.sections);
 
     const addSection = () => {
-      const updated = addSectionLocal(outline as any, newSectionType);
+      const updated = addSectionLocal(outlineForRender as any, newSectionType);
       onOutlineChange(updated as any);
     };
 
     const deleteSection = (id: string) => {
-      const section = outline.sections.find(s => s.id === id);
+      const section = outlineForRender.sections.find(s => s.id === id);
       if (section?.type === 'opener' || section?.type === 'closing') {
         if (!confirm('This appears to be a required section. Delete anyway?')) return;
       }
-      const updated = removeSectionLocal(outline as any, id);
+      const updated = removeSectionLocal(outlineForRender as any, id);
       onOutlineChange(updated as any);
     };
 
     const duplicateSection = (id: string) => {
-      const updated = duplicateSectionLocal(outline as any, id);
+      const updated = duplicateSectionLocal(outlineForRender as any, id);
       onOutlineChange(updated as any);
     };
 
     const moveSection = (id: string, dir: 'up' | 'down') => {
-      const updated = moveSectionLocal(outline as any, id, dir);
+      const updated = moveSectionLocal(outlineForRender as any, id, dir);
       onOutlineChange(updated as any);
     };
 
     const changeType = (id: string, type: SectionType) => {
-      const updatedSections = outline.sections.map(s => s.id === id ? convertSection(s, type) : s);
+      const updatedSections = outlineForRender.sections.map(s =>
+        s.id === id ? convertSection(s, type) : s
+      );
       onOutlineChange({
-        ...outline,
+        ...outlineForRender,
         sections: updatedSections,
         totalDuration: sessionBuilderService.calculateTotalDuration(updatedSections)
       } as any);
@@ -143,16 +192,11 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
 
     const validate = async () => {
       try {
-        const res = await sessionBuilderService.validateOutline(outline as any);
+        const res = await sessionBuilderService.validateOutline(outlineForRender as any);
         setValidationErrors(res.isValid ? [] : res.errors);
       } catch (e: any) {
         setValidationErrors([e.message || 'Validation failed']);
       }
-    };
-
-    const limitLines = (value: string, max: number) => {
-      const lines = value.split(/\r?\n/).slice(0, max);
-      return lines.join('\n');
     };
 
     return (
@@ -160,7 +204,7 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900">Customize Your Session Outline</h2>
           <div className="text-sm text-gray-500">
-            Total Duration: {sessionBuilderService.formatDuration(outline.totalDuration)}
+            Total Duration: {sessionBuilderService.formatDuration(outlineForRender.totalDuration)}
           </div>
         </div>
 
@@ -171,16 +215,26 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
               <label className="block text-sm font-medium text-gray-700 mb-1">Session Title</label>
               <input
                 type="text"
-                value={outline.suggestedSessionTitle}
-                onChange={(e) => onOutlineChange({ ...outline, suggestedSessionTitle: e.target.value })}
+                value={outlineForRender.suggestedSessionTitle}
+                onChange={(e) =>
+                  onOutlineChange({
+                    ...outlineForRender,
+                    suggestedSessionTitle: e.target.value
+                  })
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Session Description</label>
               <textarea
-                value={outline.suggestedDescription}
-                onChange={(e) => onOutlineChange({ ...outline, suggestedDescription: e.target.value })}
+                value={outlineForRender.suggestedDescription}
+                onChange={(e) =>
+                  onOutlineChange({
+                    ...outlineForRender,
+                    suggestedDescription: e.target.value
+                  })
+                }
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
@@ -237,10 +291,14 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
                 const [moved] = newOrder.splice(from, 1);
                 newOrder.splice(to, 0, moved);
                 const reordered = newOrder.map((id, idx) => {
-                  const s = outline.sections.find(x => x.id === id)!;
+                  const s = outlineForRender.sections.find(x => x.id === id)!;
                   return { ...s, position: idx + 1, updatedAt: new Date().toISOString() };
                 });
-                onOutlineChange({ ...outline, sections: reordered, totalDuration: sessionBuilderService.calculateTotalDuration(reordered) } as any);
+                onOutlineChange({
+                  ...outlineForRender,
+                  sections: reordered,
+                  totalDuration: sessionBuilderService.calculateTotalDuration(reordered)
+                } as any);
                 setDraggingId(null);
               }}
             >
@@ -715,8 +773,10 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
     );
   }
 
+  const legacyOutline = outline as SessionOutlineLegacy;
+
   const handleSectionEdit = (sectionKey: string, field: string, value: any) => {
-    const updatedOutline = { ...outline };
+    const updatedOutline = { ...legacyOutline } as SessionOutlineLegacy;
 
     if (sectionKey.includes('.')) {
       // Handle nested properties
@@ -738,7 +798,7 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
   };
 
   const handleArrayEdit = (sectionKey: string, field: string, index: number, value: string) => {
-    const updatedOutline = { ...outline };
+    const updatedOutline = { ...legacyOutline } as SessionOutlineLegacy;
     const section = (updatedOutline as any)[sectionKey];
 
     if (section[field] && Array.isArray(section[field])) {
@@ -748,7 +808,7 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
   };
 
   const addArrayItem = (sectionKey: string, field: string) => {
-    const updatedOutline = { ...outline };
+    const updatedOutline = { ...legacyOutline } as SessionOutlineLegacy;
     const section = (updatedOutline as any)[sectionKey];
 
     if (section[field] && Array.isArray(section[field])) {
@@ -758,7 +818,7 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
   };
 
   const removeArrayItem = (sectionKey: string, field: string, index: number) => {
-    const updatedOutline = { ...outline };
+    const updatedOutline = { ...legacyOutline } as SessionOutlineLegacy;
     const section = (updatedOutline as any)[sectionKey];
 
     if (section[field] && Array.isArray(section[field])) {
@@ -1184,7 +1244,7 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">Customize Your Session Outline</h2>
         <div className="text-sm text-gray-500">
-          Total Duration: {sessionBuilderService.formatDuration(outline.totalDuration)}
+          Total Duration: {sessionBuilderService.formatDuration(legacyOutline.totalDuration)}
         </div>
       </div>
 
@@ -1195,7 +1255,7 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">Session Title</label>
             <input
               type="text"
-              value={outline.suggestedSessionTitle}
+              value={legacyOutline.suggestedSessionTitle}
               onChange={(e) => handleSectionEdit('suggestedSessionTitle', '', e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
@@ -1203,7 +1263,7 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Session Description</label>
             <textarea
-              value={outline.suggestedDescription}
+              value={legacyOutline.suggestedDescription}
               onChange={(e) => handleSectionEdit('suggestedDescription', '', e.target.value)}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
@@ -1216,36 +1276,36 @@ export const SessionOutlineEditor: React.FC<SessionOutlineEditorProps> = ({
       <div className="space-y-4">
         <EditableSection
           sectionKey="opener"
-          section={outline.opener}
-          title={outline.opener.title}
+          section={legacyOutline.opener}
+          title={legacyOutline.opener.title}
           icon="🎯"
         />
 
         <EditableSection
           sectionKey="topic1"
-          section={outline.topic1}
-          title={outline.topic1.title}
+          section={legacyOutline.topic1}
+          title={legacyOutline.topic1.title}
           icon="📚"
         />
 
         <EditableSection
           sectionKey="topic2"
-          section={outline.topic2}
-          title={outline.topic2.title}
+          section={legacyOutline.topic2}
+          title={legacyOutline.topic2.title}
           icon="🎮"
         />
 
         <EditableSection
           sectionKey="inspirationalContent"
-          section={outline.inspirationalContent}
-          title={outline.inspirationalContent.title}
+          section={legacyOutline.inspirationalContent}
+          title={legacyOutline.inspirationalContent.title}
           icon="🎥"
         />
 
         <EditableSection
           sectionKey="closing"
-          section={outline.closing}
-          title={outline.closing.title}
+          section={legacyOutline.closing}
+          title={legacyOutline.closing.title}
           icon="✨"
         />
       </div>

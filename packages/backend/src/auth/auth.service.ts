@@ -1,80 +1,69 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User } from '../entities/user.entity';
+import { User, UserRole } from '../entities';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
     @InjectRepository(User)
-    private usersRepository: Repository<User>,
-    private jwtService: JwtService,
+    private readonly usersRepository: Repository<User>,
+    private readonly jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<User | null> {
+  async onModuleInit(): Promise<void> {
     try {
-      // Find user by email with role relationship
-      const user = await this.usersRepository.findOne({
-        where: { email, isActive: true },
-        relations: ['role'],
-      });
-
-      if (!user) {
-        this.logger.warn(`Login attempt with non-existent email: ${email}`);
-        return null;
-      }
-
-      // Verify password
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-      if (!isPasswordValid) {
-        this.logger.warn(`Invalid password attempt for user: ${email}`);
-        return null;
-      }
-
-      this.logger.log(`Successful authentication for user: ${email}`);
-      return user;
+      await this.seedInitialUsers();
     } catch (error) {
-      this.logger.error('Error during user validation', error);
-      return null;
+      this.logger.error('Failed to seed initial users', error);
     }
   }
 
-  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
-    const { email, password } = loginDto;
+  private async validateUser(email: string, password: string): Promise<User | null> {
+    const user = await this.usersRepository.findOne({ where: { email, isActive: true } });
 
-    // Validate user credentials
-    const user = await this.validateUser(email, password);
+    if (!user) {
+      this.logger.warn(`Login attempt with non-existent email: ${email}`);
+      return null;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+
+    if (!isPasswordValid) {
+      this.logger.warn(`Invalid password attempt for user: ${email}`);
+      return null;
+    }
+
+    return user;
+  }
+
+  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
+    const user = await this.validateUser(loginDto.email, loginDto.password);
+
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    // Generate JWT payload
     const payload = {
       sub: user.id,
       email: user.email,
-      roleId: user.roleId,
-      roleName: user.role.name,
-      iat: Math.floor(Date.now() / 1000),
+      role: user.role,
     };
 
-    // Generate tokens
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1h' });
     const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
     return {
       user: {
         id: user.id,
         email: user.email,
-        role: {
-          id: user.role.id,
-          name: user.role.name,
-        },
+        role: user.role,
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -84,33 +73,19 @@ export class AuthService {
     };
   }
 
-  async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
+  async refreshToken(token: string): Promise<{ accessToken: string }> {
     try {
-      // Verify refresh token
-      const payload = this.jwtService.verify(refreshToken);
+      const payload = this.jwtService.verify(token);
 
-      // Get current user to ensure they're still active
-      const user = await this.usersRepository.findOne({
-        where: { id: payload.sub, isActive: true },
-        relations: ['role'],
-      });
+      const user = await this.usersRepository.findOne({ where: { id: payload.sub, isActive: true } });
 
       if (!user) {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      // Generate new access token
-      const newPayload = {
-        sub: user.id,
-        email: user.email,
-        roleId: user.roleId,
-        roleName: user.role.name,
-        iat: Math.floor(Date.now() / 1000),
-      };
+      const newAccess = this.jwtService.sign({ sub: user.id, email: user.email, role: user.role }, { expiresIn: '1h' });
 
-      const accessToken = this.jwtService.sign(newPayload);
-
-      return { accessToken };
+      return { accessToken: newAccess };
     } catch (error) {
       this.logger.error('Error refreshing token', error);
       throw new UnauthorizedException('Invalid refresh token');
@@ -118,10 +93,7 @@ export class AuthService {
   }
 
   async getUserProfile(userId: string): Promise<User> {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId, isActive: true },
-      relations: ['role'],
-    });
+    const user = await this.usersRepository.findOne({ where: { id: userId, isActive: true } });
 
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -130,12 +102,40 @@ export class AuthService {
     return user;
   }
 
-  async hashPassword(password: string): Promise<string> {
-    const saltRounds = 12;
-    return bcrypt.hash(password, saltRounds);
-  }
+  async seedInitialUsers(): Promise<void> {
+    const passwordHash = await bcrypt.hash('Password123!', 10);
 
-  async validatePassword(password: string, hashedPassword: string): Promise<boolean> {
-    return bcrypt.compare(password, hashedPassword);
+    const defaultUsers: Array<{ email: string; role: UserRole; displayName: string }> = [
+      { email: 'sarah.content@company.com', role: UserRole.CONTENT_DEVELOPER, displayName: 'Sarah Content' },
+      { email: 'broker1@company.com', role: UserRole.BROKER, displayName: 'Broker One' },
+      { email: 'john.trainer@company.com', role: UserRole.TRAINER, displayName: 'John Trainer' },
+      // Legacy demo accounts retained for backwards compatibility
+      { email: 'dev@example.com', role: UserRole.CONTENT_DEVELOPER, displayName: 'Content Developer' },
+      { email: 'broker@example.com', role: UserRole.BROKER, displayName: 'Broker User' },
+      { email: 'trainer@example.com', role: UserRole.TRAINER, displayName: 'Trainer User' },
+    ];
+
+    for (const { email, role, displayName } of defaultUsers) {
+      const existing = await this.usersRepository.findOne({ where: { email } });
+      if (existing) {
+        existing.passwordHash = passwordHash;
+        existing.role = role;
+        existing.isActive = true;
+        if (!existing.displayName) {
+          existing.displayName = displayName;
+        }
+        await this.usersRepository.save(existing);
+        continue;
+      }
+
+      const user = this.usersRepository.create({
+        email,
+        passwordHash,
+        role,
+        displayName,
+        isActive: true,
+      });
+      await this.usersRepository.save(user);
+    }
   }
 }

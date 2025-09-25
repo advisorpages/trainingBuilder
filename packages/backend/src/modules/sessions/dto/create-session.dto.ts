@@ -1,78 +1,38 @@
-import { IsNotEmpty, IsString, MaxLength, IsDateString, IsOptional, IsInt, Min, IsArray, IsObject } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { SessionStatus } from '../../../entities';
 
 export class CreateSessionDto {
-  @IsNotEmpty()
   @IsString()
-  @MaxLength(255)
   title: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(2000)
-  description?: string;
-
-  @IsNotEmpty()
-  @IsDateString()
-  startTime: Date;
-
-  @IsNotEmpty()
-  @IsDateString()
-  endTime: Date;
+  subtitle?: string;
 
   @IsOptional()
-  @IsInt()
-  locationId?: number;
+  @IsString()
+  audience?: string;
 
   @IsOptional()
-  @IsInt()
-  trainerId?: number;
+  @IsString()
+  objective?: string;
 
   @IsOptional()
-  @IsInt()
-  audienceId?: number;
-
-  @IsOptional()
-  @IsInt()
-  toneId?: number;
-
-  @IsOptional()
-  @IsInt()
-  categoryId?: number;
+  @IsUUID()
+  topicId?: string;
 
   @IsOptional()
   @IsArray()
-  @IsInt({ each: true })
-  topicIds?: number[];
+  @IsUUID('4', { each: true })
+  incentiveIds?: string[];
 
+  @IsOptional()
+  @IsEnum(SessionStatus)
+  status?: SessionStatus;
+
+  @IsOptional()
   @IsInt()
-  @Min(1)
-  maxRegistrations = 50;
-
-  @IsOptional()
-  @IsObject()
-  aiGeneratedContent?: object;
-
-  @IsOptional()
-  @IsString()
-  promotionalHeadline?: string;
-
-  @IsOptional()
-  @IsString()
-  promotionalSummary?: string;
-
-  @IsOptional()
-  @IsString()
-  keyBenefits?: string;
-
-  @IsOptional()
-  @IsString()
-  callToAction?: string;
-
-  @IsOptional()
-  @IsString()
-  socialMediaContent?: string;
-
-  @IsOptional()
-  @IsString()
-  emailMarketingContent?: string;
+  @Min(0)
+  @Max(100)
+  readinessScore?: number;
 }
