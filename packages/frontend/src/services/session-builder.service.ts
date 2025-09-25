@@ -300,6 +300,7 @@ class SessionBuilderService {
         request.readinessScore,
       );
 
+      console.log('Session data being sent to backend:', sessionData);
       const response = await api.post('/sessions', sessionData);
       return response.data;
     } catch (error: any) {

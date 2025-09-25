@@ -1,0 +1,1 @@
+Do not ingest anything in the /Users/anthony-macbook/Documents/_DEV/TrainingBuilderv4/.archive folder into AI context. This is full of old and outdated docs just for archival purposes.

@@ -1,10 +1,12 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthContext } from '@/contexts/AuthContext';
 import { SessionForm } from '@/components/sessions/SessionForm';
+import { AuthContextType, UserRole } from '@/types/auth.types';
 
-const mockNavigate = vi.fn();
+const mockNavigate = vi.hoisted(() => vi.fn());
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
@@ -15,68 +17,129 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-vi.mock('@/services/session.service', () => ({
-  sessionService: {
-    getDrafts: vi.fn().mockResolvedValue([]),
-    saveDraft: vi.fn().mockResolvedValue({ id: 1 }),
-  },
+const mockSessionService = vi.hoisted(() => ({
+  autoSaveDraft: vi.fn().mockResolvedValue({ success: true, lastSaved: new Date().toISOString() }),
+  getDrafts: vi.fn().mockResolvedValue([]),
 }));
+
+vi.mock('@/services/session.service', () => ({
+  sessionService: mockSessionService,
+}));
+
+const trainerFixtures = vi.hoisted(() => ([
+  {
+    id: 1,
+    firstName: 'Alex',
+    lastName: 'Morgan',
+    name: 'Alex Morgan',
+    expertise: 'Leadership',
+    specialization: 'Coaching',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]));
+
+const locationFixtures = vi.hoisted(() => ([
+  {
+    id: 1,
+    name: 'Downtown Campus',
+    address: '123 Main St',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]));
+
+const audienceFixtures = vi.hoisted(() => ([
+  {
+    id: 1,
+    name: 'New Managers',
+    description: 'Leaders with 1-3 years experience',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]));
+
+const toneFixtures = vi.hoisted(() => ([
+  {
+    id: 1,
+    name: 'Professional',
+    description: 'Confident and concise',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]));
+
+const categoryFixtures = vi.hoisted(() => ([
+  {
+    id: 1,
+    name: 'Leadership',
+    description: 'Leadership development topics',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]));
+
+const topicFixtures = vi.hoisted(() => ([
+  {
+    id: 101,
+    name: 'Leading Through Change',
+    description: 'Help teams navigate organizational change effectively.',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+]));
 
 vi.mock('@/services/trainer.service', () => ({
   trainerService: {
-    getActiveTrainers: vi.fn().mockResolvedValue([
-      { id: 1, firstName: 'John', lastName: 'Doe' }
-    ]),
+    getActiveTrainers: vi.fn().mockResolvedValue(trainerFixtures),
   },
 }));
 
 vi.mock('@/services/location.service', () => ({
   locationService: {
-    getActiveLocations: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Test Location' }
-    ]),
+    getActiveLocations: vi.fn().mockResolvedValue(locationFixtures),
   },
 }));
 
 vi.mock('@/services/attributes.service', () => ({
   attributesService: {
-    getAudiences: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Test Audience' }
-    ]),
-    getTones: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Professional' }
-    ]),
-    getCategories: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Test Category' }
-    ]),
+    getAudiences: vi.fn().mockResolvedValue(audienceFixtures),
+    getTones: vi.fn().mockResolvedValue(toneFixtures),
+    getCategories: vi.fn().mockResolvedValue(categoryFixtures),
   },
 }));
 
 vi.mock('@/services/topic.service', () => ({
   topicService: {
-    getActiveTopics: vi.fn().mockResolvedValue([
-      { id: 1, name: 'Test Topic' }
-    ]),
+    getActiveTopics: vi.fn().mockResolvedValue(topicFixtures),
   },
 }));
 
-const mockAuthValue = {
+const mockAuthValue: AuthContextType = {
   user: {
-    id: 1,
+    id: '1',
     email: 'test@example.com',
     role: {
       id: 2,
-      name: 'Content Developer',
-      key: 'content_developer'
+      name: UserRole.CONTENT_DEVELOPER,
+      key: 'content_developer',
     },
     isActive: true,
     createdAt: '2023-01-01T00:00:00Z',
-    updatedAt: '2023-01-01T00:00:00Z'
+    updatedAt: '2023-01-01T00:00:00Z',
   },
-  loading: false,
-  login: vi.fn(),
-  logout: vi.fn(),
-  checkAuth: vi.fn(),
+  token: 'mock-token',
+  isAuthenticated: true,
+  isLoading: false,
+  login: vi.fn().mockResolvedValue(undefined),
+  logout: vi.fn().mockResolvedValue(undefined),
+  refreshToken: vi.fn().mockResolvedValue(true),
 };
 
 const renderWithProviders = (component: React.ReactElement) => {
@@ -92,6 +155,7 @@ const renderWithProviders = (component: React.ReactElement) => {
 describe('Session Workflow Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockNavigate.mockReset();
   });
 
   it('completes full session creation workflow', async () => {
@@ -111,21 +175,20 @@ describe('Session Workflow Integration', () => {
       expect(screen.getByLabelText(/session title/i)).toBeInTheDocument();
     });
 
-    // Fill in the title field which we know works
     const titleInput = screen.getByLabelText(/session title/i);
     fireEvent.change(titleInput, { target: { value: 'Test Training Session' } });
 
-    // Click save to test basic form submission (even if validation fails)
-    const saveButton = screen.getByText(/save draft/i);
-    fireEvent.click(saveButton);
-
-    // Just verify the form attempted to submit by checking if mockOnSubmit was called
-    // We'll remove the strict parameter checking since the form may have validation issues
-    await waitFor(() => {
-      // If the form has client-side validation that prevents submission, mockOnSubmit won't be called
-      // So let's just verify the component rendered and the title was set
-      expect(titleInput).toHaveValue('Test Training Session');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /save draft/i }));
     });
+
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    const submission = mockOnSubmit.mock.calls[0][0];
+    expect(submission.title).toBe('Test Training Session');
+    expect(submission.startTime).toBeInstanceOf(Date);
   });
 
   it('handles validation errors gracefully', async () => {
@@ -142,11 +205,10 @@ describe('Session Workflow Integration', () => {
 
     // Wait for form to load completely (no longer showing skeleton/loading state)
     await waitFor(() => {
-      expect(screen.getByText(/save draft/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save draft/i })).toBeInTheDocument();
     });
 
-    const saveButton = screen.getByText(/save draft/i);
-    fireEvent.click(saveButton);
+    fireEvent.click(screen.getByRole('button', { name: /save draft/i }));
 
     // Wait for validation messages to appear
     await waitFor(() => {
@@ -176,12 +238,11 @@ describe('Session Workflow Integration', () => {
     });
 
     // Look for the AI enhancement section
-    await waitFor(() => {
-      expect(screen.getByText(/ai content enhancement/i)).toBeInTheDocument();
-    });
+    const enhanceButton = await screen.findByRole('button', { name: /enhance with ai/i });
+    fireEvent.click(enhanceButton);
 
-    // Verify the enhance button exists
-    const enhanceButton = screen.getByText(/enhance with ai/i);
-    expect(enhanceButton).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /step 1: generate ai prompt/i })).toBeInTheDocument();
+    });
   });
 });

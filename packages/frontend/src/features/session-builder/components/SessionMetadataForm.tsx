@@ -207,10 +207,11 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
+            <label htmlFor="session-title" className="text-sm font-medium text-slate-700">
               Session Title <span className="text-red-500">*</span>
             </label>
             <Input
+              id="session-title"
               value={metadata.title}
               placeholder="e.g. Coaching Through Change"
               onChange={handleStringChange('title')}
@@ -227,10 +228,11 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
+            <label htmlFor="session-category" className="text-sm font-medium text-slate-700">
               Category <span className="text-red-500">*</span>
             </label>
             <Input
+              id="session-category"
               value={metadata.category}
               placeholder="Leadership, Sales, Communication..."
               onChange={handleStringChange('category')}
@@ -244,10 +246,11 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
+            <label htmlFor="session-type" className="text-sm font-medium text-slate-700">
               Session Type <span className="text-red-500">*</span>
             </label>
             <select
+              id="session-type"
               className={cn(
                 'h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500',
                 fieldErrors.sessionType && 'border-red-500 focus:border-red-500'
@@ -267,10 +270,11 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
+            <label htmlFor="session-desired-outcome" className="text-sm font-medium text-slate-700">
               Desired Outcome <span className="text-red-500">*</span>
             </label>
             <textarea
+              id="session-desired-outcome"
               className={cn(
                 'min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none',
                 fieldErrors.desiredOutcome && 'border-red-500 focus:border-red-500'

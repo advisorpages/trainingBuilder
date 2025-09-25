@@ -1,14 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { aiTopicService } from '../../../services/aiTopicService';
 import { TopicEnhancementInput, TopicAIContent } from '@leadership-training/shared';
-
-// Mock the API module
-vi.mock('../../../services/api.service', () => ({
-  api: {
-    post: vi.fn(),
-    get: vi.fn(),
-  }
-}));
 
 describe('AI Topic Enhancement', () => {
   const mockEnhancementInput: TopicEnhancementInput = {
@@ -239,9 +231,4 @@ describe('AI Topic Enhancement', () => {
       expect(sessionContext).toBeUndefined();
     });
   });
-});
-
-describe('Session Context Utils', () => {
-  // These would be tested if we had the utils imported
-  // For now, we'll add them when we run the actual tests
 });

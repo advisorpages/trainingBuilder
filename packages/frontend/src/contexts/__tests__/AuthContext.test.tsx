@@ -1,32 +1,58 @@
+import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider, AuthContext } from '../AuthContext';
-import { useContext } from 'react';
+import { AuthProvider, useAuth } from '../AuthContext';
 import { vi } from 'vitest';
 
-const mockAuthService = {
+const mockAuthService = vi.hoisted(() => ({
   login: vi.fn(),
   logout: vi.fn(),
   getCurrentUser: vi.fn(),
   refreshToken: vi.fn(),
-};
+  isAuthenticated: vi.fn(),
+  initializeTokenRefresh: vi.fn(),
+  setUnauthorizedCallback: vi.fn(),
+  clearUnauthorizedCallback: vi.fn(),
+  getUserFromStorage: vi.fn(),
+  setUserInStorage: vi.fn(),
+  getToken: vi.fn(),
+  getAccessToken: vi.fn(),
+  getRefreshToken: vi.fn(),
+  setTokens: vi.fn(),
+  setAccessToken: vi.fn(),
+}));
 
 vi.mock('@/services/auth.service', () => ({
   authService: mockAuthService,
+  default: mockAuthService,
 }));
 
+const mockUser = {
+  id: '1',
+  email: 'test@example.com',
+  role: {
+    id: 2,
+    name: 'Content Developer',
+    key: 'content_developer',
+  },
+  isActive: true,
+  createdAt: '2023-01-01T00:00:00Z',
+  updatedAt: '2023-01-01T00:00:00Z',
+};
+
 const TestComponent = () => {
-  const auth = useContext(AuthContext);
-  if (!auth) return <div>No Auth Context</div>;
+  const auth = useAuth();
 
   return (
     <div>
       <div data-testid="user">{auth.user ? auth.user.email : 'No User'}</div>
-      <div data-testid="loading">{auth.loading ? 'Loading' : 'Not Loading'}</div>
-      <button onClick={() => auth.login('test@example.com', 'password')}>
+      <div data-testid="loading">{auth.isLoading ? 'Loading' : 'Not Loading'}</div>
+      <button
+        onClick={() => auth.login({ email: 'test@example.com', password: 'password' })}
+      >
         Login
       </button>
-      <button onClick={auth.logout}>Logout</button>
+      <button onClick={() => auth.logout()}>Logout</button>
     </div>
   );
 };
@@ -45,57 +71,44 @@ describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+
+    mockAuthService.isAuthenticated.mockReturnValue(false);
+    mockAuthService.getUserFromStorage.mockReturnValue(null);
+    mockAuthService.getCurrentUser.mockResolvedValue(null);
+    mockAuthService.getToken.mockReturnValue(null);
+    mockAuthService.getAccessToken.mockReturnValue(null);
+    mockAuthService.getRefreshToken.mockReturnValue(null);
+    mockAuthService.refreshToken.mockResolvedValue(true);
   });
 
-  it('provides authentication context', () => {
-    mockAuthService.getCurrentUser.mockResolvedValue(null);
-
+  it('provides authentication context defaults when no user is present', async () => {
     renderWithRouter(<TestComponent />);
 
-    expect(screen.getByTestId('user')).toHaveTextContent('No User');
-    expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading');
+    await waitFor(() => {
+      expect(screen.getByTestId('user')).toHaveTextContent('No User');
+      expect(screen.getByTestId('loading')).toHaveTextContent('Not Loading');
+    });
   });
 
-  it('loads user on initialization', async () => {
-    const mockUser = {
-      id: 1,
-      email: 'test@example.com',
-      role: {
-        id: 2,
-        name: 'Content Developer',
-        key: 'content_developer'
-      },
-      isActive: true,
-      createdAt: '2023-01-01T00:00:00Z',
-      updatedAt: '2023-01-01T00:00:00Z'
-    };
-    mockAuthService.getCurrentUser.mockResolvedValue(mockUser);
+  it('restores a user from storage during initialization', async () => {
+    mockAuthService.isAuthenticated.mockReturnValue(true);
+    mockAuthService.getUserFromStorage.mockReturnValue(mockUser);
 
     renderWithRouter(<TestComponent />);
 
     await waitFor(() => {
       expect(screen.getByTestId('user')).toHaveTextContent('test@example.com');
     });
+
+    expect(mockAuthService.initializeTokenRefresh).toHaveBeenCalled();
   });
 
   it('handles login successfully', async () => {
-    const mockUser = {
-      id: 1,
-      email: 'test@example.com',
-      role: {
-        id: 2,
-        name: 'Content Developer',
-        key: 'content_developer'
-      },
-      isActive: true,
-      createdAt: '2023-01-01T00:00:00Z',
-      updatedAt: '2023-01-01T00:00:00Z'
-    };
     mockAuthService.login.mockResolvedValue({
       user: mockUser,
-      token: 'mock-token',
+      accessToken: 'mock-access',
+      refreshToken: 'mock-refresh',
     });
-    mockAuthService.getCurrentUser.mockResolvedValue(null);
 
     renderWithRouter(<TestComponent />);
 
@@ -106,24 +119,19 @@ describe('AuthContext', () => {
     });
 
     await waitFor(() => {
-      expect(mockAuthService.login).toHaveBeenCalledWith('test@example.com', 'password');
+      expect(mockAuthService.login).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'password',
+      });
+      expect(screen.getByTestId('user')).toHaveTextContent('test@example.com');
     });
+
+    expect(mockAuthService.setUserInStorage).toHaveBeenCalledWith(mockUser);
   });
 
-  it('handles logout', async () => {
-    const mockUser = {
-      id: 1,
-      email: 'test@example.com',
-      role: {
-        id: 2,
-        name: 'Content Developer',
-        key: 'content_developer'
-      },
-      isActive: true,
-      createdAt: '2023-01-01T00:00:00Z',
-      updatedAt: '2023-01-01T00:00:00Z'
-    };
-    mockAuthService.getCurrentUser.mockResolvedValue(mockUser);
+  it('handles logout and clears user state', async () => {
+    mockAuthService.isAuthenticated.mockReturnValue(true);
+    mockAuthService.getUserFromStorage.mockReturnValue(mockUser);
     mockAuthService.logout.mockResolvedValue(undefined);
 
     renderWithRouter(<TestComponent />);
@@ -144,21 +152,23 @@ describe('AuthContext', () => {
     });
   });
 
-  it('shows loading state during authentication', async () => {
-    let resolvePromise: (value: any) => void;
-    const pendingPromise = new Promise((resolve) => {
-      resolvePromise = resolve;
+  it('shows loading state while authentication is pending', async () => {
+    mockAuthService.isAuthenticated.mockReturnValue(true);
+    mockAuthService.getUserFromStorage.mockReturnValue(null);
+
+    let resolveCurrentUser: (value: unknown) => void;
+    const currentUserPromise = new Promise((resolve) => {
+      resolveCurrentUser = resolve;
     });
 
-    mockAuthService.getCurrentUser.mockReturnValue(pendingPromise);
+    mockAuthService.getCurrentUser.mockReturnValue(currentUserPromise);
 
     renderWithRouter(<TestComponent />);
 
     expect(screen.getByTestId('loading')).toHaveTextContent('Loading');
 
     await act(async () => {
-      resolvePromise(null);
-      await pendingPromise;
+      resolveCurrentUser!(mockUser);
     });
 
     await waitFor(() => {
@@ -168,6 +178,8 @@ describe('AuthContext', () => {
 
   it('handles authentication errors gracefully', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockAuthService.isAuthenticated.mockReturnValue(true);
+    mockAuthService.getUserFromStorage.mockReturnValue(null);
     mockAuthService.getCurrentUser.mockRejectedValue(new Error('Auth failed'));
 
     renderWithRouter(<TestComponent />);

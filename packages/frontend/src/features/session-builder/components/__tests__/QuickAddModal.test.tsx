@@ -34,7 +34,9 @@ describe('QuickAddModal', () => {
     );
 
     expect(screen.getByText('Quick Add Section')).toBeInTheDocument();
-    expect(screen.getByText('Choose a block to append to your draft outline.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Choose a block to append to your draft outline. You can refine details after adding.')
+    ).toBeInTheDocument();
   });
 
   it('displays all section type options', () => {
@@ -137,7 +139,7 @@ describe('QuickAddModal', () => {
   });
 
   it('calls onAdd with correct section types for different options', () => {
-    render(
+    const { unmount } = render(
       <QuickAddModal
         open={true}
         onClose={mockOnClose}
@@ -153,6 +155,7 @@ describe('QuickAddModal', () => {
 
     // Reset mocks and test another type
     vi.clearAllMocks();
+    unmount();
 
     // Re-render since clicking closes the modal
     render(
@@ -163,7 +166,7 @@ describe('QuickAddModal', () => {
       />
     );
 
-    const exerciseButton = screen.getByRole('button', { name: /Exercise.*Hands-on practice/ });
+    const [exerciseButton] = screen.getAllByRole('button', { name: /Exercise.*Hands-on practice/ });
     fireEvent.click(exerciseButton);
 
     expect(mockOnAdd).toHaveBeenCalledWith('exercise');

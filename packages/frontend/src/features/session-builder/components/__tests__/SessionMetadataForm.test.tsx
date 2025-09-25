@@ -113,7 +113,7 @@ describe('SessionMetadataForm', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'Save Draft' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save Now' })).toBeInTheDocument();
   });
 
   it('calls onAutosave when Save Draft button is clicked', () => {
@@ -126,7 +126,7 @@ describe('SessionMetadataForm', () => {
       />
     );
 
-    const saveButton = screen.getByRole('button', { name: 'Save Draft' });
+    const saveButton = screen.getByRole('button', { name: 'Save Now' });
     fireEvent.click(saveButton);
 
     expect(mockOnAutosave).toHaveBeenCalledTimes(1);
@@ -143,8 +143,8 @@ describe('SessionMetadataForm', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'Saving…' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+    const savingButton = screen.getByRole('button', { name: /saving/i });
+    expect(savingButton).toBeDisabled();
   });
 
   it('handles textarea inputs correctly', () => {
@@ -212,6 +212,6 @@ describe('SessionMetadataForm', () => {
       />
     );
 
-    expect(screen.queryByRole('button', { name: 'Save Draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save Now' })).not.toBeInTheDocument();
   });
 });

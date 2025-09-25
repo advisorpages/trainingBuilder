@@ -49,6 +49,7 @@ export class SessionsController {
 
   @Post()
   async create(@Body() dto: CreateSessionDto) {
+    console.log('CreateSessionDto received:', dto);
     return this.sessionsService.create(dto);
   }
 
