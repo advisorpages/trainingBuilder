@@ -17,7 +17,11 @@ export class SessionsController {
     @Query('topicId') topicId?: string,
     @Query('trainerId') trainerId?: string,
   ) {
-    return this.sessionsService.findAll({ status, topicId, trainerId });
+    const topicIdNumber = topicId !== undefined ? Number(topicId) : undefined;
+    const parsedTopicId =
+      topicIdNumber !== undefined && !Number.isNaN(topicIdNumber) ? topicIdNumber : undefined;
+
+    return this.sessionsService.findAll({ status, topicId: parsedTopicId, trainerId });
   }
 
   @Post('builder/:id/autosave')

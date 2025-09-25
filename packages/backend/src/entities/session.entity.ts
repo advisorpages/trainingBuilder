@@ -67,7 +67,17 @@ export class Session extends BaseEntity {
   @Column({ type: 'timestamptz', nullable: true })
   publishedAt?: Date;
 
+  @Column({ type: 'int', name: 'location_id', nullable: true })
+  locationId?: number;
+
+  @Column({ type: 'int', name: 'audience_id', nullable: true })
+  audienceId?: number;
+
+  @Column({ type: 'int', name: 'tone_id', nullable: true })
+  toneId?: number;
+
   @ManyToOne(() => Topic, (topic) => topic.sessions, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'topic_id' })
   topic?: Topic;
 
   @ManyToMany(() => Incentive, (incentive) => incentive.sessions)

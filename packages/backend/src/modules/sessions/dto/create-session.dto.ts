@@ -1,4 +1,15 @@
-import { IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 import { SessionStatus } from '../../../entities';
 
 export class CreateSessionDto {
@@ -18,13 +29,37 @@ export class CreateSessionDto {
   objective?: string;
 
   @IsOptional()
-  @IsUUID()
-  topicId?: string;
+  @Type(() => Number)
+  @IsInt()
+  topicId?: number;
 
   @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   incentiveIds?: string[];
+
+  @IsOptional()
+  @IsISO8601()
+  startTime?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  endTime?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  locationId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  audienceId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  toneId?: number;
 
   @IsOptional()
   @IsEnum(SessionStatus)

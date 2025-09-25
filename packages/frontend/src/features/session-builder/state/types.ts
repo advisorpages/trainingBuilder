@@ -3,6 +3,7 @@ import { SessionOutline } from '../../../services/session-builder.service';
 export type BuilderStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type AutosaveStatus = 'idle' | 'pending' | 'success' | 'error';
 export type AIRequestStatus = 'idle' | 'pending' | 'error';
+export type PublishStatus = 'idle' | 'pending' | 'success' | 'error';
 
 export interface SessionMetadata {
   title: string;
@@ -26,11 +27,37 @@ export interface AIContentBlock {
   body: string;
 }
 
+export interface TopicReference {
+  id: number;
+  name: string;
+  description?: string;
+  learningOutcomes?: string;
+  trainerNotes?: string;
+  materialsNeeded?: string;
+  deliveryGuidance?: string;
+  matchScore?: number;
+}
+
+export interface TopicBasedSection {
+  id: string;
+  type: 'opener' | 'topic' | 'exercise' | 'closing';
+  position: number;
+  title: string;
+  duration: number;
+  description: string;
+  learningObjectives?: string[];
+  suggestedActivities?: string[];
+  associatedTopic?: TopicReference;
+  isTopicSuggestion?: boolean;
+}
+
 export interface AIContentVersion {
   id: string;
   prompt: string;
   summary: string;
   blocks: AIContentBlock[];
+  sections?: TopicBasedSection[];
+  suggestedTopics?: TopicReference[];
   createdAt: string;
   status: 'pending' | 'ready' | 'error';
   source: 'ai' | 'user' | 'template' | 'mock';
@@ -57,6 +84,9 @@ export interface BuilderState {
   draft: SessionDraftData | null;
   lastGenerationSource?: 'ai' | 'template' | 'mock';
   lastGenerationError?: string;
+  publishStatus: PublishStatus;
+  publishError?: string;
+  publishedSessionId?: string;
 }
 
 export type BuilderAction =
@@ -77,4 +107,7 @@ export type BuilderAction =
   | { type: 'AUTOSAVE_FAILURE'; payload: string }
   | { type: 'AUTOSAVE_IDLE' }
   | { type: 'UPDATE_READINESS'; payload: number }
-  | { type: 'RESTORE_DRAFT'; payload: SessionDraftData };
+  | { type: 'RESTORE_DRAFT'; payload: SessionDraftData }
+  | { type: 'PUBLISH_SESSION_START' }
+  | { type: 'PUBLISH_SESSION_SUCCESS'; payload: { sessionId: string } }
+  | { type: 'PUBLISH_SESSION_FAILURE'; payload: string };

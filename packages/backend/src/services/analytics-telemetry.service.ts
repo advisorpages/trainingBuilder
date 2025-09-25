@@ -148,7 +148,7 @@ export class AnalyticsTelemetryService {
     };
   }
 
-  getRecentEvents(limit: number = 50, eventType?: string): TelemetryEvent[] {
+  getRecentEvents(limit = 50, eventType?: string): TelemetryEvent[] {
     let filteredEvents = this.events;
 
     if (eventType) {

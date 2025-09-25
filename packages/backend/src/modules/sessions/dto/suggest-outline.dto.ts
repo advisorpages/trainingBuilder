@@ -42,6 +42,17 @@ export class SuggestOutlineDto {
   audienceSize?: string;
 }
 
+export interface TopicReference {
+  id: number;
+  name: string;
+  description?: string;
+  learningOutcomes?: string;
+  trainerNotes?: string;
+  materialsNeeded?: string;
+  deliveryGuidance?: string;
+  matchScore?: number; // How well this topic matches the AI-generated content
+}
+
 export interface SuggestedSessionSection {
   id: string;
   type:
@@ -57,6 +68,8 @@ export interface SuggestedSessionSection {
   description: string;
   learningObjectives?: string[];
   suggestedActivities?: string[];
+  associatedTopic?: TopicReference;
+  isTopicSuggestion?: boolean; // True if this section suggests creating a new topic
 }
 
 export interface SuggestedSessionOutline {

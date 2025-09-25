@@ -142,7 +142,12 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({ isOpen, onToggle }) => {
   const [selectedCall, setSelectedCall] = React.useState<ApiCall | null>(null);
 
   React.useEffect(() => {
-    return debugStore.subscribe(setCalls);
+    const unsubscribe = debugStore.subscribe(setCalls);
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, []);
 
   if (!isOpen) {

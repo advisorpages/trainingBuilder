@@ -6,6 +6,9 @@ export const initialBuilderState: BuilderState = {
   aiStatus: 'idle',
   draft: null,
   error: undefined,
+  publishStatus: 'idle',
+  publishError: undefined,
+  publishedSessionId: undefined,
 };
 
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
@@ -23,17 +26,22 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         aiStatus: 'idle',
         error: undefined,
         draft: action.payload,
+        publishStatus: 'idle',
+        publishError: undefined,
+        publishedSessionId: action.payload.sessionId !== 'new' ? action.payload.sessionId : undefined,
       };
     case 'INIT_FAILURE':
       return {
         ...state,
         status: 'error',
         error: action.payload,
+        publishStatus: 'idle',
       };
     case 'UPDATE_METADATA':
       if (!state.draft) return state;
       return {
         ...state,
+        publishStatus: state.publishStatus === 'success' ? 'idle' : state.publishStatus,
         draft: {
           ...state.draft,
           metadata: { ...state.draft.metadata, ...action.payload },
@@ -44,6 +52,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       if (!state.draft) return state;
       return {
         ...state,
+        publishStatus: state.publishStatus === 'success' ? 'idle' : state.publishStatus,
         draft: {
           ...state.draft,
           aiPrompt: action.payload,
@@ -54,6 +63,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       if (!state.draft) return state;
       return {
         ...state,
+        publishStatus: state.publishStatus === 'success' ? 'idle' : state.publishStatus,
         draft: {
           ...state.draft,
           outline: action.payload,
@@ -72,6 +82,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...state,
         aiStatus: 'idle',
         error: undefined,
+        publishStatus: state.publishStatus === 'success' ? 'idle' : state.publishStatus,
         draft: {
           ...state.draft,
           aiVersions: [action.payload, ...state.draft.aiVersions.filter((version) => version.id !== action.payload.id)],
@@ -98,6 +109,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       if (!state.draft) return state;
       return {
         ...state,
+        publishStatus: state.publishStatus === 'success' ? 'idle' : state.publishStatus,
         draft: {
           ...state.draft,
           acceptedVersionId: action.payload,
@@ -109,6 +121,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       if (!state.draft) return state;
       return {
         ...state,
+        publishStatus: state.publishStatus === 'success' ? 'idle' : state.publishStatus,
         draft: {
           ...state.draft,
           acceptedVersionId: undefined,
@@ -157,6 +170,38 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         status: 'ready',
         draft: action.payload,
         error: undefined,
+        publishStatus: 'idle',
+        publishError: undefined,
+      };
+    case 'PUBLISH_SESSION_START':
+      return {
+        ...state,
+        publishStatus: 'pending',
+        publishError: undefined,
+      };
+    case 'PUBLISH_SESSION_SUCCESS':
+      if (!state.draft) return {
+        ...state,
+        publishStatus: 'success',
+        publishError: undefined,
+        publishedSessionId: action.payload.sessionId,
+      };
+      return {
+        ...state,
+        publishStatus: 'success',
+        publishError: undefined,
+        publishedSessionId: action.payload.sessionId,
+        draft: {
+          ...state.draft,
+          sessionId: action.payload.sessionId,
+          isDirty: false,
+        },
+      };
+    case 'PUBLISH_SESSION_FAILURE':
+      return {
+        ...state,
+        publishStatus: 'error',
+        publishError: action.payload,
       };
     default:
       return state;

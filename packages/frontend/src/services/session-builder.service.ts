@@ -122,6 +122,19 @@ export interface FlexibleSessionSection {
   trainerNotes?: string;
   deliveryGuidance?: string;
 
+  // Topic association support
+  associatedTopic?: {
+    id: number;
+    name: string;
+    description?: string;
+    learningOutcomes?: string;
+    trainerNotes?: string;
+    materialsNeeded?: string;
+    deliveryGuidance?: string;
+    matchScore?: number;
+  };
+  isTopicSuggestion?: boolean;
+
   // Speaker assignment (optional)
   trainerId?: number;
   trainerName?: string;
@@ -184,6 +197,7 @@ export interface CreateSessionFromOutlineRequest {
     addedTopics?: number[];
     removedSections?: string[];
   };
+  readinessScore?: number;
 }
 
 export interface TopicSuggestion {
@@ -212,8 +226,9 @@ class SessionBuilderService {
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
       const params = templateId ? `?template=${templateId}` : '';
-      console.log('Sending request to backend:', { url: `/sessions/builder/suggest-outline${params}`, input });
-      const response = await api.post(`/sessions/builder/suggest-outline${params}`, input);
+      const { date, ...payload } = input;
+      console.log('Sending request to backend:', { url: `/sessions/builder/suggest-outline${params}`, input: payload });
+      const response = await api.post(`/sessions/builder/suggest-outline${params}`, payload);
       console.log('Backend response:', response.data);
       return response.data as SessionOutlineResponse;
     } catch (error: any) {
@@ -230,7 +245,8 @@ class SessionBuilderService {
 
   async generateLegacyOutline(input: SessionBuilderInput): Promise<SessionOutlineResponse> {
     try {
-      const response = await api.post('/sessions/builder/suggest-legacy-outline', input);
+      const { date, ...payload } = input;
+      const response = await api.post('/sessions/builder/suggest-legacy-outline', payload);
       return response.data as SessionOutlineResponse;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to generate legacy session outline');
@@ -281,15 +297,8 @@ class SessionBuilderService {
         request.outline,
         request.input,
         topicId,
+        request.readinessScore,
       );
-
-      // Include customization metadata inside aiGeneratedContent to conform to DTO
-      if (request.customizations) {
-        sessionData.aiGeneratedContent = {
-          ...(sessionData.aiGeneratedContent || {}),
-          builderCustomizations: request.customizations,
-        };
-      }
 
       const response = await api.post('/sessions', sessionData);
       return response.data;
@@ -402,31 +411,55 @@ class SessionBuilderService {
     outline: SessionOutline,
     input: SessionBuilderInput,
     topicId?: string,
-  ): any {
-    // Create session data structure that matches existing CreateSessionDto
-    return {
-      title: outline.suggestedSessionTitle,
-      description: outline.suggestedDescription,
+    readinessScore?: number,
+  ): Record<string, unknown> {
+    const fallbackTitle = input.title?.trim() || 'Untitled Session';
+    const suggestedTitle = outline.suggestedSessionTitle?.trim();
+    const title = suggestedTitle || fallbackTitle;
+
+    const subtitleCandidate = input.title?.trim();
+    const subtitle = subtitleCandidate && subtitleCandidate !== title ? subtitleCandidate : undefined;
+
+    const objective = (outline.suggestedDescription || input.desiredOutcome || '').trim();
+    const audience = (input.category || input.specificTopics || '').trim();
+
+    const payload: Record<string, unknown> = {
+      title,
+      status: readinessScore && readinessScore >= 90 ? 'published' : 'draft',
+      readinessScore: Math.max(0, Math.min(100, readinessScore ?? 100)),
       startTime: input.startTime,
       endTime: input.endTime,
-      locationId: input.locationId,
-      audienceId: input.audienceId,
-      toneId: input.toneId,
-      topicId,
-      maxRegistrations: 25, // Default value, could be made configurable
-
-      // AI-related fields
-      aiGeneratedContent: {
-        outline,
-        prompt: this.generatePromptFromInput(input),
-        generatedAt: new Date().toISOString(),
-        source: 'session-builder',
-        version: 1
-      },
-
-      // Topic associations - will be handled separately if needed
-      topicIds: [], // Can be populated from outline if topics are selected
     };
+
+    if (subtitle) {
+      payload.subtitle = subtitle;
+    }
+
+    if (audience) {
+      payload.audience = audience;
+    }
+
+    if (objective) {
+      payload.objective = objective;
+    }
+
+    if (topicId) {
+      payload.topicId = topicId;
+    }
+
+    if (typeof input.locationId === 'number') {
+      payload.locationId = input.locationId;
+    }
+
+    if (typeof input.audienceId === 'number') {
+      payload.audienceId = input.audienceId;
+    }
+
+    if (typeof input.toneId === 'number') {
+      payload.toneId = input.toneId;
+    }
+
+    return payload;
   }
 
   private generatePromptFromInput(input: SessionBuilderInput): string {

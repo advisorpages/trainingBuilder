@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { TestDataFactory } from './test-data.factory';
+import { Topic } from '../entities/topic.entity';
 
 /**
  * Database seeder for test environments
@@ -47,12 +48,42 @@ export class TestDatabaseSeeder {
   }
 
   /**
+   * Seed business training topics
+   */
+  async seedTopics() {
+    console.log('🌱 Seeding business training topics...');
+
+    try {
+      const topicRepo = this.dataSource.getRepository(Topic);
+
+      // Check if topics already exist
+      const existingCount = await topicRepo.count();
+      if (existingCount > 0) {
+        console.log('📝 Topics already exist, skipping...');
+        return await topicRepo.find();
+      }
+
+      const businessTopics = TestDataFactory.createBusinessTopics();
+      const savedTopics = await topicRepo.save(businessTopics);
+
+      console.log(`✅ Successfully created ${savedTopics.length} business training topics`);
+      return savedTopics;
+    } catch (error) {
+      console.error('❌ Failed to seed topics:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Seed comprehensive test data for all epics
    */
   async seedAllTestData() {
     console.log('🌱 Seeding comprehensive test data...');
 
     try {
+      // Create topics first
+      const topics = await this.seedTopics();
+
       // Create users for each role
       const broker = TestDataFactory.createUser({ role: 'broker', email: 'broker@test.com' });
       const contentDev = TestDataFactory.createUser({
@@ -122,6 +153,7 @@ export class TestDatabaseSeeder {
         );
 
       console.log(`✅ Created test data:
+        - ${topics.length} topics
         - ${4} users
         - ${locations.length} locations
         - ${trainers.length} trainers
@@ -129,6 +161,7 @@ export class TestDatabaseSeeder {
         - ${coachingTips.length} coaching tips`);
 
       return {
+        topics,
         users: [broker, contentDev, trainer1, trainer2],
         locations,
         trainers,
@@ -154,6 +187,7 @@ export class TestDatabaseSeeder {
         'DELETE FROM session_topics',
         'DELETE FROM registrations',
         'DELETE FROM sessions',
+        'DELETE FROM topics',
         'DELETE FROM trainers',
         'DELETE FROM locations',
         'DELETE FROM users',

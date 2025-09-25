@@ -18,6 +18,7 @@ interface SessionBuilderContextValue {
   rejectAcceptedVersion: () => void;
   selectVersion: (versionId: string) => void;
   manualAutosave: () => Promise<void>;
+  publishSession: () => Promise<void>;
 }
 
 const SessionBuilderContext =
@@ -73,6 +74,7 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     desiredOutcome: metadata.desiredOutcome,
     currentProblem: metadata.currentProblem,
     specificTopics: metadata.specificTopics,
+    date: metadata.startDate,
     startTime: metadata.startTime,
     endTime: metadata.endTime,
     locationId: metadata.locationId,
@@ -153,6 +155,36 @@ function outlineToVersion(outline: SessionOutline, prompt: string): AIContentVer
     body: section.description,
   }));
 
+  // Convert sections to TopicBasedSections for new format
+  const sections = outline.sections.map((section) => ({
+    id: section.id,
+    type: section.type as 'opener' | 'topic' | 'exercise' | 'closing',
+    position: section.position,
+    title: section.title,
+    duration: section.duration,
+    description: section.description,
+    learningObjectives: section.learningObjectives,
+    suggestedActivities: section.suggestedActivities,
+    associatedTopic: section.associatedTopic ? {
+      id: section.associatedTopic.id,
+      name: section.associatedTopic.name,
+      description: section.associatedTopic.description,
+      learningOutcomes: section.associatedTopic.learningOutcomes,
+      trainerNotes: section.associatedTopic.trainerNotes,
+      materialsNeeded: section.associatedTopic.materialsNeeded,
+      deliveryGuidance: section.associatedTopic.deliveryGuidance,
+    } : undefined,
+    isTopicSuggestion: section.isTopicSuggestion,
+  }));
+
+  // Extract suggested topics from sections that have associated topics
+  const suggestedTopics = sections
+    .filter(section => section.associatedTopic)
+    .map(section => section.associatedTopic!)
+    .filter((topic, index, self) =>
+      index === self.findIndex(t => t.id === topic.id) // Remove duplicates
+    );
+
   // Detect if this is template content from backend vs real AI
   const isTemplate = outline.fallbackUsed === false &&
     (outline.suggestedSessionTitle?.includes('Workshop') ||
@@ -167,35 +199,115 @@ function outlineToVersion(outline: SessionOutline, prompt: string): AIContentVer
     prompt,
     summary: outline.suggestedDescription,
     blocks,
+    sections,
+    suggestedTopics,
     createdAt: outline.generatedAt || new Date().toISOString(),
     status: 'ready',
     source: isTemplate ? 'template' : 'ai',
   };
 }
 
+function versionToOutline(version: AIContentVersion): SessionOutline {
+  const sections = (version.sections ?? []).map((section, index) => ({
+    id: section.id ?? `section-${index + 1}`,
+    type: section.type,
+    position: section.position ?? index + 1,
+    title: section.title,
+    duration: section.duration ?? 0,
+    description: section.description ?? '',
+    learningObjectives: section.learningObjectives,
+    suggestedActivities: section.suggestedActivities,
+    associatedTopic: section.associatedTopic
+      ? {
+          id: section.associatedTopic.id,
+          name: section.associatedTopic.name,
+          description: section.associatedTopic.description,
+          learningOutcomes: section.associatedTopic.learningOutcomes,
+          trainerNotes: section.associatedTopic.trainerNotes,
+          materialsNeeded: section.associatedTopic.materialsNeeded,
+          deliveryGuidance: section.associatedTopic.deliveryGuidance,
+        }
+      : undefined,
+    isTopicSuggestion: section.isTopicSuggestion,
+  }));
+
+  const totalDuration = sections.reduce((sum, section) => sum + (section.duration ?? 0), 0);
+
+  return {
+    sections,
+    totalDuration,
+    suggestedSessionTitle: version.summary || 'Generated Session',
+    suggestedDescription: version.summary || '',
+    difficulty: 'Intermediate',
+    recommendedAudienceSize: '10-25',
+    ragSuggestions: undefined,
+    fallbackUsed: version.source === 'mock',
+    generatedAt: version.createdAt || new Date().toISOString(),
+    convertedFromLegacy: true,
+    convertedAt: new Date().toISOString(),
+  };
+}
+
 function buildMockVersion(prompt: string, metadata: SessionMetadata): AIContentVersion {
   const createdAt = new Date().toISOString();
+  const blocks = [
+    {
+      id: 'intro',
+      heading: 'Welcome & Warm-up',
+      body: 'Kick off with an energizer that surfaces current leadership challenges.'
+    },
+    {
+      id: 'core',
+      heading: 'Core Concepts',
+      body: 'Cover the foundational frameworks and illustrate them with real scenarios from the team.'
+    },
+    {
+      id: 'practice',
+      heading: 'Applied Practice',
+      body: 'Facilitate small-group role plays to practice feedback and alignment conversations.'
+    },
+  ];
+
+  const sections = [
+    {
+      id: 'opener-mock',
+      type: 'opener' as const,
+      position: 0,
+      title: 'Welcome & Warm-up',
+      duration: 15,
+      description: 'Kick off with an energizer that surfaces current leadership challenges.',
+      learningObjectives: ['Establish psychological safety', 'Surface current challenges'],
+      isTopicSuggestion: false,
+    },
+    {
+      id: 'topic-mock',
+      type: 'topic' as const,
+      position: 1,
+      title: 'Core Concepts',
+      duration: 30,
+      description: 'Cover the foundational frameworks and illustrate them with real scenarios from the team.',
+      learningObjectives: ['Understand key frameworks', 'Apply to real scenarios'],
+      isTopicSuggestion: true,
+    },
+    {
+      id: 'exercise-mock',
+      type: 'exercise' as const,
+      position: 2,
+      title: 'Applied Practice',
+      duration: 25,
+      description: 'Facilitate small-group role plays to practice feedback and alignment conversations.',
+      suggestedActivities: ['Role-play scenarios', 'Peer feedback loops'],
+      isTopicSuggestion: false,
+    },
+  ];
+
   return {
     id: `mock-${Date.now()}`,
     prompt,
     summary: `Proposed outline for ${metadata.title || metadata.category}`,
-    blocks: [
-      {
-        id: 'intro',
-        heading: 'Welcome & Warm-up',
-        body: 'Kick off with an energizer that surfaces current leadership challenges.'
-      },
-      {
-        id: 'core',
-        heading: 'Core Concepts',
-        body: 'Cover the foundational frameworks and illustrate them with real scenarios from the team.'
-      },
-      {
-        id: 'practice',
-        heading: 'Applied Practice',
-        body: 'Facilitate small-group role plays to practice feedback and alignment conversations.'
-      },
-    ],
+    blocks,
+    sections,
+    suggestedTopics: [],
     createdAt,
     status: 'ready',
     source: 'mock',
@@ -446,7 +558,16 @@ export const SessionBuilderProvider: React.FC<{
 
   const acceptVersion = React.useCallback((versionId: string) => {
     dispatch({ type: 'ACCEPT_AI_VERSION', payload: versionId });
-  }, []);
+    if (!state.draft) {
+      return;
+    }
+
+    const version = state.draft.aiVersions.find((v) => v.id === versionId);
+    if (version && version.sections && version.sections.length > 0) {
+      const outline = versionToOutline(version);
+      dispatch({ type: 'UPDATE_OUTLINE', payload: outline });
+    }
+  }, [state.draft]);
 
   const rejectAcceptedVersion = React.useCallback(() => {
     if (!state.draft?.acceptedVersionId) return;
@@ -467,9 +588,13 @@ export const SessionBuilderProvider: React.FC<{
         const response = await sessionBuilderService.generateSessionOutline(
           metadataToInput(state.draft.metadata)
         );
-        const version = response?.outline
-          ? outlineToVersion(response.outline, prompt)
+        const outlineFromResponse = response?.outline ?? null;
+        const version = outlineFromResponse
+          ? outlineToVersion(outlineFromResponse, prompt)
           : buildMockVersion(prompt, state.draft.metadata);
+
+        const outlineForState = outlineFromResponse ?? versionToOutline(version);
+        dispatch({ type: 'UPDATE_OUTLINE', payload: outlineForState });
         dispatch({ type: 'AI_REQUEST_SUCCESS', payload: version });
         updatePrompt(prompt);
       } catch (error) {
@@ -486,6 +611,79 @@ export const SessionBuilderProvider: React.FC<{
     [state.draft, updatePrompt, publish]
   );
 
+  const publishSession = React.useCallback(async () => {
+    if (!state.draft || !state.draft.outline) {
+      publish({
+        variant: 'error',
+        title: 'Outline required',
+        description: 'Generate or build an outline before publishing.',
+      });
+      return;
+    }
+
+    if (state.publishStatus === 'pending') {
+      return;
+    }
+
+    dispatch({ type: 'PUBLISH_SESSION_START' });
+
+    try {
+      const session = await sessionBuilderService.createSessionFromOutline({
+        outline: state.draft.outline,
+        input: metadataToInput(state.draft.metadata),
+        readinessScore: state.draft.readinessScore,
+      });
+
+      const sessionId = session?.id || state.draft.sessionId;
+
+      if (sessionId && sessionId !== 'new') {
+        try {
+          await sessionBuilderService.autosaveDraft(sessionId, convertAutosavePayload(state.draft));
+        } catch (draftError) {
+          console.warn('Failed to sync builder draft after publish', draftError);
+        }
+      }
+
+      if (state.draft) {
+        const updatedDraftSnapshot: SessionDraftData = {
+          ...state.draft,
+          sessionId,
+          isDirty: false,
+        };
+        lastSavedRef.current = cloneDraft(updatedDraftSnapshot);
+      }
+
+      dispatch({ type: 'PUBLISH_SESSION_SUCCESS', payload: { sessionId } });
+
+      publish({
+        variant: 'success',
+        title: 'Session published',
+        description: session?.title
+          ? `${session.title} is now saved in Sessions.`
+          : 'Your session is now saved in Sessions.',
+        actionLabel: sessionId && sessionId !== 'new' ? 'View session' : undefined,
+        onAction: sessionId && sessionId !== 'new'
+          ? () => {
+              window.open(`/sessions/${sessionId}`, '_blank');
+            }
+          : undefined,
+      });
+    } catch (error: any) {
+      const responseMessage = error?.response?.data?.message;
+      const message = Array.isArray(responseMessage)
+        ? responseMessage.join('\n')
+        : responseMessage || error?.message || 'Failed to publish session';
+
+      dispatch({ type: 'PUBLISH_SESSION_FAILURE', payload: message });
+
+      publish({
+        variant: 'error',
+        title: 'Publish failed',
+        description: message,
+      });
+    }
+  }, [state.draft, state.publishStatus, publish]);
+
   const value = React.useMemo<SessionBuilderContextValue>(() => ({
     state,
     updateMetadata,
@@ -496,6 +694,7 @@ export const SessionBuilderProvider: React.FC<{
     rejectAcceptedVersion,
     selectVersion,
     manualAutosave,
+    publishSession,
   }), [
     state,
     updateMetadata,
@@ -506,6 +705,7 @@ export const SessionBuilderProvider: React.FC<{
     rejectAcceptedVersion,
     selectVersion,
     manualAutosave,
+    publishSession,
   ]);
 
   return (

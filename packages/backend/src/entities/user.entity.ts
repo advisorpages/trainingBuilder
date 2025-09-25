@@ -44,11 +44,6 @@ export class User extends BaseEntity {
   @OneToMany(() => SessionStatusLog, (log) => log.changedBy)
   statusLogs: SessionStatusLog[];
 
-  @OneToMany(() => Topic, (topic) => topic.createdBy)
-  createdTopics: Topic[];
-
-  @OneToMany(() => Topic, (topic) => topic.updatedBy)
-  updatedTopics: Topic[];
 
   @OneToMany(() => Incentive, (incentive) => incentive.createdBy)
   createdIncentives: Incentive[];

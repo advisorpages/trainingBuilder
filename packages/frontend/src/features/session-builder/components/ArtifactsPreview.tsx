@@ -13,6 +13,9 @@ interface ArtifactsPreviewProps {
   onOpenQuickAdd: () => void;
   onUpdateOutline?: (outline: SessionOutline) => void;
   onUpdateMetadata?: (updates: Partial<SessionMetadata>) => void;
+  onPublish?: () => void;
+  publishStatus?: 'idle' | 'pending' | 'success' | 'error';
+  canPublish?: boolean;
 }
 
 // Editable Section Component
@@ -175,6 +178,9 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
   onOpenQuickAdd,
   onUpdateOutline,
   onUpdateMetadata,
+  onPublish,
+  publishStatus = 'idle',
+  canPublish = false,
 }) => {
   const [tab, setTab] = React.useState('readiness');
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
@@ -517,9 +523,16 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
                     </div>
                     <Button
                       className="w-full"
-                      disabled={readinessScore < 90}
+                      disabled={!canPublish || publishStatus === 'pending' || publishStatus === 'success'}
+                      onClick={onPublish}
                     >
-                      {readinessScore >= 90 ? 'Publish Session' : `${90 - readinessScore}% to publish`}
+                      {publishStatus === 'pending'
+                        ? 'Publishing…'
+                        : canPublish
+                          ? publishStatus === 'success'
+                            ? 'Published'
+                            : 'Publish Session'
+                          : `${Math.max(0, 90 - readinessScore)}% to publish`}
                     </Button>
                     <Button variant="outline" className="w-full">
                       Save as Template

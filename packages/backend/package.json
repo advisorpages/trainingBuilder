@@ -25,7 +25,8 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/typeorm.config.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
     "schema:drop": "typeorm-ts-node-commonjs schema:drop -d src/config/typeorm.config.ts",
-    "seed": "ts-node -r tsconfig-paths/register src/scripts/seed-database.ts"
+    "seed": "ts-node -r tsconfig-paths/register src/scripts/seed-database.ts",
+    "seed:topics": "ts-node -r tsconfig-paths/register src/scripts/seed-topics.ts"
   },
   "dependencies": {
     "@leadership-training/shared": "*",

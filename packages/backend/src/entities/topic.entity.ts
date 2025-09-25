@@ -1,27 +1,40 @@
-import { Column, Entity, ManyToOne, OneToMany } from 'typeorm';
-import { BaseEntity } from './base.entity';
-import { User } from './user.entity';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Session } from './session.entity';
 
 @Entity({ name: 'topics' })
-export class Topic extends BaseEntity {
-  @Column({ unique: true })
+export class Topic {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
   name: string;
 
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Column({ type: 'simple-array', nullable: true })
-  tags?: string[];
-
   @Column({ default: true })
   isActive: boolean;
 
-  @ManyToOne(() => User, (user) => user.createdTopics, { nullable: true, onDelete: 'SET NULL' })
-  createdBy?: User;
+  @Column({ type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.updatedTopics, { nullable: true, onDelete: 'SET NULL' })
-  updatedBy?: User;
+  @Column({ type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
+  updatedAt: Date;
+
+  @Column({ type: 'jsonb', nullable: true })
+  aiGeneratedContent?: any;
+
+  @Column({ type: 'text', nullable: true })
+  learningOutcomes?: string;
+
+  @Column({ type: 'text', nullable: true })
+  trainerNotes?: string;
+
+  @Column({ type: 'text', nullable: true })
+  materialsNeeded?: string;
+
+  @Column({ type: 'text', nullable: true })
+  deliveryGuidance?: string;
 
   @OneToMany(() => Session, (session) => session.topic)
   sessions: Session[];

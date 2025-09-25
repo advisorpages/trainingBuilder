@@ -19,6 +19,7 @@ import {
   SuggestOutlineDto,
   SuggestOutlineResponse,
   SuggestedSessionSection,
+  TopicReference,
 } from './dto/suggest-outline.dto';
 import { OpenAIService, OpenAISessionOutlineRequest } from '../../services/openai.service';
 
@@ -78,7 +79,7 @@ export class SessionsService {
 
   async findAll(filters?: {
     status?: SessionStatus;
-    topicId?: string;
+    topicId?: number;
     trainerId?: string;
   }): Promise<Session[]> {
     const queryBuilder = this.sessionsRepository
@@ -94,7 +95,7 @@ export class SessionsService {
       queryBuilder.andWhere('session.status = :status', { status: filters.status });
     }
 
-    if (filters?.topicId) {
+    if (filters?.topicId !== undefined) {
       queryBuilder.andWhere('session.topicId = :topicId', { topicId: filters.topicId });
     }
 
@@ -135,6 +136,34 @@ export class SessionsService {
       incentives,
     });
 
+    if (dto.startTime) {
+      session.scheduledAt = new Date(dto.startTime);
+    }
+
+    if (dto.endTime && dto.startTime) {
+      const start = new Date(dto.startTime).getTime();
+      const end = new Date(dto.endTime).getTime();
+      if (!Number.isNaN(start) && !Number.isNaN(end) && end > start) {
+        session.durationMinutes = Math.floor((end - start) / (60 * 1000));
+      }
+    }
+
+    if (dto.locationId !== undefined) {
+      session.locationId = dto.locationId;
+    }
+
+    if (dto.audienceId !== undefined) {
+      session.audienceId = dto.audienceId;
+    }
+
+    if (dto.toneId !== undefined) {
+      session.toneId = dto.toneId;
+    }
+
+    if (session.status === SessionStatus.PUBLISHED) {
+      session.publishedAt = session.publishedAt ?? new Date();
+    }
+
     return this.sessionsRepository.save(session);
   }
 
@@ -154,6 +183,31 @@ export class SessionsService {
     if (dto.subtitle !== undefined) session.subtitle = dto.subtitle;
     if (dto.audience !== undefined) session.audience = dto.audience;
     if (dto.objective !== undefined) session.objective = dto.objective;
+    if (dto.locationId !== undefined) session.locationId = dto.locationId;
+    if (dto.audienceId !== undefined) session.audienceId = dto.audienceId;
+    if (dto.toneId !== undefined) session.toneId = dto.toneId;
+
+    if (dto.startTime !== undefined) {
+      session.scheduledAt = dto.startTime ? new Date(dto.startTime) : undefined;
+    }
+
+    if (dto.endTime !== undefined || dto.startTime !== undefined) {
+      const startTimestamp = session.scheduledAt?.getTime();
+      const endTimestamp = dto.endTime ? new Date(dto.endTime).getTime() : undefined;
+
+      if (
+        startTimestamp !== undefined &&
+        !Number.isNaN(startTimestamp) &&
+        endTimestamp !== undefined &&
+        !Number.isNaN(endTimestamp) &&
+        endTimestamp > startTimestamp
+      ) {
+        session.durationMinutes = Math.floor((endTimestamp - startTimestamp) / (60 * 1000));
+      } else if (dto.endTime !== undefined && !endTimestamp) {
+        session.durationMinutes = undefined;
+      }
+    }
+
     if (dto.status !== undefined) session.status = dto.status;
     if (dto.readinessScore !== undefined) session.readinessScore = dto.readinessScore;
 
@@ -182,6 +236,112 @@ export class SessionsService {
   }
 
   private readonly logger = new Logger(SessionsService.name);
+
+  private async findMatchingTopics(sections: SuggestedSessionSection[]): Promise<TopicReference[]> {
+    try {
+      // Get all active topics from the database
+      const allTopics = await this.topicsRepository.find({
+        where: { isActive: true },
+      });
+
+      const matchingTopics: TopicReference[] = [];
+
+      // Simple keyword-based matching for now
+      // In a more advanced implementation, you might use semantic similarity
+      for (const section of sections) {
+        if (section.type === 'topic') {
+          const sectionText = `${section.title} ${section.description} ${section.learningObjectives?.join(' ') || ''}`.toLowerCase();
+
+          for (const topic of allTopics) {
+            const topicText = `${topic.name} ${topic.description || ''} ${topic.learningOutcomes || ''}`.toLowerCase();
+
+            // Calculate simple text similarity score
+            const matchScore = this.calculateTextSimilarity(sectionText, topicText);
+
+            if (matchScore > 0.3) { // Threshold for considering it a match
+              const topicRef: TopicReference = {
+                id: topic.id,
+                name: topic.name,
+                description: topic.description,
+                learningOutcomes: topic.learningOutcomes,
+                trainerNotes: topic.trainerNotes,
+                materialsNeeded: topic.materialsNeeded,
+                deliveryGuidance: topic.deliveryGuidance,
+                matchScore,
+              };
+
+              // Check if we already have this topic (avoid duplicates)
+              if (!matchingTopics.find(t => t.id === topic.id)) {
+                matchingTopics.push(topicRef);
+              }
+            }
+          }
+        }
+      }
+
+      // Sort by match score descending and limit to top 10
+      return matchingTopics
+        .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
+        .slice(0, 10);
+
+    } catch (error) {
+      this.logger.error('Error finding matching topics:', error);
+      return [];
+    }
+  }
+
+  private calculateTextSimilarity(text1: string, text2: string): number {
+    // Simple keyword overlap calculation
+    const words1 = new Set(text1.split(' ').filter(word => word.length > 3));
+    const words2 = new Set(text2.split(' ').filter(word => word.length > 3));
+
+    const intersection = new Set([...words1].filter(word => words2.has(word)));
+    const union = new Set([...words1, ...words2]);
+
+    return union.size > 0 ? intersection.size / union.size : 0;
+  }
+
+  private async associateTopicsWithSections(sections: SuggestedSessionSection[], matchingTopics: TopicReference[]): Promise<SuggestedSessionSection[]> {
+    const enhancedSections = [...sections];
+
+    for (let i = 0; i < enhancedSections.length; i++) {
+      const section = enhancedSections[i];
+
+      if (section.type === 'topic') {
+        const sectionText = `${section.title} ${section.description}`.toLowerCase();
+
+        // Find the best matching topic for this section
+        let bestMatch: TopicReference | undefined;
+        let bestScore = 0;
+
+        for (const topic of matchingTopics) {
+          const topicText = `${topic.name} ${topic.description || ''}`.toLowerCase();
+          const score = this.calculateTextSimilarity(sectionText, topicText);
+
+          if (score > bestScore && score > 0.2) { // Lower threshold for association
+            bestMatch = topic;
+            bestScore = score;
+          }
+        }
+
+        if (bestMatch) {
+          enhancedSections[i] = {
+            ...section,
+            associatedTopic: bestMatch,
+            isTopicSuggestion: false,
+          };
+        } else {
+          // Mark as a topic suggestion if no good match found
+          enhancedSections[i] = {
+            ...section,
+            isTopicSuggestion: true,
+          };
+        }
+      }
+    }
+
+    return enhancedSections;
+  }
 
   async suggestOutline(payload: SuggestOutlineDto): Promise<SuggestOutlineResponse> {
     const startTime = Date.now();
@@ -297,12 +457,16 @@ export class SessionsService {
       recommendedAudienceSize = '8-20';
     }
 
-    const totalDuration = sections.reduce((acc, section) => acc + section.duration, 0);
+    // Find matching topics and associate them with sections
+    const matchingTopics = await this.findMatchingTopics(sections);
+    const enhancedSections = await this.associateTopicsWithSections(sections, matchingTopics);
+
+    const totalDuration = enhancedSections.reduce((acc, section) => acc + section.duration, 0);
     const processingTime = Date.now() - startTime;
 
     return {
       outline: {
-        sections,
+        sections: enhancedSections,
         totalDuration,
         suggestedSessionTitle: sessionTitle,
         suggestedDescription: description,
@@ -311,13 +475,16 @@ export class SessionsService {
         fallbackUsed,
         generatedAt: now.toISOString(),
       },
-      relevantTopics: [],
+      relevantTopics: matchingTopics.map(topic => ({
+        id: topic.id.toString(),
+        name: topic.name
+      })),
       ragAvailable: false,
       generationMetadata: {
         processingTime,
         ragQueried: false,
         fallbackUsed,
-        topicsFound: sections[1]?.learningObjectives?.length ?? 0,
+        topicsFound: matchingTopics.length,
       },
     };
   }
@@ -564,7 +731,7 @@ export class SessionsService {
     };
   }
 
-  private async findTopic(topicId: string): Promise<Topic> {
+  private async findTopic(topicId: number): Promise<Topic> {
     const topic = await this.topicsRepository.findOne({ where: { id: topicId } });
     if (!topic) {
       throw new NotFoundException(`Topic ${topicId} not found`);

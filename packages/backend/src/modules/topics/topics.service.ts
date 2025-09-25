@@ -16,21 +16,19 @@ export class TopicsService {
   async findAll(): Promise<(Topic & { sessionCount: number })[]> {
     const topics = await this.topicRepository
       .createQueryBuilder('topic')
-      .leftJoin('topic.sessions', 'session')
-      .addSelect('COUNT(session.id)', 'sessionCount')
-      .groupBy('topic.id')
+      .loadRelationCountAndMap('topic.sessionCount', 'topic.sessions')
       .orderBy('topic.name', 'ASC')
-      .getRawAndEntities();
+      .getMany();
 
-    return topics.entities.map((topic, index) => ({
+    return topics.map((topic) => ({
       ...topic,
-      sessionCount: parseInt(topics.raw[index].sessionCount) || 0,
+      sessionCount: (topic as Topic & { sessionCount?: number }).sessionCount ?? 0,
     }));
   }
 
   async findOne(id: string): Promise<Topic> {
     const topic = await this.topicRepository.findOne({
-      where: { id },
+      where: { id: parseInt(id) },
       relations: ['sessions']
     });
 
@@ -45,7 +43,10 @@ export class TopicsService {
     const topic = this.topicRepository.create({
       name: dto.name,
       description: dto.description,
-      tags: dto.tags ? dto.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : undefined,
+      learningOutcomes: dto.learningOutcomes,
+      trainerNotes: dto.trainerNotes,
+      materialsNeeded: dto.materialsNeeded,
+      deliveryGuidance: dto.deliveryGuidance,
     });
 
     return this.topicRepository.save(topic);
@@ -56,9 +57,10 @@ export class TopicsService {
 
     if (dto.name !== undefined) topic.name = dto.name;
     if (dto.description !== undefined) topic.description = dto.description;
-    if (dto.tags !== undefined) {
-      topic.tags = dto.tags ? dto.tags.split(',').map((tag) => tag.trim()).filter(Boolean) : [];
-    }
+    if (dto.learningOutcomes !== undefined) topic.learningOutcomes = dto.learningOutcomes;
+    if (dto.trainerNotes !== undefined) topic.trainerNotes = dto.trainerNotes;
+    if (dto.materialsNeeded !== undefined) topic.materialsNeeded = dto.materialsNeeded;
+    if (dto.deliveryGuidance !== undefined) topic.deliveryGuidance = dto.deliveryGuidance;
 
     return this.topicRepository.save(topic);
   }
@@ -67,7 +69,7 @@ export class TopicsService {
     const topic = await this.findOne(id);
 
     // Check if topic is used by any sessions
-    const sessionCount = await this.sessionRepository.count({ where: { topic: { id } } });
+    const sessionCount = await this.sessionRepository.count({ where: { topic: { id: parseInt(id) } } });
 
     if (sessionCount > 0) {
       return {

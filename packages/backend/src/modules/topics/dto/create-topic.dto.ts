@@ -10,5 +10,17 @@ export class CreateTopicDto {
 
   @IsOptional()
   @IsString()
-  tags?: string;
+  learningOutcomes?: string;
+
+  @IsOptional()
+  @IsString()
+  trainerNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  materialsNeeded?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryGuidance?: string;
 }

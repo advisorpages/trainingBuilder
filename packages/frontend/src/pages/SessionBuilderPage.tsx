@@ -37,6 +37,7 @@ const SessionBuilderScreen: React.FC = () => {
     rejectAcceptedVersion,
     selectVersion,
     manualAutosave,
+    publishSession,
   } = useSessionBuilder();
 
   // Step management
@@ -62,6 +63,9 @@ const SessionBuilderScreen: React.FC = () => {
   useApiDebugger();
 
   const draft = state.draft;
+  const publishStatus = state.publishStatus;
+  const isPublishing = publishStatus === 'pending';
+  const canPublish = !!draft?.outline && draft.outline.sections.length > 0 && draft.readinessScore >= 90;
 
   // Determine if metadata has changed since last AI generation
   const hasMetadataChanged = React.useMemo(() => {
@@ -270,8 +274,11 @@ const SessionBuilderScreen: React.FC = () => {
               <Button onClick={() => goToStep('review')} variant="outline">
                 Review Content
               </Button>
-              <Button>
-                Publish Session
+              <Button
+                onClick={() => void publishSession()}
+                disabled={!draft || !canPublish || isPublishing || publishStatus === 'success'}
+              >
+                {isPublishing ? 'Publishing…' : publishStatus === 'success' ? 'Published' : 'Publish Session'}
               </Button>
             </div>
           </div>
@@ -416,6 +423,9 @@ const SessionBuilderScreen: React.FC = () => {
                 onOpenQuickAdd={() => setQuickAddOpen(true)}
                 onUpdateOutline={updateOutline}
                 onUpdateMetadata={updateMetadata}
+                onPublish={() => void publishSession()}
+                publishStatus={publishStatus}
+                canPublish={canPublish}
               />
             </div>
           </div>

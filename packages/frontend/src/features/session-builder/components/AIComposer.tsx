@@ -348,17 +348,108 @@ export const AIComposer: React.FC<AIComposerProps> = ({
 
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-slate-900">Session Outline</h4>
-              {activeVersion.blocks.map((block, index) => (
-                <div key={block.id} className="flex gap-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium">
-                    {index + 1}
+              {activeVersion.sections && activeVersion.sections.length > 0 ? (
+                // New topic-based display
+                activeVersion.sections.map((section, index) => (
+                  <div key={section.id} className="border border-slate-200 rounded-lg p-4 bg-white">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-medium">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-semibold text-slate-900">{section.title}</h5>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                              {section.type}
+                            </span>
+                            <span className="text-xs text-slate-500">{section.duration} min</span>
+                          </div>
+                        </div>
+                      </div>
+                      {section.associatedTopic && (
+                        <div className="flex items-center gap-1 text-xs">
+                          <svg className="h-3 w-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-green-700">Topic Match</span>
+                        </div>
+                      )}
+                      {section.isTopicSuggestion && (
+                        <div className="flex items-center gap-1 text-xs">
+                          <svg className="h-3 w-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-yellow-700">New Topic</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="text-sm text-slate-600 mb-3">{section.description}</p>
+
+                    {section.associatedTopic && (
+                      <div className="bg-green-50 border border-green-200 rounded-md p-3 mb-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h6 className="text-sm font-medium text-green-800 mb-1">
+                              Matched Topic: {section.associatedTopic.name}
+                            </h6>
+                            {section.associatedTopic.description && (
+                              <p className="text-xs text-green-700">{section.associatedTopic.description}</p>
+                            )}
+                          </div>
+                          {section.associatedTopic.matchScore && (
+                            <span className="text-xs text-green-600 font-medium">
+                              {Math.round(section.associatedTopic.matchScore * 100)}% match
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {section.learningObjectives && section.learningObjectives.length > 0 && (
+                      <div className="mb-2">
+                        <h6 className="text-xs font-medium text-slate-700 mb-1">Learning Objectives:</h6>
+                        <ul className="text-xs text-slate-600 space-y-1">
+                          {section.learningObjectives.map((objective, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-slate-400">•</span>
+                              <span>{objective}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {section.suggestedActivities && section.suggestedActivities.length > 0 && (
+                      <div>
+                        <h6 className="text-xs font-medium text-slate-700 mb-1">Suggested Activities:</h6>
+                        <ul className="text-xs text-slate-600 space-y-1">
+                          {section.suggestedActivities.map((activity, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-slate-400">•</span>
+                              <span>{activity}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h5 className="text-sm font-medium text-slate-900 mb-1">{block.heading}</h5>
-                    <p className="text-sm text-slate-600">{block.body}</p>
+                ))
+              ) : (
+                // Fallback to blocks display for backward compatibility
+                activeVersion.blocks.map((block, index) => (
+                  <div key={block.id} className="flex gap-3">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h5 className="text-sm font-medium text-slate-900 mb-1">{block.heading}</h5>
+                      <p className="text-sm text-slate-600">{block.body}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
 
             {!hasAcceptedVersion && activeVersion && (
