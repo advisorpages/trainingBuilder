@@ -24,7 +24,18 @@ interface NavItem {
   icon?: string;
 }
 
+const getDashboardRoute = (userRole: string) => {
+  return userRole === 'trainer' ? '/trainer/dashboard' : '/dashboard';
+};
+
 const allNavItems: NavItem[] = [
+  {
+    label: 'Home',
+    description: 'Dashboard and overview',
+    to: '/dashboard', // Will be dynamically set based on user role
+    roles: ['content_developer', 'trainer', 'admin'],
+    icon: '🏠',
+  },
   {
     label: 'Session Builder',
     description: 'Craft AI-assisted training sessions',
@@ -75,10 +86,15 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
   statusSlot,
   children,
 }) => {
-  // Filter nav items based on user role
-  const navItems = allNavItems.filter(item =>
-    item.roles.includes(mockUser.role)
-  );
+  // Filter nav items based on user role and set correct dashboard route
+  const navItems = allNavItems
+    .filter(item => item.roles.includes(mockUser.role))
+    .map(item => {
+      if (item.label === 'Home') {
+        return { ...item, to: getDashboardRoute(mockUser.role) };
+      }
+      return item;
+    });
 
   const getRoleDisplayName = (role: string) => {
     switch (role) {

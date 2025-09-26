@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BuilderLayout } from '../layouts/BuilderLayout';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
+import { sessionService } from '../services/session.service';
 
 interface Session {
   id: string;
@@ -52,7 +53,7 @@ const SessionsTable: React.FC<{
   onEditSession: (sessionId: string) => void;
 }> = ({ sessions, selectedSessions, onSelectionChange, onEditSession }) => {
   const handleSelectAll = (checked: boolean) => {
-    onSelectionChange(checked ? sessions.map(s => s.id) : []);
+    onSelectionChange(checked ? (sessions || []).map(s => s.id) : []);
   };
 
   const handleSelectSession = (sessionId: string, checked: boolean) => {
@@ -71,7 +72,7 @@ const SessionsTable: React.FC<{
             <th className="w-12 px-4 py-3">
               <input
                 type="checkbox"
-                checked={selectedSessions.length === sessions.length && sessions.length > 0}
+                checked={selectedSessions.length === (sessions || []).length && (sessions || []).length > 0}
                 onChange={(e) => handleSelectAll(e.target.checked)}
                 className="rounded border-slate-300"
               />
@@ -97,7 +98,7 @@ const SessionsTable: React.FC<{
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">
-          {sessions.map((session) => (
+          {(sessions || []).map((session) => (
             <tr key={session.id} className="hover:bg-slate-50">
               <td className="px-4 py-4">
                 <input
@@ -166,15 +167,24 @@ export const ManageSessionsPage: React.FC = () => {
   const fetchSessions = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (topicFilter !== 'all') params.append('topicId', topicFilter);
 
-      const response = await fetch(`/api/sessions?${params.toString()}`);
-      const data = await response.json();
-      setSessions(data);
+      // Use the authenticated sessionService instead of direct fetch
+      const data = await sessionService.getSessions();
+
+      // Apply filters if needed (could be moved to backend later)
+      let filteredData = data;
+      if (statusFilter !== 'all') {
+        filteredData = filteredData.filter(session => session.status === statusFilter);
+      }
+      if (topicFilter !== 'all') {
+        filteredData = filteredData.filter(session => session.topic?.id.toString() === topicFilter);
+      }
+
+      // Ensure data is always an array
+      setSessions(Array.isArray(filteredData) ? filteredData : []);
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
+      setSessions([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -184,11 +194,10 @@ export const ManageSessionsPage: React.FC = () => {
     if (selectedSessions.length === 0) return;
 
     try {
-      await fetch('/api/sessions/bulk/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionIds: selectedSessions }),
-      });
+      // Use sessionService for bulk operations (you may need to add this method)
+      for (const sessionId of selectedSessions) {
+        await sessionService.publishSession(sessionId);
+      }
 
       setSelectedSessions([]);
       fetchSessions();
@@ -201,11 +210,10 @@ export const ManageSessionsPage: React.FC = () => {
     if (selectedSessions.length === 0) return;
 
     try {
-      await fetch('/api/sessions/bulk/archive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionIds: selectedSessions }),
-      });
+      // Use sessionService for bulk operations (using status update method)
+      for (const sessionId of selectedSessions) {
+        await sessionService.updateSessionStatus(sessionId, { status: 'retired' });
+      }
 
       setSelectedSessions([]);
       fetchSessions();
@@ -222,6 +230,10 @@ export const ManageSessionsPage: React.FC = () => {
     navigate('/sessions/builder/new');
   };
 
+  const handleBackToHome = () => {
+    navigate('/dashboard');
+  };
+
   if (loading) {
     return (
       <BuilderLayout title="Sessions" subtitle="Loading sessions...">
@@ -235,7 +247,7 @@ export const ManageSessionsPage: React.FC = () => {
   return (
     <BuilderLayout
       title="Sessions"
-      subtitle={`${sessions.length} sessions total`}
+      subtitle={`${(sessions || []).length} sessions total`}
     >
       <div className="space-y-6">
         {/* Controls */}
@@ -264,9 +276,14 @@ export const ManageSessionsPage: React.FC = () => {
             </select>
           </div>
 
-          <Button onClick={handleNewSession}>
-            New Session
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleBackToHome}>
+              Back to Home
+            </Button>
+            <Button onClick={handleNewSession}>
+              New Session
+            </Button>
+          </div>
         </div>
 
         {/* Bulk Actions */}
@@ -296,7 +313,7 @@ export const ManageSessionsPage: React.FC = () => {
           onEditSession={handleEditSession}
         />
 
-        {sessions.length === 0 && (
+        {(sessions || []).length === 0 && (
           <div className="text-center py-12">
             <div className="text-slate-500 mb-4">No sessions found</div>
             <Button onClick={handleNewSession}>Create Your First Session</Button>

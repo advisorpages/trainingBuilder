@@ -2,16 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BuilderLayout } from '../layouts/BuilderLayout';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-
-interface Topic {
-  id: string;
-  name: string;
-  description?: string;
-  tags?: string[];
-  sessionCount?: number;
-  createdAt: string;
-  updatedAt: string;
-}
+import { topicsService, Topic } from '../services/topics.service';
 
 interface TopicFormData {
   name: string;
@@ -200,10 +191,9 @@ export const TopicsManagePage: React.FC = () => {
   const fetchTopics = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/topics');
-      if (!response.ok) throw new Error('Failed to fetch topics');
-      const data = await response.json();
+      const data = await topicsService.getTopics();
       setTopics(data);
+      setError(null);
     } catch (error) {
       console.error('Failed to fetch topics:', error);
       setError('Failed to load topics');
@@ -215,16 +205,15 @@ export const TopicsManagePage: React.FC = () => {
   const handleCreateTopic = async (formData: TopicFormData) => {
     try {
       setIsSubmitting(true);
-      const response = await fetch('/api/topics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+      await topicsService.createTopic({
+        name: formData.name,
+        description: formData.description,
+        tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
       });
-
-      if (!response.ok) throw new Error('Failed to create topic');
 
       await fetchTopics();
       setShowForm(false);
+      setError(null);
     } catch (error) {
       console.error('Failed to create topic:', error);
       setError('Failed to create topic');
@@ -238,16 +227,15 @@ export const TopicsManagePage: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/topics/${editingTopic.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+      await topicsService.updateTopic(editingTopic.id, {
+        name: formData.name,
+        description: formData.description,
+        tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
       });
-
-      if (!response.ok) throw new Error('Failed to update topic');
 
       await fetchTopics();
       setEditingTopic(null);
+      setError(null);
     } catch (error) {
       console.error('Failed to update topic:', error);
       setError('Failed to update topic');
@@ -267,22 +255,14 @@ export const TopicsManagePage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/topics/${topic.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete topic');
-      }
-
-      const result = await response.json();
+      const result = await topicsService.deleteTopic(topic.id);
       if (!result.deleted) {
         setError(result.message || 'Failed to delete topic');
         return;
       }
 
       await fetchTopics();
+      setError(null);
     } catch (error) {
       console.error('Failed to delete topic:', error);
       setError('Failed to delete topic');

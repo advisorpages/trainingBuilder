@@ -5,6 +5,7 @@ import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types/auth.types';
+import { sessionService } from '../services/session.service';
 
 interface DashboardStats {
   totalSessions: number;
@@ -37,62 +38,90 @@ const DashboardPage: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Helper function to get time ago string
+  const getTimeAgo = (dateString: string): string => {
+    if (!dateString) return 'Unknown time';
+
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
+
   useEffect(() => {
-    // Simulate API call for dashboard data
+    // Fetch real dashboard data
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
 
-        // Mock data - replace with actual API calls
-        setTimeout(() => {
-          setStats({
-            totalSessions: 24,
-            activeSessions: 8,
-            totalTrainers: 12,
-            upcomingSessions: 5,
-            publishedSessions: 16,
-            draftSessions: 8,
-          });
+        // Fetch actual session data
+        const sessions = await sessionService.getSessions();
 
-          setRecentActivity([
-            {
-              id: '1',
-              type: 'session_created',
-              title: 'New Session Created',
-              description: 'Leadership Fundamentals session created by John Doe',
-              timestamp: '2 minutes ago',
-              user: 'John Doe',
-            },
-            {
-              id: '2',
-              type: 'session_published',
-              title: 'Session Published',
-              description: 'Effective Communication session is now live',
-              timestamp: '1 hour ago',
-              user: 'Sarah Smith',
-            },
-            {
-              id: '3',
-              type: 'trainer_assigned',
-              title: 'Trainer Assigned',
-              description: 'Mike Johnson assigned to Team Building workshop',
-              timestamp: '3 hours ago',
-              user: 'Admin',
-            },
-            {
-              id: '4',
-              type: 'session_updated',
-              title: 'Session Updated',
-              description: 'Strategic Planning session content revised',
-              timestamp: '1 day ago',
-              user: 'Jane Wilson',
-            },
-          ]);
+        // Calculate stats from real data
+        const totalSessions = sessions.length;
+        const publishedSessions = sessions.filter(s => s.status === 'published').length;
+        const draftSessions = sessions.filter(s => s.status === 'draft').length;
+        const activeSessions = sessions.filter(s => {
+          // Consider active if scheduled for today or ongoing
+          const sessionDate = new Date(s.scheduledAt || '');
+          const today = new Date();
+          return sessionDate.toDateString() === today.toDateString();
+        }).length;
 
-          setLoading(false);
-        }, 1000);
+        // Calculate upcoming sessions (future scheduled sessions)
+        const upcomingSessions = sessions.filter(s => {
+          const sessionDate = new Date(s.scheduledAt || '');
+          const today = new Date();
+          return sessionDate > today;
+        }).length;
+
+        setStats({
+          totalSessions,
+          activeSessions,
+          totalTrainers: 12, // Keep mock for now, would need trainer API
+          upcomingSessions,
+          publishedSessions,
+          draftSessions,
+        });
+
+        // Create recent activity from sessions (latest updated sessions)
+        const recentSessions = sessions
+          .sort((a, b) => new Date(b.updatedAt || '').getTime() - new Date(a.updatedAt || '').getTime())
+          .slice(0, 4);
+
+        const activityItems: RecentActivity[] = recentSessions.map((session, index) => ({
+          id: session.id,
+          type: session.status === 'published' ? 'session_published' :
+                session.status === 'draft' ? 'session_created' : 'session_updated',
+          title: session.status === 'published' ? 'Session Published' :
+                 session.status === 'draft' ? 'New Session Created' : 'Session Updated',
+          description: `${session.title} is ${session.status}`,
+          timestamp: getTimeAgo(session.updatedAt || ''),
+          user: 'System', // Would need user info from API
+        }));
+
+        setRecentActivity(activityItems);
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        // Fallback to empty data instead of mock data
+        setStats({
+          totalSessions: 0,
+          activeSessions: 0,
+          totalTrainers: 0,
+          upcomingSessions: 0,
+          publishedSessions: 0,
+          draftSessions: 0,
+        });
+        setRecentActivity([]);
         setLoading(false);
       }
     };

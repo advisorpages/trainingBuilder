@@ -13,7 +13,6 @@ services:
       - "5433:5432"  # Use 5433 on host to avoid local conflicts
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init:/docker-entrypoint-initdb.d
     networks:
       - app-network
     healthcheck:
@@ -73,7 +72,7 @@ services:
       NODE_ENV: development
       VITE_API_URL: http://localhost:3001/api
     ports:
-      - "3000:3000"
+      - "3002:3000"
     volumes:
       - ./packages/frontend:/app/packages/frontend
       - ./packages/shared:/app/packages/shared

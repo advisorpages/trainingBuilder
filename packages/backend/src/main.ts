@@ -18,7 +18,7 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://frontend:3000'],
+    origin: ['http://localhost:3002', 'http://frontend:3000'],
     credentials: true,
   });
 

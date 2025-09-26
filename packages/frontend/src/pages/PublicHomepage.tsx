@@ -5,13 +5,21 @@ import { sessionService } from '../services/session.service'
 import { incentiveService } from '../services/incentive.service'
 import SessionCard from '../components/sessions/SessionCard'
 import IncentiveCard from '../components/incentives/IncentiveCard'
+import { useAuth } from '../contexts/AuthContext'
 import './PublicHomepage.css'
 
 const PublicHomepage = () => {
+  const { user, isAuthenticated } = useAuth()
   const [sessions, setSessions] = useState<Session[]>([])
   const [incentives, setIncentives] = useState<Incentive[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Helper function to get the appropriate dashboard route
+  const getDashboardRoute = () => {
+    if (!user) return '/dashboard'
+    return user.role === 'trainer' ? '/trainer/dashboard' : '/dashboard'
+  }
 
   useEffect(() => {
     // Set page title and meta tags for SEO
@@ -85,9 +93,15 @@ const PublicHomepage = () => {
         <div className="header-content">
           <h1 className="brand-title">Leadership Training</h1>
           <nav className="header-nav">
-            <Link to="/login" className="btn btn-outline">
-              Login
-            </Link>
+            {isAuthenticated ? (
+              <Link to={getDashboardRoute()} className="btn btn-outline">
+                Go to Dashboard
+              </Link>
+            ) : (
+              <Link to="/login" className="btn btn-outline">
+                Login
+              </Link>
+            )}
           </nav>
         </div>
       </header>

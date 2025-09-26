@@ -133,7 +133,7 @@ if (failed === 0) {
 }
 
 console.log('\n🔗 Quick Links:');
-console.log('- Frontend: http://localhost:3000');
+console.log('- Frontend: http://localhost:3002');
 console.log('- Backend API: http://localhost:3001/api');
 console.log('- Health Check: http://localhost:3001/api/health');
 console.log('- Documentation: ./README.md');

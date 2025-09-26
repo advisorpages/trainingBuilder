@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Topic, Session } from '../../entities';
@@ -6,6 +6,8 @@ import { CreateTopicDto } from './dto/create-topic.dto';
 
 @Injectable()
 export class TopicsService {
+  private readonly logger = new Logger(TopicsService.name);
+
   constructor(
     @InjectRepository(Topic)
     private readonly topicRepository: Repository<Topic>,
@@ -14,16 +16,46 @@ export class TopicsService {
   ) {}
 
   async findAll(): Promise<(Topic & { sessionCount: number })[]> {
-    const topics = await this.topicRepository
-      .createQueryBuilder('topic')
-      .loadRelationCountAndMap('topic.sessionCount', 'topic.sessions')
-      .orderBy('topic.name', 'ASC')
-      .getMany();
+    try {
+      this.logger.log('Fetching all topics with session counts');
 
-    return topics.map((topic) => ({
-      ...topic,
-      sessionCount: (topic as Topic & { sessionCount?: number }).sessionCount ?? 0,
-    }));
+      // First, let's try a simple query to see if basic topic fetching works
+      const simpleTopics = await this.topicRepository.find();
+      this.logger.log(`Found ${simpleTopics.length} topics in database`);
+
+      // Now try the complex query with session count
+      const topics = await this.topicRepository
+        .createQueryBuilder('topic')
+        .loadRelationCountAndMap('topic.sessionCount', 'topic.sessions')
+        .orderBy('topic.name', 'ASC')
+        .getMany();
+
+      this.logger.log(`Successfully fetched ${topics.length} topics with session counts`);
+
+      return topics.map((topic) => ({
+        ...topic,
+        sessionCount: (topic as Topic & { sessionCount?: number }).sessionCount ?? 0,
+      }));
+    } catch (error) {
+      this.logger.error('Failed to fetch topics:', error.message);
+      this.logger.error('Error stack:', error.stack);
+
+      // Try fallback - return topics without session counts
+      try {
+        this.logger.log('Attempting fallback: fetching topics without session counts');
+        const fallbackTopics = await this.topicRepository.find();
+        this.logger.log(`Fallback successful: found ${fallbackTopics.length} topics`);
+
+        return fallbackTopics.map((topic) => ({
+          ...topic,
+          sessionCount: 0, // Default to 0 if we can't count sessions
+        }));
+      } catch (fallbackError) {
+        this.logger.error('Fallback query also failed:', fallbackError.message);
+        this.logger.error('Fallback error stack:', fallbackError.stack);
+        throw fallbackError; // Re-throw the fallback error
+      }
+    }
   }
 
   async findOne(id: string): Promise<Topic> {

@@ -84,7 +84,7 @@ async function seedTopics() {
     });
 
     console.log('🎉 Topic seeding completed successfully!');
-    console.log(`\n🔗 View topics at: http://localhost:3000/topics`);
+    console.log(`\n🔗 View topics at: http://localhost:3002/topics`);
 
   } catch (error) {
     console.error('❌ Failed to seed topics:', error);

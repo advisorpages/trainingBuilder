@@ -692,25 +692,62 @@ export class SessionsService {
   }
 
   async publishSession(id: string): Promise<Session> {
-    const session = await this.findOne(id);
-    const readiness = await this.readinessScoringService.calculateReadinessScore(session);
+    try {
+      this.logger.log(`Attempting to publish session: ${id}`);
 
-    if (!readiness.canPublish) {
-      throw new ForbiddenException(
-        `Session is not ready for publishing (${readiness.percentage}% complete, ${this.readinessScoringService.getReadinessThreshold()}% required). ` +
-          `Required actions: ${readiness.recommendedActions.join('; ')}`
-      );
+      // Step 1: Find the session
+      this.logger.log(`Fetching session details for: ${id}`);
+      const session = await this.findOne(id);
+      this.logger.log(`Session found: ${session.title} (status: ${session.status})`);
+
+      // Step 2: Calculate readiness score
+      this.logger.log(`Calculating readiness score for session: ${id}`);
+      const readiness = await this.readinessScoringService.calculateReadinessScore(session);
+      this.logger.log(`Readiness calculated: ${readiness.percentage}% (can publish: ${readiness.canPublish})`);
+
+      if (!readiness.canPublish) {
+        this.logger.warn(`Session ${id} is not ready for publishing - ${readiness.percentage}% complete`);
+        this.logger.warn(`Required actions: ${readiness.recommendedActions.join('; ')}`);
+
+        throw new ForbiddenException(
+          `Session is not ready for publishing (${readiness.percentage}% complete, ${this.readinessScoringService.getReadinessThreshold()}% required). ` +
+            `Required actions: ${readiness.recommendedActions.join('; ')}`
+        );
+      }
+
+      // Step 3: Update session status
+      this.logger.log(`Updating session status to PUBLISHED for session: ${id}`);
+      const previousStatus = session.status;
+      session.status = SessionStatus.PUBLISHED;
+      session.readinessScore = readiness.percentage;
+      this.applyPublishTimestamp(session, previousStatus);
+
+      // Step 4: Save the session
+      this.logger.log(`Saving session changes for: ${id}`);
+      const saved = await this.sessionsRepository.save(session);
+      this.logger.log(`Session saved successfully: ${id}`);
+
+      // Step 5: Record status transition
+      this.logger.log(`Recording status transition from ${previousStatus} to PUBLISHED for session: ${id}`);
+      await this.recordStatusTransition(saved, previousStatus, readiness);
+      this.logger.log(`Status transition recorded successfully for session: ${id}`);
+
+      this.logger.log(`Session ${id} published successfully`);
+      return saved;
+    } catch (error) {
+      this.logger.error(`Failed to publish session ${id}:`, error.message);
+      this.logger.error(`Error stack:`, error.stack);
+
+      // Log additional context if it's a database error
+      if (error.code) {
+        this.logger.error(`Database error code: ${error.code}`);
+      }
+      if (error.detail) {
+        this.logger.error(`Database error detail: ${error.detail}`);
+      }
+
+      throw error; // Re-throw the original error
     }
-
-    const previousStatus = session.status;
-    session.status = SessionStatus.PUBLISHED;
-    session.readinessScore = readiness.percentage;
-    this.applyPublishTimestamp(session, previousStatus);
-
-    const saved = await this.sessionsRepository.save(session);
-    await this.recordStatusTransition(saved, previousStatus, readiness);
-
-    return saved;
   }
 
   async getReadinessScore(id: string) {
