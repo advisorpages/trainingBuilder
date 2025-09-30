@@ -42,6 +42,8 @@ const SessionBuilderScreen: React.FC = () => {
     selectVersion,
     manualAutosave,
     publishSession,
+    canUndoAutosave,
+    undoAutosave,
   } = useSessionBuilder();
 
   // Step management
@@ -373,6 +375,8 @@ const SessionBuilderScreen: React.FC = () => {
               status={state.autosaveStatus}
               lastSavedAt={draft.lastAutosaveAt}
               onManualSave={manualAutosave}
+              canUndo={canUndoAutosave}
+              onUndo={undoAutosave}
             />
           </div>
         }

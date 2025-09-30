@@ -23,6 +23,8 @@ interface SessionBuilderContextValue {
   selectVersion: (versionId: string) => void;
   manualAutosave: () => Promise<void>;
   publishSession: () => Promise<void>;
+  canUndoAutosave: boolean;
+  undoAutosave: () => void;
 }
 
 const SessionBuilderContext =
@@ -321,6 +323,36 @@ export const SessionBuilderProvider: React.FC<{
   const [state, dispatch] = React.useReducer(builderReducer, initialBuilderState);
   const { publish } = useToast();
   const lastSavedRef = React.useRef<SessionDraftData | null>(null);
+  const undoTimerRef = React.useRef<number | null>(null);
+  const [canUndoAutosave, setCanUndoAutosave] = React.useState(false);
+
+  const showUndoTemporarily = React.useCallback(() => {
+    setCanUndoAutosave(true);
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (undoTimerRef.current) {
+      window.clearTimeout(undoTimerRef.current);
+    }
+
+    undoTimerRef.current = window.setTimeout(() => {
+      setCanUndoAutosave(false);
+      undoTimerRef.current = null;
+    }, 8000);
+  }, []);
+
+  const undoAutosave = React.useCallback(() => {
+    if (!lastSavedRef.current) return;
+    const restored = cloneDraft(lastSavedRef.current);
+    dispatch({ type: 'RESTORE_DRAFT', payload: restored });
+    setCanUndoAutosave(false);
+
+    if (typeof window !== 'undefined' && undoTimerRef.current) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+  }, [dispatch]);
 
   const loadDraft = React.useCallback(async (): Promise<SessionDraftData> => {
     if (sessionId && sessionId !== 'new') {
@@ -473,6 +505,7 @@ export const SessionBuilderProvider: React.FC<{
       const savedAt = response?.savedAt ?? new Date().toISOString();
       lastSavedRef.current = cloneDraft({ ...state.draft, lastAutosaveAt: savedAt, isDirty: false });
       dispatch({ type: 'AUTOSAVE_SUCCESS', payload: savedAt });
+      showUndoTemporarily();
     } catch (error: any) {
       const message = error?.message ?? 'Autosave failed';
       dispatch({ type: 'AUTOSAVE_FAILURE', payload: message });
@@ -483,7 +516,7 @@ export const SessionBuilderProvider: React.FC<{
       });
       throw error;
     }
-  }, [state.draft, publish]);
+  }, [state.draft, publish, showUndoTemporarily]);
 
   React.useEffect(() => {
     if (!state.draft || !state.draft.isDirty || state.status !== 'ready') {
@@ -502,20 +535,14 @@ export const SessionBuilderProvider: React.FC<{
             isDirty: false,
           });
           dispatch({ type: 'AUTOSAVE_SUCCESS', payload: savedAt });
-          publish({
-            variant: 'info',
-            title: 'Draft autosaved',
-            description: response?.viaFallback
-              ? 'Saved locally while offline. Changes will sync when back online.'
-              : 'Changes synced to the builder service.',
-            actionLabel: 'Undo',
-            onAction: () => {
-              if (lastSavedRef.current) {
-                const restored = cloneDraft(lastSavedRef.current);
-                dispatch({ type: 'RESTORE_DRAFT', payload: restored });
-              }
-            },
-          });
+          showUndoTemporarily();
+          if (response?.viaFallback) {
+            publish({
+              variant: 'info',
+              title: 'Draft saved locally',
+              description: 'You are offline. Changes will sync once you are back online.',
+            });
+          }
         })
         .catch((error: any) => {
           const message = error?.message ?? 'Autosave failed';
@@ -531,7 +558,7 @@ export const SessionBuilderProvider: React.FC<{
     }, AUTOSAVE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [state.draft, state.status, publish, manualAutosave]);
+  }, [state.draft, state.status, publish, manualAutosave, showUndoTemporarily]);
 
   const updateMetadata = React.useCallback((updates: Partial<SessionMetadata>) => {
     dispatch({ type: 'UPDATE_METADATA', payload: updates });
@@ -673,6 +700,15 @@ export const SessionBuilderProvider: React.FC<{
     }
   }, [state.draft, state.publishStatus, publish]);
 
+  React.useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && undoTimerRef.current) {
+        window.clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const value = React.useMemo<SessionBuilderContextValue>(() => ({
     state,
     updateMetadata,
@@ -684,6 +720,8 @@ export const SessionBuilderProvider: React.FC<{
     selectVersion,
     manualAutosave,
     publishSession,
+    canUndoAutosave,
+    undoAutosave,
   }), [
     state,
     updateMetadata,
@@ -695,6 +733,8 @@ export const SessionBuilderProvider: React.FC<{
     selectVersion,
     manualAutosave,
     publishSession,
+    canUndoAutosave,
+    undoAutosave,
   ]);
 
   return (

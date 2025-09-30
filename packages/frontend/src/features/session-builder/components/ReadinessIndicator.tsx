@@ -19,7 +19,7 @@ export const ReadinessIndicator: React.FC<ReadinessIndicatorProps> = ({
   onOpenQuickAdd,
   className
 }) => {
-  const items = getReadinessItems(metadata, hasOutline, hasAcceptedVersion);
+  const items = getReadinessItems(metadata, { hasOutline, hasAcceptedVersion });
   const incompleteRequired = items.filter((item) => item.required && !item.completed);
   const incompleteOptional = items.filter((item) => !item.required && !item.completed);
   const allRequiredComplete = incompleteRequired.length === 0;

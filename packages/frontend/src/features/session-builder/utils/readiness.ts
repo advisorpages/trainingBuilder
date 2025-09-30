@@ -108,7 +108,27 @@ export function getDraftReadinessItems(draft: SessionDraftData | null): Readines
   const hasOutline = !!draft.outline && draft.outline.sections.length > 0;
   const hasAcceptedVersion = !!draft.acceptedVersionId;
 
-  return getReadinessItems(draft.metadata, { hasOutline, hasAcceptedVersion });
+  // If a version is accepted, also check if we have AI versions with sections as a fallback
+  const acceptedVersion = draft.aiVersions.find(v => v.id === draft.acceptedVersionId);
+  const hasAcceptedVersionWithContent = hasAcceptedVersion && acceptedVersion?.sections && acceptedVersion.sections.length > 0;
+
+  // Use either the outline sections OR the accepted version sections
+  const effectiveHasOutline = hasOutline || hasAcceptedVersionWithContent;
+
+  // Debug logging for troubleshooting
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Readiness Debug:', {
+      hasOutline,
+      hasAcceptedVersion,
+      hasAcceptedVersionWithContent,
+      effectiveHasOutline,
+      outlineSectionsCount: draft.outline?.sections?.length || 0,
+      acceptedVersionSectionsCount: acceptedVersion?.sections?.length || 0,
+      acceptedVersionId: draft.acceptedVersionId,
+    });
+  }
+
+  return getReadinessItems(draft.metadata, { hasOutline: effectiveHasOutline, hasAcceptedVersion });
 }
 
 export function calculateReadinessScore(items: ReadinessItem[]): number {

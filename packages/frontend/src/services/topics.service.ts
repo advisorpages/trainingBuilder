@@ -1,7 +1,5 @@
 import { api } from './api.service';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
-
 export interface Topic {
   id: string;
   name: string;
@@ -22,7 +20,7 @@ export interface CreateTopicRequest {
 export interface UpdateTopicRequest extends Partial<CreateTopicRequest> {}
 
 class TopicsService {
-  private readonly base = `${API_BASE_URL}/topics`;
+  private readonly base = '/topics';
 
   async getTopics(): Promise<Topic[]> {
     const response = await api.get<Topic[]>(this.base);

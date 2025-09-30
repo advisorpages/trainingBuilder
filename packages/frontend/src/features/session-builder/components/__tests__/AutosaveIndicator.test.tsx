@@ -11,7 +11,7 @@ describe('AutosaveIndicator', () => {
     mockOnManualSave.mockClear();
   });
 
-  it('displays idle status correctly', () => {
+  it('displays idle status with helper copy', () => {
     render(
       <AutosaveIndicator
         status="idle"
@@ -20,6 +20,7 @@ describe('AutosaveIndicator', () => {
     );
 
     expect(screen.getByText('Saved')).toBeInTheDocument();
+    expect(screen.getByText('Auto-save keeps your progress up to date.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save now' })).toBeInTheDocument();
   });
 
@@ -32,20 +33,26 @@ describe('AutosaveIndicator', () => {
     );
 
     expect(screen.getByText('Saving…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save now' })).toBeDisabled();
   });
 
   it('displays success status', () => {
+    const timestamp = '2025-09-26T12:00:00.000Z';
+    const expectedTime = new Intl.DateTimeFormat(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(timestamp));
+
     render(
       <AutosaveIndicator
         status="success"
-        lastSavedAt="2025-09-26T12:00:00.000Z"
+        lastSavedAt={timestamp}
         onManualSave={mockOnManualSave}
       />
     );
 
     expect(screen.getByText('Saved')).toBeInTheDocument();
-    // Check that timestamp is displayed (exact format may vary by locale)
-    expect(screen.getByText(/\d{1,2}:\d{2}:\d{2}/)).toBeInTheDocument();
+    expect(screen.getByText(`Saved at ${expectedTime}`)).toBeInTheDocument();
   });
 
   it('displays error status', () => {
@@ -57,6 +64,8 @@ describe('AutosaveIndicator', () => {
     );
 
     expect(screen.getByText('Save failed')).toBeInTheDocument();
+    expect(screen.getByText('We could not save your latest changes.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry save' })).toBeInTheDocument();
   });
 
   it('calls onManualSave when save button is clicked', () => {
@@ -71,6 +80,22 @@ describe('AutosaveIndicator', () => {
     expect(mockOnManualSave).toHaveBeenCalledTimes(1);
   });
 
+  it('renders undo control when provided', () => {
+    const handleUndo = vi.fn();
+
+    render(
+      <AutosaveIndicator
+        status="success"
+        onManualSave={mockOnManualSave}
+        canUndo
+        onUndo={handleUndo}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(handleUndo).toHaveBeenCalledTimes(1);
+  });
+
   it('handles missing lastSavedAt gracefully', () => {
     render(
       <AutosaveIndicator
@@ -81,7 +106,7 @@ describe('AutosaveIndicator', () => {
 
     expect(screen.getByText('Saved')).toBeInTheDocument();
     // Should not display any timestamp
-    expect(screen.queryByText(/\d{1,2}:\d{2}:\d{2}/)).not.toBeInTheDocument();
+    expect(screen.getByText('Auto-save keeps your progress up to date.')).toBeInTheDocument();
   });
 
   it('has proper styling classes for different statuses', () => {
@@ -93,7 +118,7 @@ describe('AutosaveIndicator', () => {
     );
 
     // Test idle status styling
-    expect(screen.getByText('Saved')).toHaveClass('text-slate-500');
+    expect(screen.getByText('Saved')).toHaveClass('text-slate-600');
 
     // Test pending status styling
     rerender(
@@ -111,7 +136,7 @@ describe('AutosaveIndicator', () => {
         onManualSave={mockOnManualSave}
       />
     );
-    expect(screen.getByText('Saved')).toHaveClass('text-green-600');
+    expect(screen.getByText('Saved')).toHaveClass('text-emerald-600');
 
     // Test error status styling
     rerender(
@@ -121,5 +146,16 @@ describe('AutosaveIndicator', () => {
       />
     );
     expect(screen.getByText('Save failed')).toHaveClass('text-red-600');
+  });
+
+  it('exposes an accessible live region', () => {
+    render(
+      <AutosaveIndicator
+        status="success"
+        onManualSave={mockOnManualSave}
+      />
+    );
+
+    expect(screen.getByTestId('autosave-indicator')).toHaveAttribute('aria-live', 'polite');
   });
 });

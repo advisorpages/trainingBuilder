@@ -302,6 +302,13 @@ class SessionBuilderService {
 
       console.log('Session data being sent to backend:', sessionData);
       const response = await api.post('/sessions', sessionData);
+
+      try {
+        await this.ensureTopicsFromOutline(request.outline, response.data?.status ?? sessionData.status);
+      } catch (topicError) {
+        console.warn('Failed to ensure outline topics exist', topicError);
+      }
+
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to create session from outline');
@@ -472,20 +479,13 @@ class SessionBuilderService {
 
   private topicLookupCache: { map: Map<string, string>; fetchedAt: number } | null = null;
 
-  private async resolveTopicIdByName(name?: string): Promise<string | undefined> {
-    if (!name) {
-      return undefined;
-    }
+  private async getTopicLookup(forceRefresh = false): Promise<Map<string, string>> {
+    const isStale =
+      forceRefresh ||
+      !this.topicLookupCache ||
+      Date.now() - this.topicLookupCache.fetchedAt > 5 * 60 * 1000;
 
-    const normalized = name.trim().toLowerCase();
-    if (!normalized) {
-      return undefined;
-    }
-
-    const needsRefresh =
-      !this.topicLookupCache || Date.now() - this.topicLookupCache.fetchedAt > 5 * 60 * 1000;
-
-    if (needsRefresh) {
+    if (isStale) {
       try {
         const response = await api.get('/topics');
         const topics = Array.isArray(response.data) ? response.data : [];
@@ -499,11 +499,97 @@ class SessionBuilderService {
       } catch (error: any) {
         console.warn('Failed to refresh topic cache', error);
         this.topicLookupCache = null;
-        return undefined;
+        return new Map();
       }
     }
 
-    return this.topicLookupCache?.map.get(normalized);
+    return this.topicLookupCache?.map ?? new Map();
+  }
+
+  private async resolveTopicIdByName(name?: string): Promise<string | undefined> {
+    if (!name) {
+      return undefined;
+    }
+
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) {
+      return undefined;
+    }
+
+    const lookup = await this.getTopicLookup();
+    return lookup.get(normalized);
+  }
+
+  private async ensureTopicsFromOutline(outline: SessionOutline, status?: unknown): Promise<void> {
+    if (!outline?.sections?.length) {
+      return;
+    }
+
+    const statusValue = typeof status === 'string' ? status.toLowerCase() : '';
+    if (statusValue !== 'published') {
+      return;
+    }
+
+    const topicSections = outline.sections.filter((section) => section.type === 'topic');
+    const suggestionSections = topicSections.filter((section) =>
+      section.isTopicSuggestion || !section.associatedTopic
+    );
+
+    if (suggestionSections.length === 0) {
+      return;
+    }
+
+    const lookup = await this.getTopicLookup();
+    const newlyCreated: string[] = [];
+
+    for (const section of suggestionSections) {
+      const name = section.title?.trim();
+      if (!name) {
+        continue;
+      }
+
+      const key = name.toLowerCase();
+      if (lookup.has(key)) {
+        continue;
+      }
+
+      const payload: Record<string, unknown> = { name };
+
+      if (section.description?.trim()) {
+        payload.description = section.description.trim();
+      }
+
+      if (section.learningObjectives?.length) {
+        payload.learningOutcomes = section.learningObjectives.join('\n');
+      }
+
+      if (section.trainerNotes?.trim?.()) {
+        payload.trainerNotes = section.trainerNotes.trim();
+      }
+
+      if (section.materialsNeeded?.length) {
+        payload.materialsNeeded = section.materialsNeeded.join('\n');
+      }
+
+      if (section.deliveryGuidance?.trim?.()) {
+        payload.deliveryGuidance = section.deliveryGuidance.trim();
+      }
+
+      try {
+        const response = await api.post('/topics', payload);
+        const topic = response.data;
+        if (topic?.id) {
+          lookup.set(key, String(topic.id));
+          newlyCreated.push(name);
+        }
+      } catch (error) {
+        console.warn(`Failed to create topic "${name}" from outline`, error);
+      }
+    }
+
+    if (newlyCreated.length > 0) {
+      this.topicLookupCache = { map: lookup, fetchedAt: Date.now() };
+    }
   }
 
   // PHASE 5: Training Kit and Marketing Kit Methods
