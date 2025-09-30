@@ -30,14 +30,20 @@ export class EnsureUserRoleAndDisplayName1701000000002 implements MigrationInter
     `);
 
     await queryRunner.query(`
-      UPDATE "users"
-      SET "role" = CASE "role_id"
-        WHEN 1 THEN 'broker'
-        WHEN 2 THEN 'content_developer'
-        WHEN 3 THEN 'trainer'
-        ELSE 'content_developer'
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'role_id') THEN
+          UPDATE "users"
+          SET "role" = CASE "role_id"
+            WHEN 1 THEN 'broker'
+            WHEN 2 THEN 'content_developer'
+            WHEN 3 THEN 'trainer'
+            ELSE 'content_developer'
+          END
+          WHERE "role" IS NULL AND "role_id" IS NOT NULL;
+        END IF;
       END
-      WHERE "role" IS NULL AND "role_id" IS NOT NULL
+      $$;
     `);
 
     await queryRunner.query(`

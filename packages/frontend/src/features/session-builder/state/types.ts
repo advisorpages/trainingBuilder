@@ -16,6 +16,7 @@ export interface SessionMetadata {
   startTime: string; // ISO string
   endTime: string; // ISO string
   timezone: string;
+  location: string; // Human-readable location name
   locationId?: number;
   audienceId?: number;
   toneId?: number;

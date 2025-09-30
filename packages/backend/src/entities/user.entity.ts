@@ -23,10 +23,10 @@ export class User extends BaseEntity {
   @Column({ type: 'enum', enum: UserRole, enumName: 'user_role_enum' })
   role: UserRole;
 
-  @Column({ nullable: true })
+  @Column({ name: 'display_name', nullable: true })
   displayName?: string;
 
-  @Column({ default: true })
+  @Column({ name: 'is_active', default: true })
   isActive: boolean;
 
   @OneToMany(() => Session, (session) => session.createdBy)

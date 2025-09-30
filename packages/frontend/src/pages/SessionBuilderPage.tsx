@@ -19,6 +19,10 @@ import {
 import { SessionBuilderProvider, useSessionBuilder } from '../features/session-builder/state/SessionBuilderContext';
 import { SessionOutline, sessionBuilderService, SectionType } from '../services/session-builder.service';
 import { cn } from '../lib/utils';
+import {
+  areRequiredItemsComplete,
+  getDraftReadinessItems,
+} from '../features/session-builder/utils/readiness';
 
 const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50">
@@ -65,7 +69,15 @@ const SessionBuilderScreen: React.FC = () => {
   const draft = state.draft;
   const publishStatus = state.publishStatus;
   const isPublishing = publishStatus === 'pending';
-  const canPublish = !!draft?.outline && draft.outline.sections.length > 0 && draft.readinessScore >= 90;
+  const readinessItems = React.useMemo(() => getDraftReadinessItems(draft ?? null), [draft]);
+  const canPublish = !!draft && areRequiredItemsComplete(readinessItems);
+
+  // Check if required setup fields are populated
+  const hasRequiredSetupFields = React.useMemo(() => {
+    if (!draft) return false;
+    const { title, desiredOutcome, category, sessionType, location } = draft.metadata;
+    return !!(title?.trim() && desiredOutcome?.trim() && category?.trim() && sessionType && location?.trim());
+  }, [draft?.metadata]);
 
   // Determine if metadata has changed since last AI generation
   const hasMetadataChanged = React.useMemo(() => {
@@ -100,7 +112,7 @@ const SessionBuilderScreen: React.FC = () => {
     }
   }, [draft, completedSteps, completeStep]);
 
-  // Bootstrap AI generation for new sessions
+  // Trigger AI generation when entering the generate step for the first time
   React.useEffect(() => {
     if (!draft || state.status !== 'ready') return;
     if (hasBootstrappedAI.current) return;
@@ -108,12 +120,12 @@ const SessionBuilderScreen: React.FC = () => {
       hasBootstrappedAI.current = true;
       return;
     }
-    // Only auto-generate if we have basic metadata
-    if (draft.metadata.title && draft.metadata.desiredOutcome) {
+    // Only generate when we're on the generate step and have basic metadata
+    if (currentStep === 'generate' && draft.metadata.title && draft.metadata.desiredOutcome) {
       hasBootstrappedAI.current = true;
       void generateAIContent();
     }
-  }, [draft, state.status, generateAIContent]);
+  }, [currentStep, draft, state.status, generateAIContent]);
 
   const handleAddSection = (type: SectionType) => {
     if (!draft) return;
@@ -399,9 +411,9 @@ const SessionBuilderScreen: React.FC = () => {
 
               <Button
                 onClick={nextStep}
-                disabled={!canGoNext}
+                disabled={currentStep === 'setup' ? !hasRequiredSetupFields : !canGoNext}
               >
-                Next
+                {currentStep === 'setup' ? 'Step 2: Make a Session' : 'Next'}
                 <svg className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>

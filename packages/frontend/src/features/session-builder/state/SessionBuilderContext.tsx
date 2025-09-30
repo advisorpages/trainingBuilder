@@ -7,6 +7,10 @@ import {
 import { useToast } from '../../../ui';
 import { AIContentVersion, BuilderState, SessionDraftData, SessionMetadata } from './types';
 import { builderReducer, initialBuilderState } from './builderReducer';
+import {
+  calculateReadinessScore,
+  getDraftReadinessItems,
+} from '../utils/readiness';
 
 interface SessionBuilderContextValue {
   state: BuilderState;
@@ -60,6 +64,7 @@ function buildDefaultMetadata(): SessionMetadata {
     startTime: start.toISOString(),
     endTime: end.toISOString(),
     timezone: DEFAULT_TIMEZONE,
+    location: '',
     locationId: undefined,
     audienceId: undefined,
     toneId: undefined,
@@ -128,24 +133,8 @@ const cloneDraft = (draft: SessionDraftData): SessionDraftData =>
   JSON.parse(JSON.stringify(draft));
 
 function calculateReadiness(draft: SessionDraftData): number {
-  const requiredFields: (keyof SessionMetadata)[] = [
-    'title',
-    'desiredOutcome',
-    'currentProblem',
-    'specificTopics',
-  ];
-  const filled = requiredFields.filter((field) =>
-    (draft.metadata[field] ?? '').toString().trim()
-  ).length;
-
-  let score = Math.round((filled / requiredFields.length) * 60);
-  if (draft.outline && draft.outline.sections.length > 0) {
-    score += 20;
-  }
-  if (draft.acceptedVersionId) {
-    score += 20;
-  }
-  return Math.min(score, 100);
+  const items = getDraftReadinessItems(draft);
+  return calculateReadinessScore(items);
 }
 
 function outlineToVersion(outline: SessionOutline, prompt: string): AIContentVersion {

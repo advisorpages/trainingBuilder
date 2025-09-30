@@ -4,6 +4,7 @@ import { SessionOutline, FlexibleSessionSection } from '../../../services/sessio
 import { AIContentVersion, SessionMetadata } from '../state/types';
 import { cn } from '../../../lib/utils';
 import { ReadinessIndicator } from './ReadinessIndicator';
+import { MIN_PUBLISH_SCORE } from '../utils/readiness';
 
 interface ArtifactsPreviewProps {
   metadata: SessionMetadata;
@@ -295,7 +296,6 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
                 metadata={metadata}
                 hasOutline={hasOutline}
                 hasAcceptedVersion={hasAcceptedContent}
-                readinessScore={readinessScore}
                 onOpenQuickAdd={onOpenQuickAdd}
               />
             </TabsContent>
@@ -482,87 +482,44 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
             </TabsContent>
 
             <TabsContent value="export" className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm">Export Options</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <Button variant="outline" className="w-full justify-start" disabled>
-                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Download PDF
-                      <span className="ml-auto text-xs text-slate-400">Coming Soon</span>
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start" disabled>
-                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Export to Word
-                      <span className="ml-auto text-xs text-slate-400">Coming Soon</span>
-                    </Button>
-                    <Button variant="outline" className="w-full justify-start" disabled>
-                      <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-                      </svg>
-                      Share Link
-                      <span className="ml-auto text-xs text-slate-400">Coming Soon</span>
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm">Publishing</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="text-sm text-slate-600">
-                      <p className="mb-2">Readiness Score: <span className={cn('font-semibold', readinessScore >= 90 ? 'text-green-600' : readinessScore >= 70 ? 'text-yellow-600' : 'text-red-600')}>{readinessScore}%</span></p>
-                      <p className="text-xs text-slate-500">Sessions with 90%+ readiness can be published</p>
-                    </div>
-                    <Button
-                      className="w-full"
-                      disabled={!canPublish || publishStatus === 'pending' || publishStatus === 'success'}
-                      onClick={onPublish}
-                    >
-                      {publishStatus === 'pending'
-                        ? 'Publishing…'
-                        : canPublish
-                          ? publishStatus === 'success'
-                            ? 'Published'
-                            : 'Publish Session'
-                          : `${Math.max(0, 90 - readinessScore)}% to publish`}
-                    </Button>
-                    <Button variant="outline" className="w-full">
-                      Save as Template
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-sm">Session Summary</CardTitle>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Publishing</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="prose prose-sm max-w-none">
-                    <h3 className="text-base font-semibold mb-2">{sessionTitle}</h3>
-                    <p className="text-slate-600 mb-4">{sessionSummary}</p>
-
-                    {hasOutline && (
-                      <div>
-                        <h4 className="text-sm font-semibold mb-2">Session Outline ({outline.totalDuration} minutes)</h4>
-                        <ol className="list-decimal list-inside space-y-1 text-sm text-slate-600">
-                          {outline.sections.map((section) => (
-                            <li key={section.id}>
-                              {section.title} ({section.duration} min)
-                            </li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
+                <CardContent className="space-y-3">
+                  <div className="text-sm text-slate-600">
+                    <p className="mb-2">
+                      Readiness Score:{' '}
+                      <span
+                        className={cn(
+                          'font-semibold',
+                          readinessScore >= MIN_PUBLISH_SCORE
+                            ? 'text-green-600'
+                            : readinessScore >= 70
+                            ? 'text-yellow-600'
+                            : 'text-red-600'
+                        )}
+                      >
+                        {readinessScore}%
+                      </span>
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Sessions with {MIN_PUBLISH_SCORE}%+ readiness can be published
+                    </p>
                   </div>
+                  <Button
+                    className="w-full"
+                    disabled={!canPublish || publishStatus === 'pending' || publishStatus === 'success'}
+                    onClick={onPublish}
+                  >
+                    {publishStatus === 'pending'
+                      ? 'Publishing…'
+                      : canPublish
+                        ? publishStatus === 'success'
+                          ? 'Published'
+                          : 'Publish Session'
+                        : `${Math.max(0, MIN_PUBLISH_SCORE - readinessScore)}% to publish`}
+                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>
