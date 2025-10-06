@@ -68,7 +68,10 @@ export class SessionsController {
 
   @Post('bulk/publish')
   async bulkPublish(@Body('sessionIds') sessionIds: string[]) {
-    return this.sessionsService.bulkPublish(sessionIds);
+    console.log('Backend controller - bulkPublish called with:', { sessionIds });
+    const result = await this.sessionsService.bulkPublish(sessionIds);
+    console.log('Backend controller - bulkPublish result:', result);
+    return result;
   }
 
   @Post('bulk/archive')
@@ -81,7 +84,16 @@ export class SessionsController {
     @Body('sessionIds') sessionIds: string[],
     @Body('status') status: SessionStatus,
   ) {
-    return this.sessionsService.bulkUpdateStatus(sessionIds, status);
+    console.log('Backend controller - bulkUpdateStatus called with:', { sessionIds, status });
+
+    // Validate status parameter
+    if (!status || !Object.values(SessionStatus).includes(status)) {
+      throw new Error(`Invalid status: ${status}. Must be one of: ${Object.values(SessionStatus).join(', ')}`);
+    }
+
+    const result = await this.sessionsService.bulkUpdateStatus(sessionIds, status);
+    console.log('Backend controller - bulkUpdateStatus result:', result);
+    return result;
   }
 
   @Post(':id/publish')

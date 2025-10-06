@@ -4,6 +4,7 @@ import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
 import { ReadinessScoringService } from './services/readiness-scoring.service';
 import { OpenAIService } from '../../services/openai.service';
+import { PromptsModule } from '../prompts/prompts.module';
 import {
   Session,
   SessionContentVersion,
@@ -27,6 +28,7 @@ import {
       Topic,
       Incentive,
     ]),
+    PromptsModule,
   ],
   controllers: [SessionsController],
   providers: [SessionsService, ReadinessScoringService, OpenAIService],

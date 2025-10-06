@@ -10,6 +10,7 @@ import { Trainer } from './trainer.entity';
 import { TrainerAssignment } from './trainer-assignment.entity';
 import { TrainerAsset } from './trainer-asset.entity';
 import { User } from './user.entity';
+import { Prompt } from './prompt.entity';
 
 export * from './base.entity';
 export * from './session.entity';
@@ -24,6 +25,7 @@ export * from './trainer.entity';
 export * from './trainer-assignment.entity';
 export * from './trainer-asset.entity';
 export * from './user.entity';
+export * from './prompt.entity';
 
 export const entities = [
   Session,
@@ -38,4 +40,5 @@ export const entities = [
   TrainerAssignment,
   TrainerAsset,
   User,
+  Prompt,
 ];

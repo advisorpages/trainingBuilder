@@ -17,6 +17,7 @@ import { EmailModule } from './modules/email/email.module';
 import { HealthModule } from './modules/health/health.module';
 import { LandingPagesModule } from './modules/landing-pages/landing-pages.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { PromptsModule } from './modules/prompts/prompts.module';
 import { entities } from './entities';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -36,7 +37,7 @@ import { SnakeNamingStrategy } from './config/snake-naming.strategy';
         password: configService.get('DATABASE_PASSWORD', 'postgres'),
         database: configService.get('DATABASE_NAME', 'leadership_training'),
         entities,
-        migrations: ['dist/backend/src/migrations/*.js'],
+        migrations: ['dist/migrations/*.js'],
         synchronize: false,
         migrationsRun: true,
         logging: configService.get('NODE_ENV') === 'development',
@@ -56,6 +57,7 @@ import { SnakeNamingStrategy } from './config/snake-naming.strategy';
     EmailModule,
     HealthModule,
     AnalyticsModule,
+    PromptsModule,
   ],
   controllers: [AppController],
   providers: [

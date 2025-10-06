@@ -107,6 +107,67 @@ class SessionService {
     return response.data;
   }
 
+  async bulkArchive(sessionIds: string[]): Promise<{ archived: number }> {
+    const response = await api.post<{ archived: number }>(`${this.base}/bulk/archive`, { sessionIds });
+    return response.data;
+  }
+
+  async bulkUpdateStatus(sessionIds: string[], status: string): Promise<{ updated: number }> {
+    try {
+      console.log('Frontend service - bulkUpdateStatus called with:', { sessionIds, status });
+
+      // Validate inputs - allow empty string but not null/undefined
+      if (status === null || status === undefined) {
+        throw new Error('Status is required');
+      }
+
+      if (!sessionIds || sessionIds.length === 0) {
+        throw new Error('Session IDs are required');
+      }
+
+      const response = await api.post<{ updated: number }>(`${this.base}/bulk/status`, { sessionIds, status });
+      console.log('Frontend service - bulkUpdateStatus response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Frontend service - bulkUpdateStatus error:', error);
+
+      // Provide more specific error messages
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data?.message || 'Invalid request parameters');
+      }
+
+      if (error.response?.status === 500) {
+        throw new Error('Server error occurred while updating session status');
+      }
+
+      throw new Error(error.response?.data?.message || error.message || 'Failed to update session status');
+    }
+  }
+
+  async bulkPublish(sessionIds: string[]): Promise<{ published: number; failed: string[] }> {
+    try {
+      console.log('Frontend service - bulkPublish called with:', { sessionIds });
+      const response = await api.post<{ published: number; failed: string[] }>(`${this.base}/bulk/publish`, { sessionIds });
+      console.log('Frontend service - bulkPublish response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Frontend service - bulkPublish error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to publish sessions');
+    }
+  }
+
+  async getSessionReadiness(sessionId: string): Promise<any> {
+    try {
+      console.log('Frontend service - getSessionReadiness called for:', sessionId);
+      const response = await api.get<any>(`${this.base}/${sessionId}/readiness`);
+      console.log('Frontend service - getSessionReadiness response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Frontend service - getSessionReadiness error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to get session readiness');
+    }
+  }
+
   // Public methods for homepage (no auth required)
   async getPublishedSessions(): Promise<Session[]> {
     const response = await axios.get<Session[]>(`${API_BASE_URL}${API_ENDPOINTS.SESSIONS.PUBLIC}`);

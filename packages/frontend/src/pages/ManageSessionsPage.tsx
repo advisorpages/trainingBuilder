@@ -4,18 +4,9 @@ import { BuilderLayout } from '../layouts/BuilderLayout';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { sessionService } from '../services/session.service';
+import { Session, SessionStatus } from '@leadership-training/shared';
 
-interface Session {
-  id: string;
-  title: string;
-  subtitle?: string;
-  status: 'draft' | 'review' | 'ready' | 'published' | 'retired';
-  readinessScore?: number;
-  updatedAt: string;
-  topic?: {
-    id: string;
-    name: string;
-  };
+interface SessionWithRelations extends Session {
   trainerAssignments?: Array<{
     trainer: {
       id: string;
@@ -28,16 +19,18 @@ interface Session {
   }>;
 }
 
-const StatusBadge: React.FC<{ status: Session['status'] }> = ({ status }) => {
+const StatusBadge: React.FC<{ status: SessionStatus }> = ({ status }) => {
   const statusConfig = {
-    draft: { label: 'Draft', className: 'bg-gray-100 text-gray-700' },
-    review: { label: 'Review', className: 'bg-yellow-100 text-yellow-700' },
-    ready: { label: 'Ready', className: 'bg-blue-100 text-blue-700' },
-    published: { label: 'Published', className: 'bg-green-100 text-green-700' },
-    retired: { label: 'Retired', className: 'bg-red-100 text-red-700' },
+    [SessionStatus.DRAFT]: { label: 'Draft', className: 'bg-gray-100 text-gray-700' },
+    [SessionStatus.REVIEW]: { label: 'Review', className: 'bg-yellow-100 text-yellow-700' },
+    [SessionStatus.READY]: { label: 'Ready', className: 'bg-blue-100 text-blue-700' },
+    [SessionStatus.PUBLISHED]: { label: 'Published', className: 'bg-green-100 text-green-700' },
+    [SessionStatus.RETIRED]: { label: 'Archived', className: 'bg-gray-50 text-gray-900' },
+    [SessionStatus.COMPLETED]: { label: 'Completed', className: 'bg-purple-100 text-purple-700' },
+    [SessionStatus.CANCELLED]: { label: 'Archived', className: 'bg-gray-50 text-gray-900' },
   };
 
-  const config = statusConfig[status];
+  const config = statusConfig[status] || { label: status, className: 'bg-gray-100 text-gray-700' };
 
   return (
     <span className={`px-2 py-1 text-xs font-medium rounded-full ${config.className}`}>
@@ -47,7 +40,7 @@ const StatusBadge: React.FC<{ status: Session['status'] }> = ({ status }) => {
 };
 
 const SessionsTable: React.FC<{
-  sessions: Session[];
+  sessions: SessionWithRelations[];
   selectedSessions: string[];
   onSelectionChange: (selectedIds: string[]) => void;
   onEditSession: (sessionId: string) => void;
@@ -125,11 +118,11 @@ const SessionsTable: React.FC<{
                 <StatusBadge status={session.status} />
               </td>
               <td className="px-6 py-4 text-sm text-slate-900">
-                {session.topic ? session.topic.name : '—'}
+                {session.topics && session.topics.length > 0 ? session.topics[0].name : '—'}
               </td>
               <td className="px-6 py-4 text-sm text-slate-900">
-                {session.trainerAssignments?.length
-                  ? session.trainerAssignments[0].trainer.name
+                {(session as SessionWithRelations).trainerAssignments?.length
+                  ? (session as SessionWithRelations).trainerAssignments![0].trainer.name
                   : '—'}
               </td>
               <td className="px-6 py-4 text-sm text-slate-500">
@@ -154,37 +147,98 @@ const SessionsTable: React.FC<{
 
 export const ManageSessionsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<SessionWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSessions, setSelectedSessions] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [topicFilter, setTopicFilter] = useState<string>('all');
+  const [availableTopics, setAvailableTopics] = useState<Array<{id: string, name: string}>>([]);
+
+  console.log('Component render - statusFilter:', statusFilter, 'topicFilter:', topicFilter);
+
+  // Track if this is the initial mount
+  const [isInitialMount, setIsInitialMount] = useState(true);
 
   useEffect(() => {
+    if (isInitialMount) {
+      console.log('Initial mount - setting up sessions');
+      setIsInitialMount(false);
+    } else {
+      console.log('Filter changed - refetching sessions');
+    }
+    console.log('Effect triggered - statusFilter:', statusFilter, 'topicFilter:', topicFilter);
     fetchSessions();
   }, [statusFilter, topicFilter]);
+
+  // Get unique topics from sessions for filter options
+  const getAvailableTopics = (sessions: SessionWithRelations[]) => {
+    const topics = new Map<string, string>();
+    sessions.forEach(session => {
+      if (session.topics && session.topics.length > 0) {
+        session.topics.forEach(topic => {
+          topics.set(topic.id.toString(), topic.name);
+        });
+      }
+    });
+    return Array.from(topics.entries()).map(([id, name]) => ({ id, name }));
+  };
 
   const fetchSessions = async () => {
     try {
       setLoading(true);
+      console.log('Fetching sessions with filters:', { statusFilter, topicFilter });
 
       // Use the authenticated sessionService instead of direct fetch
       const data = await sessionService.getSessions();
-
-      // Apply filters if needed (could be moved to backend later)
-      let filteredData = data;
-      if (statusFilter !== 'all') {
-        filteredData = filteredData.filter(session => session.status === statusFilter);
-      }
-      if (topicFilter !== 'all') {
-        filteredData = filteredData.filter(session => session.topic?.id.toString() === topicFilter);
-      }
+      console.log('Raw sessions data:', data);
 
       // Ensure data is always an array
-      setSessions(Array.isArray(filteredData) ? filteredData : []);
+      const sessionsData = Array.isArray(data) ? data : [];
+      console.log('Sessions count:', sessionsData.length);
+
+      // Apply filters if needed (could be moved to backend later)
+      let filteredData = sessionsData;
+
+      // Apply status filter
+      if (statusFilter !== 'all') {
+        console.log('Applying status filter:', statusFilter);
+        filteredData = filteredData.filter(session => {
+          console.log(`Session ${session.id} status: ${session.status}, filter: ${statusFilter}, match: ${session.status === statusFilter}`);
+          return session.status === statusFilter;
+        });
+      } else {
+        // By default, hide archived sessions unless user specifically selects "Archived" filter
+        console.log('Hiding archived sessions by default');
+        filteredData = filteredData.filter(session => {
+          const shouldInclude = session.status !== 'retired';
+          console.log(`Session ${session.id}: ${session.status} !== retired? ${shouldInclude}`);
+          return shouldInclude;
+        });
+      }
+
+      // Apply topic filter
+      if (topicFilter !== 'all') {
+        console.log('Applying topic filter:', topicFilter);
+        filteredData = filteredData.filter(session => {
+          const hasTopic = session.topics &&
+            session.topics.length > 0 &&
+            session.topics.some(topic => topic.id.toString() === topicFilter);
+          console.log(`Session ${session.id} has topic ${topicFilter}? ${hasTopic}`);
+          return hasTopic;
+        });
+      }
+
+      // Update available topics for filter dropdown
+      const topics = getAvailableTopics(sessionsData);
+      console.log('Available topics:', topics);
+      setAvailableTopics(topics);
+
+      console.log('Final filtered sessions count:', filteredData.length);
+      setSessions(filteredData);
     } catch (error) {
       console.error('Failed to fetch sessions:', error);
       setSessions([]); // Set empty array on error
+      setAvailableTopics([]);
     } finally {
       setLoading(false);
     }
@@ -194,15 +248,69 @@ export const ManageSessionsPage: React.FC = () => {
     if (selectedSessions.length === 0) return;
 
     try {
-      // Use sessionService for bulk operations (you may need to add this method)
+      console.log('Publish button clicked, calling bulk publish with:', selectedSessions);
+
+      // First, check readiness of selected sessions
+      const readinessResults = [];
       for (const sessionId of selectedSessions) {
-        await sessionService.publishSession(sessionId);
+        try {
+          const readiness = await sessionService.getSessionReadiness(sessionId);
+          readinessResults.push({ sessionId, readiness });
+        } catch (error) {
+          console.error(`Failed to get readiness for session ${sessionId}:`, error);
+          readinessResults.push({ sessionId, error: error.message });
+        }
+      }
+
+      // Check if any sessions are not ready
+      const notReadySessions = readinessResults.filter(r =>
+        !r.readiness || !r.readiness.canPublish
+      );
+
+      if (notReadySessions.length > 0) {
+        const notReadyList = notReadySessions.map(r => {
+          if (r.error) return `${r.sessionId}: Error checking readiness`;
+          return `${r.sessionId}: ${r.readiness.percentage}% ready (needs ${r.readiness.recommendedActions.join(', ')})`;
+        }).join('\n');
+
+        console.log('Not ready sessions:', notReadyList);
+
+        // For now, always proceed to see what happens
+        const proceedAnyway = true; // Temporarily bypass confirmation
+
+        if (!proceedAnyway) {
+          return;
+        }
+      }
+
+      // Use sessionService bulk publish method
+      const result = await sessionService.bulkPublish(selectedSessions);
+      console.log('Publish result:', result);
+
+      if (result.published > 0) {
+        alert(`Successfully published ${result.published} session(s)`);
+      }
+
+      if (result.failed.length > 0) {
+        const failedSessionDetails = await Promise.all(
+          result.failed.map(async (sessionId) => {
+            try {
+              const readiness = await sessionService.getSessionReadiness(sessionId);
+              return `${sessionId}: ${readiness.percentage}% ready (${readiness.recommendedActions.join(', ')})`;
+            } catch {
+              return `${sessionId}: Unable to check readiness`;
+            }
+          })
+        );
+
+        alert(`Failed to publish ${result.failed.length} session(s):\n\n${failedSessionDetails.join('\n')}`);
       }
 
       setSelectedSessions([]);
       fetchSessions();
     } catch (error) {
       console.error('Failed to publish sessions:', error);
+      alert(`Error publishing sessions: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -210,15 +318,57 @@ export const ManageSessionsPage: React.FC = () => {
     if (selectedSessions.length === 0) return;
 
     try {
-      // Use sessionService for bulk operations (using status update method)
-      for (const sessionId of selectedSessions) {
-        await sessionService.updateSessionStatus(sessionId, { status: 'retired' });
+      console.log('Archive button clicked, calling with status:', SessionStatus.RETIRED);
+
+      // First check if selected sessions are already archived
+      const selectedSessionObjects = sessions.filter(s => selectedSessions.includes(s.id));
+      const alreadyArchived = selectedSessionObjects.filter(s => s.status === 'retired');
+
+      if (alreadyArchived.length > 0) {
+        alert(`Some selected sessions are already archived: ${alreadyArchived.map(s => s.title).join(', ')}`);
+        return;
+      }
+
+      // Use sessionService bulk status update method with RETIRED status
+      console.log('Calling bulkUpdateStatus with:', selectedSessions, 'retired');
+      const result = await sessionService.bulkUpdateStatus(selectedSessions, 'retired');
+      console.log('Archive result:', result);
+
+      if (result.updated > 0) {
+        alert(`Successfully archived ${result.updated} session(s)`);
+      } else {
+        alert('No sessions were archived');
       }
 
       setSelectedSessions([]);
       fetchSessions();
     } catch (error) {
       console.error('Failed to archive sessions:', error);
+      alert(`Error archiving sessions: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleBulkRestoreToPublished = async () => {
+    if (selectedSessions.length === 0) return;
+
+    try {
+      console.log('Restore to Published button clicked, calling with status:', SessionStatus.PUBLISHED);
+
+      // Use sessionService bulk status update method with PUBLISHED status
+      const result = await sessionService.bulkUpdateStatus(selectedSessions, 'published');
+      console.log('Restore to Published result:', result);
+
+      if (result.updated > 0) {
+        alert(`Successfully restored ${result.updated} session(s) to published status`);
+      } else {
+        alert('No sessions were restored');
+      }
+
+      setSelectedSessions([]);
+      fetchSessions();
+    } catch (error) {
+      console.error('Failed to restore sessions to published:', error);
+      alert(`Error restoring sessions: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -247,7 +397,7 @@ export const ManageSessionsPage: React.FC = () => {
   return (
     <BuilderLayout
       title="Sessions"
-      subtitle={`${(sessions || []).length} sessions total`}
+      subtitle={`${(sessions || []).length} sessions total${statusFilter === 'all' ? ' (archived sessions hidden)' : ''}`}
     >
       <div className="space-y-6">
         {/* Controls */}
@@ -255,7 +405,11 @@ export const ManageSessionsPage: React.FC = () => {
           <div className="flex flex-wrap gap-4">
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                console.log('Status filter onChange fired, value:', value, 'current state:', statusFilter);
+                setStatusFilter(value);
+              }}
               className="rounded-lg border-slate-300 text-sm"
             >
               <option value="all">All Status</option>
@@ -263,7 +417,9 @@ export const ManageSessionsPage: React.FC = () => {
               <option value="review">Review</option>
               <option value="ready">Ready</option>
               <option value="published">Published</option>
-              <option value="retired">Retired</option>
+              <option value="retired">Archived</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
 
             <select
@@ -272,7 +428,11 @@ export const ManageSessionsPage: React.FC = () => {
               className="rounded-lg border-slate-300 text-sm"
             >
               <option value="all">All Topics</option>
-              {/* Topic options would be populated from API */}
+              {availableTopics.map(topic => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.name}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -294,6 +454,20 @@ export const ManageSessionsPage: React.FC = () => {
                 {selectedSessions.length} session{selectedSessions.length > 1 ? 's' : ''} selected
               </span>
               <div className="flex gap-2">
+                {/* Show Restore to Published button only for archived/cancelled sessions */}
+                {(() => {
+                  const selectedSessionObjects = sessions.filter(s => selectedSessions.includes(s.id));
+                  const hasArchivedOrCancelled = selectedSessionObjects.some(s =>
+                    s.status === 'retired' || s.status === 'cancelled'
+                  );
+
+                  return hasArchivedOrCancelled ? (
+                    <Button variant="outline" size="sm" onClick={handleBulkRestoreToPublished}>
+                      Restore to Published
+                    </Button>
+                  ) : null;
+                })()}
+
                 <Button variant="outline" size="sm" onClick={handleBulkPublish}>
                   Publish Selected
                 </Button>

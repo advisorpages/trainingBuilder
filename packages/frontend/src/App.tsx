@@ -24,6 +24,7 @@ import IncentiveWorksheetPage from './pages/IncentiveWorksheetPage'
 import BrokerSessionsPage from './pages/BrokerSessionsPage'
 import BrokerIncentivesPage from './pages/BrokerIncentivesPage'
 import BrokerReportsPage from './pages/BrokerReportsPage'
+import { AISettingsPage } from './pages/AISettingsPage'
 import HomePage from './pages/HomePage'
 import './App.css'
 
@@ -158,6 +159,14 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageCategoriesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/ai"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <AISettingsPage />
               </ProtectedRoute>
             }
           />

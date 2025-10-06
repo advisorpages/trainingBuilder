@@ -71,7 +71,10 @@ export interface Session {
 
 export enum SessionStatus {
   DRAFT = 'draft',
+  REVIEW = 'review',
+  READY = 'ready',
   PUBLISHED = 'published',
+  RETIRED = 'retired',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
 }

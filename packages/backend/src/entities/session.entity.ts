@@ -24,6 +24,8 @@ export enum SessionStatus {
   READY = 'ready',
   PUBLISHED = 'published',
   RETIRED = 'retired',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
 }
 
 @Entity({ name: 'sessions' })

@@ -22,6 +22,7 @@ import {
   TopicReference,
 } from './dto/suggest-outline.dto';
 import { OpenAIService, OpenAISessionOutlineRequest } from '../../services/openai.service';
+import { PromptRegistryService } from '../../services/prompt-registry.service';
 
 @Injectable()
 export class SessionsService {
@@ -40,6 +41,7 @@ export class SessionsService {
     private readonly draftsRepository: Repository<SessionBuilderDraft>,
     private readonly readinessScoringService: ReadinessScoringService,
     private readonly openAIService: OpenAIService,
+    private readonly promptRegistry: PromptRegistryService,
   ) {}
 
   private applyPublishTimestamp(session: Session, previousStatus: SessionStatus) {
@@ -59,6 +61,12 @@ export class SessionsService {
     remark?: string,
   ) {
     if (previousStatus === session.status) {
+      return;
+    }
+
+    // Ensure session.status is valid before creating log
+    if (!session.status) {
+      console.error(`Cannot record status transition: session ${session.id} has invalid status: ${session.status}`);
       return;
     }
 
@@ -589,6 +597,7 @@ export class SessionsService {
   }
 
   async bulkUpdateStatus(sessionIds: string[], status: SessionStatus): Promise<{ updated: number }> {
+    console.log('Backend service - bulkUpdateStatus called with:', { sessionIds, status });
     if (sessionIds.length === 0) {
       return { updated: 0 };
     }
@@ -597,6 +606,7 @@ export class SessionsService {
       where: { id: In(sessionIds) },
       relations: ['contentVersions', 'agendaItems', 'trainerAssignments', 'landingPage', 'incentives'],
     });
+    console.log('Backend service - found sessions:', sessions.map(s => ({ id: s.id, currentStatus: s.status })));
 
     const previousStatusMap = new Map<string, SessionStatus>();
     const readinessMap = new Map<string, ReadinessScore>();
@@ -604,10 +614,12 @@ export class SessionsService {
 
     for (const session of sessions) {
       if (session.status === status) {
+        console.log(`Session ${session.id} already has status ${status}, skipping`);
         continue;
       }
 
       const previousStatus = session.status;
+      console.log(`Session ${session.id}: changing status from ${previousStatus} to ${status}`);
       session.status = status;
       this.applyPublishTimestamp(session, previousStatus);
 
@@ -620,9 +632,11 @@ export class SessionsService {
     }
 
     if (updates.length === 0) {
+      console.log('No sessions to update');
       return { updated: 0 };
     }
 
+    console.log('Backend service - saving sessions with new statuses:', updates.map(s => ({ id: s.id, newStatus: s.status })));
     await this.sessionsRepository.save(updates);
 
     for (const session of updates) {
@@ -633,6 +647,7 @@ export class SessionsService {
       }
     }
 
+    console.log(`Backend service - successfully updated ${updates.length} sessions`);
     return { updated: updates.length };
   }
 
@@ -642,6 +657,7 @@ export class SessionsService {
   }
 
   async bulkPublish(sessionIds: string[]): Promise<{ published: number; failed: string[] }> {
+    console.log('Backend service - bulkPublish called with:', { sessionIds });
     if (sessionIds.length === 0) {
       return { published: 0, failed: [] };
     }
@@ -650,9 +666,11 @@ export class SessionsService {
       where: { id: In(sessionIds) },
       relations: ['contentVersions', 'agendaItems', 'trainerAssignments', 'landingPage', 'incentives'],
     });
+    console.log('Backend service - found sessions for publish:', sessions.map(s => ({ id: s.id, status: s.status, readinessScore: s.readinessScore })));
 
     const foundIds = new Set(sessions.map((session) => session.id));
     const missingIds = sessionIds.filter((id) => !foundIds.has(id));
+    console.log('Backend service - missing session IDs:', missingIds);
 
     const publishable: Session[] = [];
     const readinessMap = new Map<string, ReadinessScore>();
@@ -660,7 +678,10 @@ export class SessionsService {
     const failed: string[] = [...missingIds];
 
     for (const session of sessions) {
+      console.log(`Backend service - checking readiness for session ${session.id}`);
       const readiness = await this.readinessScoringService.calculateReadinessScore(session);
+      console.log(`Backend service - session ${session.id} readiness: ${readiness.percentage}%, canPublish: ${readiness.canPublish}`);
+
       if (readiness.canPublish) {
         const previousStatus = session.status;
         previousStatusMap.set(session.id, previousStatus);
@@ -669,15 +690,19 @@ export class SessionsService {
         session.readinessScore = readiness.percentage;
         readinessMap.set(session.id, readiness);
         publishable.push(session);
+        console.log(`Backend service - session ${session.id} marked as publishable`);
       } else {
         failed.push(session.id);
+        console.log(`Backend service - session ${session.id} failed readiness check`);
       }
     }
 
     if (publishable.length === 0) {
+      console.log('Backend service - no sessions ready for publishing');
       return { published: 0, failed };
     }
 
+    console.log('Backend service - saving publishable sessions:', publishable.map(s => ({ id: s.id, newStatus: s.status })));
     await this.sessionsRepository.save(publishable);
 
     for (const session of publishable) {
@@ -688,6 +713,7 @@ export class SessionsService {
       }
     }
 
+    console.log(`Backend service - successfully published ${publishable.length} sessions, ${failed.length} failed`);
     return { published: publishable.length, failed };
   }
 
