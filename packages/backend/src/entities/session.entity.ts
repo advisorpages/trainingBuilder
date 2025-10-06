@@ -17,6 +17,7 @@ import { SessionContentVersion } from './session-content-version.entity';
 import { TrainerAssignment } from './trainer-assignment.entity';
 import { SessionStatusLog } from './session-status-log.entity';
 import { User } from './user.entity';
+import { Category } from './category.entity';
 
 export enum SessionStatus {
   DRAFT = 'draft',
@@ -77,6 +78,13 @@ export class Session extends BaseEntity {
 
   @Column({ type: 'int', name: 'tone_id', nullable: true })
   toneId?: number;
+
+  @Column({ type: 'int', name: 'category_id', nullable: true })
+  categoryId?: number;
+
+  @ManyToOne(() => Category, (category) => category.sessions, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'category_id' })
+  category?: Category;
 
   @ManyToOne(() => Topic, (topic) => topic.sessions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'topic_id' })

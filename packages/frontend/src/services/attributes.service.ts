@@ -13,7 +13,7 @@ class AttributesService {
   }
 
   async getCategories(): Promise<Category[]> {
-    const response = await api.get<Category[]>('/categories');
+    const response = await api.get<Category[]>('/admin/categories/active');
     return response.data;
   }
 

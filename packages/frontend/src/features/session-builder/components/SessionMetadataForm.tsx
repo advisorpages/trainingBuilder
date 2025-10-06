@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Input, Button, Card, CardContent, CardHeader, CardTitle } from '../../../ui';
 import { SessionMetadata } from '../state/types';
 import { cn } from '../../../lib/utils';
+import { CategorySelect } from '../../../components/ui/CategorySelect';
 
 interface SessionMetadataFormProps {
   metadata: SessionMetadata;
@@ -45,10 +46,10 @@ const timeSegment = (value: string) => {
 
 
 // Field validation helper
-const getFieldValidation = (field: keyof SessionMetadata, value: string) => {
-  const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'category', 'sessionType', 'location'];
+const getFieldValidation = (field: keyof SessionMetadata, value: string | number | undefined) => {
+  const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'categoryId', 'sessionType', 'location'];
   const isRequired = requiredFields.includes(field);
-  const isEmpty = !value || value.trim() === '';
+  const isEmpty = field === 'categoryId' ? !value : (!value || String(value).trim() === '');
 
   return {
     isRequired,
@@ -80,7 +81,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
     };
 
   const validateField = (field: keyof SessionMetadata) => {
-    const validation = getFieldValidation(field, metadata[field] as string);
+    const validation = getFieldValidation(field, metadata[field]);
     if (!validation.isValid) {
       setFieldErrors(prev => ({ ...prev, [field]: validation.errorMessage }));
       return false;
@@ -89,12 +90,12 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   };
 
   const validateForm = () => {
-    const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'category', 'sessionType', 'location'];
+    const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'categoryId', 'sessionType', 'location'];
     let isValid = true;
     const errors: Record<string, string> = {};
 
     requiredFields.forEach(field => {
-      const validation = getFieldValidation(field, metadata[field] as string);
+      const validation = getFieldValidation(field, metadata[field]);
       if (!validation.isValid) {
         errors[field] = validation.errorMessage;
         isValid = false;
@@ -156,17 +157,25 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <label htmlFor="session-category" className="text-sm font-medium text-slate-700">
                 Category <span className="text-red-500">*</span>
               </label>
-              <Input
-                id="session-category"
-                value={metadata.category}
-                placeholder="Leadership, Sales, Communication..."
-                onChange={handleStringChange('category')}
+              <CategorySelect
+                value={metadata.categoryId || ''}
+                onChange={(categoryId) => {
+                  onChange({ categoryId: categoryId || undefined });
+                  // Clear error when user selects a category
+                  if (fieldErrors.categoryId) {
+                    setFieldErrors(prev => ({ ...prev, categoryId: '' }));
+                  }
+                }}
+                placeholder="Select or create category..."
                 className={cn(
-                  fieldErrors.category && 'border-red-500 focus:border-red-500'
+                  fieldErrors.categoryId && 'border-red-500 focus:border-red-500'
                 )}
+                allowCreate={true}
+                required={true}
+                onError={(error) => console.error('Category error:', error)}
               />
-              {fieldErrors.category && (
-                <p className="text-xs text-red-600">{fieldErrors.category}</p>
+              {fieldErrors.categoryId && (
+                <p className="text-xs text-red-600">{fieldErrors.categoryId}</p>
               )}
             </div>
 

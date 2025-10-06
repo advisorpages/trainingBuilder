@@ -3,107 +3,58 @@ import { BuilderLayout } from '../layouts/BuilderLayout';
 import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Input } from '../ui/input';
+import { categoryService } from '../services/category.service';
+import type { Category } from '@leadership-training/shared';
 
-interface Category {
-  id: string;
-  name: string;
-  description: string;
-  color: string;
-  icon: string;
-  sessionCount: number;
-  parentId?: string;
-  isActive: boolean;
-  order: number;
-}
 
 const ManageCategoriesPage: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    setTimeout(() => {
-      setCategories([
-        {
-          id: '1',
-          name: 'Leadership Development',
-          description: 'Sessions focused on building leadership skills and capabilities',
-          color: 'blue',
-          icon: '👑',
-          sessionCount: 12,
-          isActive: true,
-          order: 1,
-        },
-        {
-          id: '2',
-          name: 'Communication Skills',
-          description: 'Training on effective communication, presentation, and interpersonal skills',
-          color: 'green',
-          icon: '💬',
-          sessionCount: 8,
-          isActive: true,
-          order: 2,
-        },
-        {
-          id: '3',
-          name: 'Team Management',
-          description: 'Building and managing high-performing teams',
-          color: 'purple',
-          icon: '👥',
-          sessionCount: 15,
-          isActive: true,
-          order: 3,
-        },
-        {
-          id: '4',
-          name: 'Strategic Planning',
-          description: 'Strategic thinking, planning, and execution methodologies',
-          color: 'orange',
-          icon: '🎯',
-          sessionCount: 6,
-          isActive: true,
-          order: 4,
-        },
-        {
-          id: '5',
-          name: 'Digital Transformation',
-          description: 'Leading change in the digital age',
-          color: 'cyan',
-          icon: '🚀',
-          sessionCount: 4,
-          isActive: true,
-          order: 5,
-        },
-        {
-          id: '6',
-          name: 'Performance Management',
-          description: 'Optimizing individual and team performance',
-          color: 'yellow',
-          icon: '📊',
-          sessionCount: 7,
-          isActive: false,
-          order: 6,
-        },
-      ]);
+  const loadCategories = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await categoryService.getCategories({
+        search: searchTerm || undefined,
+        page: 1,
+        limit: 100,
+      });
+      setCategories(response.categories);
+    } catch (err) {
+      setError('Failed to load categories');
+      console.error('Error loading categories:', err);
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, []);
+    }
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, [searchTerm]);
 
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    category.description.toLowerCase().includes(searchTerm.toLowerCase())
+    (category.description && category.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const getColorClasses = (color: string, variant: 'bg' | 'text' | 'border' = 'bg') => {
-    const colorMap: { [key: string]: { [key: string]: string } } = {
-      blue: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
-      green: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
-      purple: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
-      orange: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
-      cyan: { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
-      yellow: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200' },
-    };
-    return colorMap[color]?.[variant] || colorMap.blue[variant];
+  const getColorClasses = (index: number) => {
+    const colors = [
+      { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+      { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
+      { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+      { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+      { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
+      { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200' },
+    ];
+    return colors[index % colors.length];
+  };
+
+  const getDefaultIcon = (index: number) => {
+    const icons = ['📂', '📋', '📊', '🎯', '💼', '🔧'];
+    return icons[index % icons.length];
   };
 
   return (
@@ -150,42 +101,50 @@ const ManageCategoriesPage: React.FC = () => {
             <div>
               <h3 className="text-lg font-semibold text-slate-900 mb-4">Active Categories</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCategories.filter(cat => cat.isActive).map((category) => (
-                  <Card key={category.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${getColorClasses(category.color)}`}>
-                            <span className="text-lg">{category.icon}</span>
+                {filteredCategories.filter(cat => cat.isActive).map((category, index) => {
+                  const colors = getColorClasses(index);
+                  const icon = getDefaultIcon(index);
+                  return (
+                    <Card key={category.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg ${colors.bg}`}>
+                              <span className="text-lg">{icon}</span>
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-slate-900">{category.name}</h4>
+                              <p className={`text-sm font-medium ${colors.text}`}>
+                                ID: {category.id}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-semibold text-slate-900">{category.name}</h4>
-                            <p className={`text-sm font-medium ${getColorClasses(category.color, 'text')}`}>
-                              {category.sessionCount} sessions
-                            </p>
+                          <div className="text-xs text-slate-400">
+                            {new Date(category.createdAt).toLocaleDateString()}
                           </div>
                         </div>
-                        <div className="text-xs text-slate-400">#{category.order}</div>
-                      </div>
 
-                      <p className="text-sm text-slate-600 mb-4">{category.description}</p>
+                        <p className="text-sm text-slate-600 mb-4">
+                          {category.description || 'No description provided'}
+                        </p>
 
-                      <div className="flex items-center justify-between">
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            Edit
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-slate-500">
-                            View Sessions
-                          </Button>
+                        <div className="flex items-center justify-between">
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm">
+                              Edit
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-slate-500">
+                              View Sessions
+                            </Button>
+                          </div>
+                          <div className={`px-2 py-1 text-xs rounded-full ${colors.bg} ${colors.text}`}>
+                            Active
+                          </div>
                         </div>
-                        <div className={`px-2 py-1 text-xs rounded-full ${getColorClasses(category.color)} ${getColorClasses(category.color, 'text')}`}>
-                          Active
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
 
@@ -194,42 +153,49 @@ const ManageCategoriesPage: React.FC = () => {
               <div>
                 <h3 className="text-lg font-semibold text-slate-900 mb-4">Inactive Categories</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredCategories.filter(cat => !cat.isActive).map((category) => (
-                    <Card key={category.id} className="opacity-60">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-slate-100">
-                              <span className="text-lg grayscale">{category.icon}</span>
+                  {filteredCategories.filter(cat => !cat.isActive).map((category, index) => {
+                    const icon = getDefaultIcon(index);
+                    return (
+                      <Card key={category.id} className="opacity-60">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-slate-100">
+                                <span className="text-lg grayscale">{icon}</span>
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-slate-700">{category.name}</h4>
+                                <p className="text-sm text-slate-500">
+                                  ID: {category.id}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="font-semibold text-slate-700">{category.name}</h4>
-                              <p className="text-sm text-slate-500">
-                                {category.sessionCount} sessions
-                              </p>
+                            <div className="text-xs text-slate-400">
+                              {new Date(category.createdAt).toLocaleDateString()}
                             </div>
                           </div>
-                          <div className="text-xs text-slate-400">#{category.order}</div>
-                        </div>
 
-                        <p className="text-sm text-slate-500 mb-4">{category.description}</p>
+                          <p className="text-sm text-slate-500 mb-4">
+                            {category.description || 'No description provided'}
+                          </p>
 
-                        <div className="flex items-center justify-between">
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                            <Button variant="default" size="sm">
-                              Activate
-                            </Button>
+                          <div className="flex items-center justify-between">
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm">
+                                Edit
+                              </Button>
+                              <Button variant="default" size="sm">
+                                Activate
+                              </Button>
+                            </div>
+                            <div className="px-2 py-1 text-xs rounded-full bg-slate-100 text-slate-600">
+                              Inactive
+                            </div>
                           </div>
-                          <div className="px-2 py-1 text-xs rounded-full bg-slate-100 text-slate-600">
-                            Inactive
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -248,8 +214,8 @@ const ManageCategoriesPage: React.FC = () => {
         )}
 
         {/* Stats Summary */}
-        {!loading && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6 border-t border-slate-200">
+        {!loading && !error && (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-6 border-t border-slate-200">
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-900">
                 {categories.filter(c => c.isActive).length}
@@ -258,22 +224,26 @@ const ManageCategoriesPage: React.FC = () => {
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-900">
-                {categories.reduce((sum, c) => sum + c.sessionCount, 0)}
-              </div>
-              <div className="text-sm text-slate-600">Total Sessions</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-slate-900">
-                {Math.round(categories.reduce((sum, c) => sum + c.sessionCount, 0) / categories.filter(c => c.isActive).length)}
-              </div>
-              <div className="text-sm text-slate-600">Avg per Category</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-slate-900">
                 {categories.filter(c => !c.isActive).length}
               </div>
-              <div className="text-sm text-slate-600">Inactive</div>
+              <div className="text-sm text-slate-600">Inactive Categories</div>
             </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-slate-900">
+                {categories.length}
+              </div>
+              <div className="text-sm text-slate-600">Total Categories</div>
+            </div>
+          </div>
+        )}
+
+        {/* Error Display */}
+        {error && !loading && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-4 text-center">
+            <p className="text-red-700 mb-2">{error}</p>
+            <Button variant="outline" onClick={loadCategories}>
+              Retry
+            </Button>
           </div>
         )}
       </div>

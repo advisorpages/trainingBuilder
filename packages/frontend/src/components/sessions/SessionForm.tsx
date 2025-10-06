@@ -12,6 +12,7 @@ import { EnhancedTopicSelection } from './EnhancedTopicSelection';
 import { SessionTopicDetail } from './EnhancedTopicCard';
 import { DynamicFieldsSection } from './DynamicFieldsSection';
 import { ReadOnlyTopicsDisplay } from './ReadOnlyTopicsDisplay';
+import { CategorySelect } from '../ui/CategorySelect';
 
 interface SessionFormProps {
   session?: Session;
@@ -117,7 +118,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const [locations, setLocations] = useState<Location[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [tones, setTones] = useState<Tone[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [sessionTopicDetails, setSessionTopicDetails] = useState<SessionTopicDetail[]>([]);
@@ -157,14 +157,12 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           locationsResponse,
           audiencesResponse,
           tonesResponse,
-          categoriesResponse,
           topicsResponse
         ] = await Promise.all([
           trainerService.getActiveTrainers(),
           locationService.getActiveLocations(),
           attributesService.getAudiences(),
           attributesService.getTones(),
-          attributesService.getCategories(),
           topicService.getActiveTopics()
         ]);
 
@@ -172,7 +170,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         setLocations(locationsResponse);
         setAudiences(audiencesResponse);
         setTones(tonesResponse);
-        setCategories(categoriesResponse);
         setTopics(topicsResponse);
 
         // Debug logging for topics
@@ -995,19 +992,14 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                 <label htmlFor="categoryId" className="block text-sm font-medium text-gray-700">
                   Category
                 </label>
-                <select
-                  id="categoryId"
+                <CategorySelect
                   value={formData.categoryId}
-                  onChange={(e) => handleInputChange('categoryId', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">Select category...</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(categoryId) => handleInputChange('categoryId', categoryId)}
+                  placeholder="Select category..."
+                  className="mt-1"
+                  allowCreate={true}
+                  onError={(error) => console.error('Category error:', error)}
+                />
               </div>
             </div>
           </div>

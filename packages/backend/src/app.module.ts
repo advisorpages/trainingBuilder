@@ -18,6 +18,7 @@ import { HealthModule } from './modules/health/health.module';
 import { LandingPagesModule } from './modules/landing-pages/landing-pages.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { PromptsModule } from './modules/prompts/prompts.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 import { entities } from './entities';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -58,6 +59,7 @@ import { SnakeNamingStrategy } from './config/snake-naming.strategy';
     HealthModule,
     AnalyticsModule,
     PromptsModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [

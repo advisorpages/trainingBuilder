@@ -8,7 +8,7 @@ export type PublishStatus = 'idle' | 'pending' | 'success' | 'error';
 export interface SessionMetadata {
   title: string;
   sessionType: 'event' | 'training' | 'workshop' | 'webinar';
-  category: string;
+  categoryId?: number;
   desiredOutcome: string;
   currentProblem: string;
   specificTopics: string;
