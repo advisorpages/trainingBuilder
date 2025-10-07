@@ -136,7 +136,6 @@ export class SessionsService {
     const session = this.sessionsRepository.create({
       title: dto.title,
       subtitle: dto.subtitle,
-      audience: dto.audience,
       objective: dto.objective,
       status: dto.status ?? SessionStatus.DRAFT,
       readinessScore: dto.readinessScore ?? 0,
@@ -189,7 +188,6 @@ export class SessionsService {
 
     if (dto.title !== undefined) session.title = dto.title;
     if (dto.subtitle !== undefined) session.subtitle = dto.subtitle;
-    if (dto.audience !== undefined) session.audience = dto.audience;
     if (dto.objective !== undefined) session.objective = dto.objective;
     if (dto.locationId !== undefined) session.locationId = dto.locationId;
     if (dto.audienceId !== undefined) session.audienceId = dto.audienceId;

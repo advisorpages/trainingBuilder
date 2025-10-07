@@ -80,11 +80,45 @@ export enum SessionStatus {
 }
 
 // Resource types
+export enum LocationType {
+  PHYSICAL = 'physical',
+  VIRTUAL = 'virtual',
+  HYBRID = 'hybrid',
+}
+
+export enum MeetingPlatform {
+  ZOOM = 'zoom',
+  MICROSOFT_TEAMS = 'microsoft_teams',
+  GOOGLE_MEET = 'google_meet',
+  OTHER = 'other',
+}
+
 export interface Location {
   id: number;
   name: string;
+  description?: string;
+  locationType: LocationType;
+
+  // Physical location fields
   address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postalCode?: string;
   capacity?: number;
+
+  // Virtual meeting fields
+  meetingPlatform?: MeetingPlatform;
+  meetingLink?: string;
+  meetingId?: string;
+  meetingPassword?: string;
+  dialInNumber?: string;
+
+  // Common fields
+  timezone?: string;
+  accessInstructions?: string;
+  notes?: string;
+
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -93,14 +127,12 @@ export interface Location {
 
 export interface Trainer {
   id: number;
-  firstName: string;
-  lastName: string;
   name: string;
-  email?: string;
+  email: string;
   bio?: string;
-  expertise?: string;
-  specialization?: string;
-  specializations?: string[];
+  phone?: string;
+  expertiseTags?: string[];
+  timezone?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -142,10 +174,39 @@ export interface Topic {
 }
 
 // Attribute types
+export enum AudienceExperienceLevel {
+  BEGINNER = 'beginner',
+  INTERMEDIATE = 'intermediate',
+  ADVANCED = 'advanced',
+  MIXED = 'mixed',
+}
+
+export enum AudienceCommunicationStyle {
+  FORMAL = 'formal',
+  CONVERSATIONAL = 'conversational',
+  TECHNICAL = 'technical',
+  SIMPLIFIED = 'simplified',
+}
+
+export enum AudienceVocabularyLevel {
+  BASIC = 'basic',
+  PROFESSIONAL = 'professional',
+  EXPERT = 'expert',
+  INDUSTRY_SPECIFIC = 'industry_specific',
+}
+
 export interface Audience {
   id: number;
   name: string;
   description?: string;
+  experienceLevel: AudienceExperienceLevel;
+  technicalDepth: number; // 1-5 scale
+  preferredLearningStyle?: string;
+  communicationStyle: AudienceCommunicationStyle;
+  exampleTypes: string[];
+  avoidTopics: string[];
+  vocabularyLevel: AudienceVocabularyLevel;
+  promptInstructions?: string;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

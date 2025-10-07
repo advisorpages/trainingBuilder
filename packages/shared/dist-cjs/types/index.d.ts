@@ -64,15 +64,43 @@ export interface Session {
 }
 export declare enum SessionStatus {
     DRAFT = "draft",
+    REVIEW = "review",
+    READY = "ready",
     PUBLISHED = "published",
+    RETIRED = "retired",
     COMPLETED = "completed",
     CANCELLED = "cancelled"
+}
+export declare enum LocationType {
+    PHYSICAL = "physical",
+    VIRTUAL = "virtual",
+    HYBRID = "hybrid"
+}
+export declare enum MeetingPlatform {
+    ZOOM = "zoom",
+    MICROSOFT_TEAMS = "microsoft_teams",
+    GOOGLE_MEET = "google_meet",
+    OTHER = "other"
 }
 export interface Location {
     id: number;
     name: string;
+    description?: string;
+    locationType: LocationType;
     address?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    postalCode?: string;
     capacity?: number;
+    meetingPlatform?: MeetingPlatform;
+    meetingLink?: string;
+    meetingId?: string;
+    meetingPassword?: string;
+    dialInNumber?: string;
+    timezone?: string;
+    accessInstructions?: string;
+    notes?: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -123,10 +151,36 @@ export interface Topic {
     updatedAt: Date;
     sessions?: Session[];
 }
+export declare enum AudienceExperienceLevel {
+    BEGINNER = "beginner",
+    INTERMEDIATE = "intermediate",
+    ADVANCED = "advanced",
+    MIXED = "mixed"
+}
+export declare enum AudienceCommunicationStyle {
+    FORMAL = "formal",
+    CONVERSATIONAL = "conversational",
+    TECHNICAL = "technical",
+    SIMPLIFIED = "simplified"
+}
+export declare enum AudienceVocabularyLevel {
+    BASIC = "basic",
+    PROFESSIONAL = "professional",
+    EXPERT = "expert",
+    INDUSTRY_SPECIFIC = "industry_specific"
+}
 export interface Audience {
     id: number;
     name: string;
     description?: string;
+    experienceLevel: AudienceExperienceLevel;
+    technicalDepth: number;
+    preferredLearningStyle?: string;
+    communicationStyle: AudienceCommunicationStyle;
+    exampleTypes: string[];
+    avoidTopics: string[];
+    vocabularyLevel: AudienceVocabularyLevel;
+    promptInstructions?: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;

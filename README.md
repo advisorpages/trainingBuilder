@@ -13,22 +13,58 @@ This repository is being overhauled so the AI Session Builder becomes the heart 
 - **AI Layer**: Central service providing prompt orchestration, provider adapters, and output moderation.
 
 ## 🚀 Development Workflow
+
 ### Prerequisites
 - Docker & Docker Compose
 - Node.js 18+
 
-### Commands
-```bash
-# Install dependencies
-yarn install # or npm run install:all
+### Quick Start (Recommended: Hybrid Development)
 
-# Start the stack (frontend + backend + db)
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Set up environment
+cp packages/backend/.env.example packages/backend/.env
+
+# 3. Start database (Docker)
+docker-compose up database
+
+# 4. Start backend (Local - new terminal)
+cd packages/backend && npm run start:dev
+
+# 5. Start frontend (Local - new terminal)
+cd packages/frontend && npm run dev
+```
+
+**Access the app:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+
+### Alternative: Full Docker
+
+```bash
+# Start all services in Docker
 npm run dev
 
-# Lint & tests
-npm run lint
-npm run test
+# Stop all services
+npm run down
 ```
+
+### Testing & Quality
+
+```bash
+# Lint all packages
+npm run lint
+
+# Run tests
+npm run test
+
+# Type check
+npm run typecheck
+```
+
+> **📚 For detailed setup, troubleshooting, and workflows, see [DEVELOPMENT.md](./DEVELOPMENT.md)**
 
 > **Tip:** During the reboot many modules are placeholders. Expect tests to be incomplete until later phases.
 

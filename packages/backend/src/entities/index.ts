@@ -12,6 +12,9 @@ import { TrainerAsset } from './trainer-asset.entity';
 import { User } from './user.entity';
 import { Prompt } from './prompt.entity';
 import { Category } from './category.entity';
+import { Location } from './location.entity';
+import { Audience } from './audience.entity';
+import { Tone } from './tone.entity';
 
 export * from './base.entity';
 export * from './session.entity';
@@ -28,6 +31,9 @@ export * from './trainer-asset.entity';
 export * from './user.entity';
 export * from './prompt.entity';
 export * from './category.entity';
+export * from './location.entity';
+export * from './audience.entity';
+export * from './tone.entity';
 
 export const entities = [
   Session,
@@ -44,4 +50,7 @@ export const entities = [
   User,
   Prompt,
   Category,
+  Location,
+  Audience,
+  Tone,
 ];

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.IncentiveStatus = exports.SettingDataType = exports.SessionStatus = exports.UserRole = void 0;
+exports.IncentiveStatus = exports.AudienceVocabularyLevel = exports.AudienceCommunicationStyle = exports.AudienceExperienceLevel = exports.SettingDataType = exports.MeetingPlatform = exports.LocationType = exports.SessionStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["BROKER"] = "Broker";
@@ -10,10 +10,27 @@ var UserRole;
 var SessionStatus;
 (function (SessionStatus) {
     SessionStatus["DRAFT"] = "draft";
+    SessionStatus["REVIEW"] = "review";
+    SessionStatus["READY"] = "ready";
     SessionStatus["PUBLISHED"] = "published";
+    SessionStatus["RETIRED"] = "retired";
     SessionStatus["COMPLETED"] = "completed";
     SessionStatus["CANCELLED"] = "cancelled";
 })(SessionStatus || (exports.SessionStatus = SessionStatus = {}));
+// Resource types
+var LocationType;
+(function (LocationType) {
+    LocationType["PHYSICAL"] = "physical";
+    LocationType["VIRTUAL"] = "virtual";
+    LocationType["HYBRID"] = "hybrid";
+})(LocationType || (exports.LocationType = LocationType = {}));
+var MeetingPlatform;
+(function (MeetingPlatform) {
+    MeetingPlatform["ZOOM"] = "zoom";
+    MeetingPlatform["MICROSOFT_TEAMS"] = "microsoft_teams";
+    MeetingPlatform["GOOGLE_MEET"] = "google_meet";
+    MeetingPlatform["OTHER"] = "other";
+})(MeetingPlatform || (exports.MeetingPlatform = MeetingPlatform = {}));
 var SettingDataType;
 (function (SettingDataType) {
     SettingDataType["STRING"] = "string";
@@ -21,6 +38,28 @@ var SettingDataType;
     SettingDataType["BOOLEAN"] = "boolean";
     SettingDataType["JSON"] = "json";
 })(SettingDataType || (exports.SettingDataType = SettingDataType = {}));
+// Attribute types
+var AudienceExperienceLevel;
+(function (AudienceExperienceLevel) {
+    AudienceExperienceLevel["BEGINNER"] = "beginner";
+    AudienceExperienceLevel["INTERMEDIATE"] = "intermediate";
+    AudienceExperienceLevel["ADVANCED"] = "advanced";
+    AudienceExperienceLevel["MIXED"] = "mixed";
+})(AudienceExperienceLevel || (exports.AudienceExperienceLevel = AudienceExperienceLevel = {}));
+var AudienceCommunicationStyle;
+(function (AudienceCommunicationStyle) {
+    AudienceCommunicationStyle["FORMAL"] = "formal";
+    AudienceCommunicationStyle["CONVERSATIONAL"] = "conversational";
+    AudienceCommunicationStyle["TECHNICAL"] = "technical";
+    AudienceCommunicationStyle["SIMPLIFIED"] = "simplified";
+})(AudienceCommunicationStyle || (exports.AudienceCommunicationStyle = AudienceCommunicationStyle = {}));
+var AudienceVocabularyLevel;
+(function (AudienceVocabularyLevel) {
+    AudienceVocabularyLevel["BASIC"] = "basic";
+    AudienceVocabularyLevel["PROFESSIONAL"] = "professional";
+    AudienceVocabularyLevel["EXPERT"] = "expert";
+    AudienceVocabularyLevel["INDUSTRY_SPECIFIC"] = "industry_specific";
+})(AudienceVocabularyLevel || (exports.AudienceVocabularyLevel = AudienceVocabularyLevel = {}));
 var IncentiveStatus;
 (function (IncentiveStatus) {
     IncentiveStatus["DRAFT"] = "draft";

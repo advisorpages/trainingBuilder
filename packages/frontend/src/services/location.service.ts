@@ -4,8 +4,7 @@ import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateLocationRequest {
   name: string;
-  address?: string;
-  capacity?: number;
+  description?: string;
 }
 
 export interface UpdateLocationRequest extends Partial<CreateLocationRequest> {
@@ -27,9 +26,9 @@ export interface PaginatedLocationsResponse {
   totalPages: number;
 }
 
-export interface CapacityCheckResponse {
-  available: boolean;
-  capacity?: number;
+export interface UsageCheckResponse {
+  inUse: boolean;
+  sessionCount?: number;
 }
 
 class LocationService {
@@ -74,10 +73,8 @@ class LocationService {
     await api.delete(`${this.baseUrl}/${id}`);
   }
 
-  async checkCapacity(id: number, requiredCapacity: number): Promise<CapacityCheckResponse> {
-    const response = await api.get<CapacityCheckResponse>(
-      `${this.baseUrl}/${id}/capacity-check?required=${requiredCapacity}`
-    );
+  async checkUsage(id: number): Promise<UsageCheckResponse> {
+    const response = await api.get<UsageCheckResponse>(`${this.baseUrl}/${id}/usage-check`);
     return response.data;
   }
 }

@@ -25,6 +25,7 @@ import BrokerSessionsPage from './pages/BrokerSessionsPage'
 import BrokerIncentivesPage from './pages/BrokerIncentivesPage'
 import BrokerReportsPage from './pages/BrokerReportsPage'
 import { AISettingsPage } from './pages/AISettingsPage'
+import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import HomePage from './pages/HomePage'
 import './App.css'
 
@@ -96,22 +97,9 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/admin/locations"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <ManageLocationsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/trainers"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <ManageTrainersPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Redirect to admin dashboard with tabs */}
+          <Route path="/admin/locations" element={<Navigate to="/admin/dashboard?tab=locations" replace />} />
+          <Route path="/admin/trainers" element={<Navigate to="/admin/dashboard?tab=trainers" replace />} />
           <Route
             path="/admin/settings"
             element={
@@ -138,35 +126,17 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/admin/audiences" element={<Navigate to="/admin/dashboard?tab=audiences" replace />} />
+          <Route path="/admin/tones" element={<Navigate to="/admin/dashboard?tab=tones" replace />} />
+          <Route path="/admin/categories" element={<Navigate to="/admin/dashboard?tab=categories" replace />} />
+          <Route path="/analytics" element={<Navigate to="/admin/dashboard?tab=analytics" replace />} />
+          <Route path="/settings/ai" element={<Navigate to="/admin/dashboard?tab=prompts" replace />} />
+
           <Route
-            path="/admin/audiences"
+            path="/admin/dashboard"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <ManageAudiencesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/tones"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <ManageTonesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/categories"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <ManageCategoriesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings/ai"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <AISettingsPage />
+                <AdminDashboardPage />
               </ProtectedRoute>
             }
           />

@@ -18,6 +18,9 @@ import { TrainerAssignment } from './trainer-assignment.entity';
 import { SessionStatusLog } from './session-status-log.entity';
 import { User } from './user.entity';
 import { Category } from './category.entity';
+import { Location } from './location.entity';
+import { Audience } from './audience.entity';
+import { Tone } from './tone.entity';
 
 export enum SessionStatus {
   DRAFT = 'draft',
@@ -37,9 +40,6 @@ export class Session extends BaseEntity {
 
   @Column({ nullable: true })
   subtitle?: string;
-
-  @Column({ type: 'text', nullable: true })
-  audience?: string;
 
   @Column({ type: 'text', nullable: true })
   objective?: string;
@@ -85,6 +85,18 @@ export class Session extends BaseEntity {
   @ManyToOne(() => Category, (category) => category.sessions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'category_id' })
   category?: Category;
+
+  @ManyToOne(() => Location, (location) => location.sessions, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'location_id' })
+  location?: Location;
+
+  @ManyToOne(() => Audience, (audience) => audience.sessions, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'audience_id' })
+  audience?: Audience;
+
+  @ManyToOne(() => Tone, (tone) => tone.sessions, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'tone_id' })
+  tone?: Tone;
 
   @ManyToOne(() => Topic, (topic) => topic.sessions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'topic_id' })

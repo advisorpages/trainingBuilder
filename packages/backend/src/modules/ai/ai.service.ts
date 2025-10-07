@@ -177,7 +177,7 @@ export class AiService {
     try {
       const session = await this.sessionsRepository.findOne({
         where: { id: sessionId },
-        relations: ['topic', 'incentives', 'trainerAssignments'],
+        relations: ['topic', 'incentives', 'trainerAssignments', 'audience', 'tone'],
       });
 
       return session;
@@ -199,14 +199,82 @@ export class AiService {
       });
     }
 
-    // Audience-based suggestions
+    // Audience-based suggestions (enriched)
     if (context?.audience) {
+      const audience = context.audience;
+
       suggestions.push({
         id: 'audience-context',
-        text: `Tailor language and examples for ${context.audience}`,
+        text: `Tailor content for ${audience.name} (${audience.experienceLevel} level, technical depth: ${audience.technicalDepth}/5)`,
         category: 'audience',
-        relevanceScore: 0.8,
+        relevanceScore: 0.9,
       });
+
+      if (audience.preferredLearningStyle) {
+        suggestions.push({
+          id: 'audience-learning-style',
+          text: `Use ${audience.preferredLearningStyle} learning approaches`,
+          category: 'audience',
+          relevanceScore: 0.85,
+        });
+      }
+
+      if (audience.exampleTypes?.length > 0) {
+        suggestions.push({
+          id: 'audience-examples',
+          text: `Include examples from: ${audience.exampleTypes.join(', ')}`,
+          category: 'audience',
+          relevanceScore: 0.8,
+        });
+      }
+
+      if (audience.avoidTopics?.length > 0) {
+        suggestions.push({
+          id: 'audience-avoid',
+          text: `Avoid these topics: ${audience.avoidTopics.join(', ')}`,
+          category: 'audience',
+          relevanceScore: 0.7,
+        });
+      }
+    }
+
+    // Tone-based suggestions (enriched)
+    if (context?.tone) {
+      const tone = context.tone;
+
+      suggestions.push({
+        id: 'tone-context',
+        text: `Use ${tone.style} tone with ${tone.energyLevel} energy (formality: ${tone.formality}/5)`,
+        category: 'tone',
+        relevanceScore: 0.9,
+      });
+
+      if (tone.languageCharacteristics?.length > 0) {
+        suggestions.push({
+          id: 'tone-language',
+          text: `Apply these language traits: ${tone.languageCharacteristics.join(', ')}`,
+          category: 'tone',
+          relevanceScore: 0.85,
+        });
+      }
+
+      if (tone.emotionalResonance?.length > 0) {
+        suggestions.push({
+          id: 'tone-emotion',
+          text: `Convey these emotions: ${tone.emotionalResonance.join(', ')}`,
+          category: 'tone',
+          relevanceScore: 0.8,
+        });
+      }
+
+      if (tone.examplePhrases?.length > 0) {
+        suggestions.push({
+          id: 'tone-examples',
+          text: `Example phrasing: "${tone.examplePhrases[0]}"`,
+          category: 'tone',
+          relevanceScore: 0.75,
+        });
+      }
     }
 
     // Kind-specific suggestions
@@ -244,14 +312,54 @@ export class AiService {
     let enhancedPrompt = originalPrompt;
 
     if (context) {
-      const contextInfo = [
-        context.topic ? `Topic: ${context.topic.name}` : null,
-        context.audience ? `Audience: ${context.audience}` : null,
-        context.objective ? `Objective: ${context.objective}` : null,
-      ].filter(Boolean).join('\n');
+      const contextParts: string[] = [];
 
-      if (contextInfo) {
-        enhancedPrompt = `Context:\n${contextInfo}\n\nRequest: ${originalPrompt}`;
+      // Topic context
+      if (context.topic) {
+        contextParts.push(`Topic: ${context.topic.name}`);
+      }
+
+      // Rich Audience context
+      if (context.audience) {
+        const aud = context.audience;
+        const audienceContext = [
+          `Audience: ${aud.name}`,
+          `- Experience Level: ${aud.experienceLevel}`,
+          `- Technical Depth: ${aud.technicalDepth}/5`,
+          `- Communication Style: ${aud.communicationStyle}`,
+          `- Vocabulary Level: ${aud.vocabularyLevel}`,
+          aud.preferredLearningStyle ? `- Learning Style: ${aud.preferredLearningStyle}` : null,
+          aud.exampleTypes?.length > 0 ? `- Relevant Examples: ${aud.exampleTypes.join(', ')}` : null,
+          aud.avoidTopics?.length > 0 ? `- Avoid Topics: ${aud.avoidTopics.join(', ')}` : null,
+          aud.promptInstructions ? `- Instructions: ${aud.promptInstructions}` : null,
+        ].filter(Boolean).join('\n');
+        contextParts.push(audienceContext);
+      }
+
+      // Rich Tone context
+      if (context.tone) {
+        const t = context.tone;
+        const toneContext = [
+          `Tone: ${t.name}`,
+          `- Style: ${t.style}`,
+          `- Formality: ${t.formality}/5`,
+          `- Energy Level: ${t.energyLevel}`,
+          `- Sentence Structure: ${t.sentenceStructure}`,
+          t.languageCharacteristics?.length > 0 ? `- Language Traits: ${t.languageCharacteristics.join(', ')}` : null,
+          t.emotionalResonance?.length > 0 ? `- Emotional Qualities: ${t.emotionalResonance.join(', ')}` : null,
+          t.examplePhrases?.length > 0 ? `- Example Phrase: "${t.examplePhrases[0]}"` : null,
+          t.promptInstructions ? `- Instructions: ${t.promptInstructions}` : null,
+        ].filter(Boolean).join('\n');
+        contextParts.push(toneContext);
+      }
+
+      // Objective
+      if (context.objective) {
+        contextParts.push(`Objective: ${context.objective}`);
+      }
+
+      if (contextParts.length > 0) {
+        enhancedPrompt = `Context:\n${contextParts.join('\n\n')}\n\nRequest: ${originalPrompt}`;
       }
     }
 
@@ -267,7 +375,7 @@ export class AiService {
 
   private generatePlaceholderContent(payload: GenerateContentPayload, context: Session | null) {
     const topicName = context?.topic?.name || 'Professional Development';
-    const audience = context?.audience || 'professionals';
+    const audienceName = context?.audience?.name || 'professionals';
 
     switch (payload.kind) {
       case 'outline':
@@ -285,7 +393,7 @@ export class AiService {
               type: 'content',
               title: `Core ${topicName} Concepts`,
               duration: 25,
-              description: `Introduce key frameworks and principles relevant to ${audience}.`,
+              description: `Introduce key frameworks and principles relevant to ${audienceName}.`,
             },
             {
               id: 'practice-' + Date.now(),
@@ -323,7 +431,7 @@ export class AiService {
       default:
         return {
           heading: `${topicName} Content`,
-          body: `Enhanced content about ${topicName.toLowerCase()} tailored for ${audience}, incorporating contextual insights and best practices.`,
+          body: `Enhanced content about ${topicName.toLowerCase()} tailored for ${audienceName}, incorporating contextual insights and best practices.`,
         };
     }
   }

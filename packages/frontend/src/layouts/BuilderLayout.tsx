@@ -73,18 +73,11 @@ const allNavItems: NavItem[] = [
     icon: '👨‍🏫',
   },
   {
-    label: 'Analytics',
-    description: 'View performance metrics',
-    to: '/analytics',
+    label: 'Admin Dashboard',
+    description: 'System settings and monitoring',
+    to: '/admin/dashboard',
     roles: ['content_developer', 'admin'],
-    icon: '📊',
-  },
-  {
-    label: 'AI Settings',
-    description: 'Configure AI prompts',
-    to: '/settings/ai',
-    roles: ['content_developer', 'admin'],
-    icon: '🤖',
+    icon: '🛠️',
   },
 ];
 
@@ -164,44 +157,33 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
         </div>
 
         {/* Navigation */}
-        <nav className="space-y-2 flex-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={() => setIsMobileMenuOpen(false)}
-              className={({ isActive }) =>
-                [
-                  'block rounded-lg border px-4 py-3 transition-colors',
-                  isActive
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-transparent hover:border-slate-200 hover:bg-slate-100',
-                ].join(' ')
-              }
-            >
-              <div className="flex items-center gap-3">
-                {item.icon && <span className="text-lg">{item.icon}</span>}
-                <div className="flex-1">
-                  <p className="text-sm font-semibold">{item.label}</p>
-                  <p className="text-xs text-slate-500">{item.description}</p>
+        <nav className="flex-1">
+          <div className="space-y-2 pr-2">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={({ isActive }) =>
+                  [
+                    'block rounded-lg border px-4 py-3 transition-colors',
+                    isActive
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-transparent hover:border-slate-200 hover:bg-slate-100',
+                  ].join(' ')
+                }
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon && <span className="text-lg">{item.icon}</span>}
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold">{item.label}</p>
+                    <p className="text-xs text-slate-500">{item.description}</p>
+                  </div>
                 </div>
-              </div>
-            </NavLink>
-          ))}
+              </NavLink>
+            ))}
+          </div>
         </nav>
-
-        {/* Footer Tip */}
-        <div className="mt-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-          <p className="font-semibold">
-            {mockUser.role === 'trainer' ? 'Trainer Tip' : 'Workflow Tip'}
-          </p>
-          <p className="mt-1">
-            {mockUser.role === 'trainer'
-              ? 'Check your dashboard regularly for new assignments and updates to session materials.'
-              : 'Autosave keeps drafts safe every few seconds. Use the AI prompt editor to experiment without losing prior versions.'
-            }
-          </p>
-        </div>
 
         {/* Logout Link */}
         <div className="pt-4 border-t border-slate-200">

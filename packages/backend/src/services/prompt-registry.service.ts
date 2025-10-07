@@ -123,54 +123,75 @@ export class PromptRegistryService {
       {
         name: 'session_outline_generation',
         category: PromptCategory.SESSION_GENERATION,
-        template: `You are an expert training designer. Create a comprehensive session outline based on the following requirements:
+        template: `# Role
+You are an expert training designer specializing in creating comprehensive, engaging training sessions.
 
-Title: {{title}}
-Category: {{category}}
-Session Type: {{sessionType}}
-Desired Outcome: {{desiredOutcome}}
-Duration: {{duration}} minutes
-Current Problem: {{currentProblem}}
-Specific Topics: {{specificTopics}}
-Audience Size: {{audienceSize}}
+# Task
+Create a detailed session outline based on the provided requirements.
 
-Return a JSON object with this structure:
+# Input Details
+- Title: {{title}}
+- Category: {{category}}
+- Session Type: {{sessionType}}
+- Desired Outcome: {{desiredOutcome}}
+- Duration: {{duration}} minutes
+- Current Problem: {{currentProblem}}
+- Specific Topics: {{specificTopics}}
+- Audience Size: {{audienceSize}}
+
+# Output Format
+Return a JSON object with this exact structure:
+
 {
-  "suggestedTitle": "string",
-  "summary": "string",
+  "suggestedTitle": "string - engaging and descriptive title",
+  "summary": "string - 2-3 sentence overview",
   "difficulty": "Beginner|Intermediate|Advanced",
-  "recommendedAudienceSize": "string",
+  "recommendedAudienceSize": "string - optimal group size",
   "sections": [
     {
-      "title": "string",
+      "title": "string - section name",
       "duration": number,
-      "description": "string",
-      "learningObjectives": ["string"],
-      "suggestedActivities": ["string"]
+      "description": "string - what happens in this section",
+      "learningObjectives": ["string - specific measurable outcomes"],
+      "suggestedActivities": ["string - practical exercises or discussions"]
     }
   ]
-}`,
+}
+
+# Requirements
+- Ensure sections add up to the total duration
+- Make learning objectives specific and measurable
+- Include interactive elements appropriate for the audience size
+- Balance theory with practical application`,
         description: 'Main prompt for generating session outlines via OpenAI',
         variables: ['title', 'category', 'sessionType', 'desiredOutcome', 'duration', 'currentProblem', 'specificTopics', 'audienceSize'],
       },
       {
         name: 'session_title_generation',
         category: PromptCategory.TITLE_CREATION,
-        template: `Create an engaging, professional title for a training session with these details:
+        template: `# Role
+You are a professional training content writer specializing in creating compelling session titles.
 
-Category: {{category}}
-Session Type: {{sessionType}}
-Desired Outcome: {{desiredOutcome}}
-Current Problem: {{currentProblem}}
-Duration: {{duration}} minutes
+# Task
+Generate an engaging, professional title for a training session.
 
-The title should be:
-- Clear and descriptive
-- Professional but engaging
-- 3-8 words long
-- Focused on the learning outcome
+# Input Details
+- Category: {{category}}
+- Session Type: {{sessionType}}
+- Desired Outcome: {{desiredOutcome}}
+- Current Problem: {{currentProblem}}
+- Duration: {{duration}} minutes
 
-Return only the title, no additional text.`,
+# Title Requirements
+- Clear and descriptive of the content
+- Professional yet engaging tone
+- Length: 3-8 words
+- Focus on the learning outcome or benefit
+- Avoid jargon unless industry-specific
+- Action-oriented when possible
+
+# Output
+Return ONLY the title text, with no quotes, punctuation, or additional commentary.`,
         description: 'Generates compelling session titles',
         variables: ['category', 'sessionType', 'desiredOutcome', 'currentProblem', 'duration'],
       },
@@ -202,58 +223,176 @@ Session duration: {{duration}} minutes.`,
       {
         name: 'topic_enhancement',
         category: PromptCategory.CONTENT_ENHANCEMENT,
-        template: `Enhance this training topic for {{audienceName}} with {{toneName}} tone:
+        template: `# Role
+You are an expert instructional designer specializing in audience-tailored training content.
 
-Topic: {{topicName}}
-Learning Outcome: {{learningOutcome}}
-Delivery Style: {{deliveryStyle}}
-Session Context: {{sessionContext}}
+# Task
+Enhance the training topic below with audience-appropriate content and tone.
 
-Provide enhanced content including:
-- Detailed description
-- Learning objectives
-- Trainer notes
-- Materials needed
-- Delivery guidance`,
-        description: 'Enhances individual training topics with detailed content',
-        variables: ['audienceName', 'toneName', 'topicName', 'learningOutcome', 'deliveryStyle', 'sessionContext'],
+# Topic Information
+- Topic: {{topicName}}
+- Learning Outcome: {{learningOutcome}}
+- Delivery Style: {{deliveryStyle}}
+- Session Context: {{sessionContext}}
+
+# Audience Profile: {{audienceName}}
+- Experience Level: {{audienceExperienceLevel}}
+- Technical Depth: {{audienceTechnicalDepth}}/5
+- Communication Style: {{audienceCommunicationStyle}}
+- Vocabulary Level: {{audienceVocabularyLevel}}
+{{#if audienceLearningStyle}}- Preferred Learning Style: {{audienceLearningStyle}}{{/if}}
+{{#if audienceExampleTypes}}- Relevant Examples: {{audienceExampleTypes}}{{/if}}
+{{#if audienceAvoidTopics}}- Topics to Avoid: {{audienceAvoidTopics}}{{/if}}
+{{#if audienceInstructions}}- Special Instructions: {{audienceInstructions}}{{/if}}
+
+# Tone Profile: {{toneName}}
+- Style: {{toneStyle}}
+- Formality: {{toneFormality}}/5
+- Energy Level: {{toneEnergyLevel}}/5
+- Sentence Structure: {{toneSentenceStructure}}
+{{#if toneLanguageTraits}}- Language Traits: {{toneLanguageTraits}}{{/if}}
+{{#if toneEmotionalQualities}}- Emotional Qualities: {{toneEmotionalQualities}}{{/if}}
+{{#if toneExamplePhrase}}- Example Phrasing: "{{toneExamplePhrase}}"{{/if}}
+{{#if toneInstructions}}- Special Instructions: {{toneInstructions}}{{/if}}
+
+# Required Output
+Provide enhanced content with:
+
+1. **Description**
+   - Tailored to audience experience level
+   - Uses appropriate vocabulary
+   - Incorporates relevant examples
+
+2. **Learning Objectives**
+   - Specific and measurable
+   - Written at appropriate technical depth
+   - Aligned with learning outcome
+
+3. **Trainer Notes**
+   - Delivery guidance matching the tone
+   - Tips for engaging this audience
+   - Timing recommendations
+
+4. **Materials Needed**
+   - Appropriate for technical depth
+   - Supports preferred learning style
+   - Practical and accessible
+
+5. **Delivery Guidance**
+   - Incorporates learning style preferences
+   - Maintains desired tone
+   - Engagement strategies`,
+        description: 'Enhances individual training topics with detailed audience and tone context',
+        variables: [
+          'topicName', 'learningOutcome', 'deliveryStyle', 'sessionContext',
+          'audienceName', 'audienceExperienceLevel', 'audienceTechnicalDepth', 'audienceCommunicationStyle', 'audienceVocabularyLevel',
+          'audienceLearningStyle', 'audienceExampleTypes', 'audienceAvoidTopics', 'audienceInstructions',
+          'toneName', 'toneStyle', 'toneFormality', 'toneEnergyLevel', 'toneSentenceStructure',
+          'toneLanguageTraits', 'toneEmotionalQualities', 'toneExamplePhrase', 'toneInstructions'
+        ],
       },
       {
         name: 'training_kit_generation',
         category: PromptCategory.TRAINING_KIT,
-        template: `Generate comprehensive training materials for:
+        template: `# Role
+You are a professional training materials developer.
 
-Session: {{sessionTitle}}
-Outline: {{sessionOutline}}
-Target Audience: {{audience}}
-Duration: {{duration}} minutes
+# Task
+Create a comprehensive training kit with all necessary materials.
 
-Include:
-1. Facilitator guide with timing and instructions
-2. Participant handouts and worksheets
-3. Activity instructions and materials
-4. Assessment tools
-5. Resource lists`,
+# Session Information
+- Session: {{sessionTitle}}
+- Outline: {{sessionOutline}}
+- Target Audience: {{audience}}
+- Duration: {{duration}} minutes
+
+# Required Components
+
+## 1. Facilitator Guide
+- Detailed timing for each section
+- Step-by-step instructions
+- Talking points and key messages
+- Transition guidance between sections
+- Tips for handling questions
+
+## 2. Participant Materials
+- Handouts summarizing key concepts
+- Worksheets for activities
+- Reference materials
+- Take-home resources
+
+## 3. Activity Instructions
+- Clear, actionable directions
+- Materials lists
+- Setup requirements
+- Expected outcomes
+- Facilitation tips
+
+## 4. Assessment Tools
+- Pre-assessment (if applicable)
+- Knowledge checks
+- Post-session evaluation
+- Reflection prompts
+
+## 5. Resource Lists
+- Additional reading
+- Online resources
+- Tools and templates
+- Follow-up support
+
+# Format
+Organize all materials clearly with headers and be ready-to-use.`,
         description: 'Creates complete training kit materials',
         variables: ['sessionTitle', 'sessionOutline', 'audience', 'duration'],
       },
       {
         name: 'marketing_kit_generation',
         category: PromptCategory.MARKETING_KIT,
-        template: `Create marketing materials for this training session:
+        template: `# Role
+You are a marketing copywriter specializing in training and professional development programs.
 
-Title: {{sessionTitle}}
-Description: {{sessionDescription}}
-Benefits: {{keyBenefits}}
-Target Audience: {{targetAudience}}
-Duration: {{duration}} minutes
+# Task
+Create compelling marketing materials for this training session.
 
-Generate:
-1. Promotional headline
-2. Course description
-3. Key learning outcomes
-4. Target audience description
-5. Call-to-action copy`,
+# Session Details
+- Title: {{sessionTitle}}
+- Description: {{sessionDescription}}
+- Key Benefits: {{keyBenefits}}
+- Target Audience: {{targetAudience}}
+- Duration: {{duration}} minutes
+
+# Required Marketing Components
+
+## 1. Promotional Headline
+- Attention-grabbing (under 10 words)
+- Benefit-focused
+- Action-oriented
+
+## 2. Course Description
+- 2-3 paragraphs
+- Explain what participants will learn
+- Highlight practical value
+- Professional yet engaging tone
+
+## 3. Key Learning Outcomes
+- 3-5 bullet points
+- Specific and measurable
+- Focus on "What will I be able to do?"
+- Use action verbs
+
+## 4. Target Audience Description
+- Who should attend
+- Prerequisites (if any)
+- Roles/positions that benefit most
+- Experience level
+
+## 5. Call-to-Action Copy
+- Urgency without being pushy
+- Clear next steps
+- Multiple CTA options (e.g., "Register Now", "Learn More")
+
+# Tone
+Professional, persuasive, and benefit-focused. Emphasize transformation and practical application.`,
         description: 'Generates marketing and promotional content',
         variables: ['sessionTitle', 'sessionDescription', 'keyBenefits', 'targetAudience', 'duration'],
       }

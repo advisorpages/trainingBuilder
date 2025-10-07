@@ -1,9 +1,11 @@
-import { Column, Entity, OneToMany } from 'typeorm';
-import { BaseEntity } from './base.entity';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { TrainerAssignment } from './trainer-assignment.entity';
 
 @Entity({ name: 'trainers' })
-export class Trainer extends BaseEntity {
+export class Trainer {
+  @PrimaryGeneratedColumn()
+  id: number;
+
   @Column()
   name: string;
 
@@ -22,8 +24,14 @@ export class Trainer extends BaseEntity {
   @Column({ nullable: true })
   timezone?: string;
 
-  @Column({ default: true })
+  @Column({ default: true, name: 'is_active' })
   isActive: boolean;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 
   @OneToMany(() => TrainerAssignment, (assignment) => assignment.trainer)
   assignments: TrainerAssignment[];

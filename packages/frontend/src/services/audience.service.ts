@@ -1,10 +1,23 @@
 import { api } from './api.service';
-import { Audience } from '@leadership-training/shared';
+import {
+  Audience,
+  AudienceExperienceLevel,
+  AudienceCommunicationStyle,
+  AudienceVocabularyLevel
+} from '@leadership-training/shared';
 import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateAudienceRequest {
   name: string;
   description?: string;
+  experienceLevel?: AudienceExperienceLevel;
+  technicalDepth?: number;
+  preferredLearningStyle?: string;
+  communicationStyle?: AudienceCommunicationStyle;
+  exampleTypes?: string[];
+  avoidTopics?: string[];
+  vocabularyLevel?: AudienceVocabularyLevel;
+  promptInstructions?: string;
 }
 
 export interface UpdateAudienceRequest extends Partial<CreateAudienceRequest> {

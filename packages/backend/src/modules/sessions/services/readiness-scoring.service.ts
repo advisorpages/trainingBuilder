@@ -67,7 +67,7 @@ export class ReadinessScoringService {
       id: 'has-audience',
       name: 'Target Audience',
       description: 'Session defines target audience',
-      passed: !!session.audience && session.audience.trim().length >= 3,
+      passed: !!session.audienceId || !!session.audience,
       weight: 5,
       category: 'metadata',
     });
