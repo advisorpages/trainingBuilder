@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AIInteractionsService } from './ai-interactions.service';
+import { AIInteractionType, AIInteractionStatus } from '../entities/ai-interaction.entity';
 
 export interface OpenAISessionOutlineRequest {
   title?: string;
@@ -10,6 +12,30 @@ export interface OpenAISessionOutlineRequest {
   specificTopics?: string;
   duration: number; // in minutes
   audienceSize?: string;
+  // Rich audience profile fields
+  audienceName?: string;
+  audienceDescription?: string;
+  audienceExperienceLevel?: string;
+  audienceTechnicalDepth?: number;
+  audienceCommunicationStyle?: string;
+  audienceVocabularyLevel?: string;
+  audienceLearningStyle?: string;
+  audienceExampleTypes?: string[];
+  audienceAvoidTopics?: string[];
+  audienceInstructions?: string;
+  audienceId?: number;
+  // Rich tone profile fields
+  toneName?: string;
+  toneDescription?: string;
+  toneStyle?: string;
+  toneFormality?: number;
+  toneEnergyLevel?: string;
+  toneSentenceStructure?: string;
+  toneLanguageCharacteristics?: string[];
+  toneEmotionalResonance?: string[];
+  toneExamplePhrases?: string[];
+  toneInstructions?: string;
+  toneId?: number;
 }
 
 export interface OpenAISessionSection {
@@ -41,7 +67,11 @@ export class OpenAIService {
   private readonly timeout: number;
   private readonly maxRetries: number;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    @Inject(forwardRef(() => AIInteractionsService))
+    private aiInteractionsService: AIInteractionsService
+  ) {
     // API Configuration
     this.apiKey = this.configService.get<string>('OPENAI_API_KEY');
     this.baseURL = this.configService.get<string>('OPENAI_BASE_URL') || 'https://api.openai.com/v1';
@@ -68,6 +98,13 @@ export class OpenAIService {
     }
 
     const prompt = this.buildPrompt(request);
+    const startTime = Date.now();
+
+    // Track missing variables
+    const inputVariables = { ...request };
+    const requiredVariables = ['category', 'sessionType', 'desiredOutcome', 'duration'];
+    const missingVariables = requiredVariables.filter(key => !inputVariables[key as keyof typeof inputVariables]);
+    const allVariablesPresent = missingVariables.length === 0;
 
     try {
       this.logger.log(`Generating session outline for: ${request.title || request.category}`);
@@ -150,9 +187,49 @@ export class OpenAIService {
           try {
             const outline = JSON.parse(content) as OpenAISessionOutline;
             this.logger.log(`Successfully generated outline with ${outline.sections.length} sections on attempt ${attempt}`);
+
+            // Log successful interaction
+            const processingTime = Date.now() - startTime;
+            await this.logInteraction({
+              interactionType: AIInteractionType.OUTLINE_GENERATION,
+              status: AIInteractionStatus.SUCCESS,
+              renderedPrompt: prompt,
+              inputVariables,
+              aiResponse: content,
+              structuredOutput: outline,
+              processingTimeMs: processingTime,
+              tokensUsed: data.usage?.total_tokens,
+              modelUsed: this.model,
+              category: request.category,
+              sessionType: request.sessionType,
+              audienceId: request.audienceId,
+              toneId: request.toneId,
+              allVariablesPresent,
+              missingVariables: missingVariables.length > 0 ? missingVariables : undefined,
+            });
+
             return outline;
           } catch (parseError) {
             this.logger.error('Failed to parse OpenAI response as JSON:', content);
+
+            // Log parsing failure
+            const processingTime = Date.now() - startTime;
+            await this.logInteraction({
+              interactionType: AIInteractionType.OUTLINE_GENERATION,
+              status: AIInteractionStatus.FAILURE,
+              renderedPrompt: prompt,
+              inputVariables,
+              aiResponse: content,
+              errorMessage: 'Invalid JSON response from OpenAI',
+              errorDetails: { parseError: parseError.message },
+              processingTimeMs: processingTime,
+              modelUsed: this.model,
+              category: request.category,
+              sessionType: request.sessionType,
+              allVariablesPresent,
+              missingVariables: missingVariables.length > 0 ? missingVariables : undefined,
+            });
+
             throw new Error('Invalid JSON response from OpenAI');
           }
 
@@ -173,7 +250,65 @@ export class OpenAIService {
 
     } catch (error) {
       this.logger.error('OpenAI API request failed:', error);
+
+      // Log the failure
+      const processingTime = Date.now() - startTime;
+      await this.logInteraction({
+        interactionType: AIInteractionType.OUTLINE_GENERATION,
+        status: AIInteractionStatus.FAILURE,
+        renderedPrompt: prompt,
+        inputVariables,
+        errorMessage: error.message,
+        errorDetails: { stack: error.stack, name: error.name },
+        processingTimeMs: processingTime,
+        modelUsed: this.model,
+        category: request.category,
+        sessionType: request.sessionType,
+        audienceId: request.audienceId,
+        toneId: request.toneId,
+        allVariablesPresent,
+        missingVariables: missingVariables.length > 0 ? missingVariables : undefined,
+      });
+
       throw error;
+    }
+  }
+
+  private async logInteraction(data: {
+    interactionType: AIInteractionType;
+    status: AIInteractionStatus;
+    renderedPrompt: string;
+    inputVariables: Record<string, any>;
+    aiResponse?: string;
+    structuredOutput?: Record<string, any>;
+    errorMessage?: string;
+    errorDetails?: Record<string, any>;
+    processingTimeMs?: number;
+    tokensUsed?: number;
+    modelUsed?: string;
+    category?: string;
+    sessionType?: string;
+    audienceId?: number;
+    toneId?: number;
+    allVariablesPresent?: boolean;
+    missingVariables?: string[];
+  }): Promise<void> {
+    try {
+      // Calculate estimated cost (rough estimate based on gpt-4o-mini pricing)
+      let estimatedCost = 0;
+      if (data.tokensUsed) {
+        // gpt-4o-mini: ~$0.15 per 1M input tokens, ~$0.60 per 1M output tokens
+        // For simplicity, using average of $0.375 per 1M tokens
+        estimatedCost = (data.tokensUsed / 1_000_000) * 0.375;
+      }
+
+      await this.aiInteractionsService.create({
+        ...data,
+        estimatedCost,
+      });
+    } catch (error) {
+      // Don't let logging errors break the main flow
+      this.logger.error('Failed to log AI interaction:', error);
     }
   }
 
@@ -198,8 +333,76 @@ export class OpenAIService {
 
     parts.push(`Session duration: ${request.duration} minutes`);
 
-    if (request.audienceSize) {
+    // Rich audience profile
+    if (request.audienceName) {
+      const audienceParts = [`\\n\\nAudience Profile:\\n- Profile: ${request.audienceName}`];
+
+      if (request.audienceDescription) {
+        audienceParts.push(`- Description: ${request.audienceDescription}`);
+      }
+      if (request.audienceExperienceLevel) {
+        audienceParts.push(`- Experience Level: ${request.audienceExperienceLevel}`);
+      }
+      if (request.audienceTechnicalDepth) {
+        audienceParts.push(`- Technical Depth: ${request.audienceTechnicalDepth}/5`);
+      }
+      if (request.audienceCommunicationStyle) {
+        audienceParts.push(`- Communication Style: ${request.audienceCommunicationStyle}`);
+      }
+      if (request.audienceVocabularyLevel) {
+        audienceParts.push(`- Vocabulary Level: ${request.audienceVocabularyLevel}`);
+      }
+      if (request.audienceLearningStyle) {
+        audienceParts.push(`- Preferred Learning Style: ${request.audienceLearningStyle}`);
+      }
+      if (request.audienceExampleTypes && request.audienceExampleTypes.length > 0) {
+        audienceParts.push(`- Use Examples From: ${request.audienceExampleTypes.join(', ')}`);
+      }
+      if (request.audienceAvoidTopics && request.audienceAvoidTopics.length > 0) {
+        audienceParts.push(`- Avoid Topics: ${request.audienceAvoidTopics.join(', ')}`);
+      }
+      if (request.audienceInstructions) {
+        audienceParts.push(`- Special Instructions: ${request.audienceInstructions}`);
+      }
+
+      parts.push(audienceParts.join('\\n'));
+    } else if (request.audienceSize) {
       parts.push(`Audience size: ${request.audienceSize}`);
+    }
+
+    // Rich tone profile
+    if (request.toneName) {
+      const toneParts = [`\\n\\nTone Profile:\\n- Profile: ${request.toneName}`];
+
+      if (request.toneDescription) {
+        toneParts.push(`- Description: ${request.toneDescription}`);
+      }
+      if (request.toneStyle) {
+        toneParts.push(`- Style: ${request.toneStyle}`);
+      }
+      if (request.toneFormality) {
+        toneParts.push(`- Formality Level: ${request.toneFormality}/5`);
+      }
+      if (request.toneEnergyLevel) {
+        toneParts.push(`- Energy: ${request.toneEnergyLevel}`);
+      }
+      if (request.toneSentenceStructure) {
+        toneParts.push(`- Sentence Structure: ${request.toneSentenceStructure}`);
+      }
+      if (request.toneLanguageCharacteristics && request.toneLanguageCharacteristics.length > 0) {
+        toneParts.push(`- Language Traits: ${request.toneLanguageCharacteristics.join(', ')}`);
+      }
+      if (request.toneEmotionalResonance && request.toneEmotionalResonance.length > 0) {
+        toneParts.push(`- Emotional Qualities: ${request.toneEmotionalResonance.join(', ')}`);
+      }
+      if (request.toneExamplePhrases && request.toneExamplePhrases.length > 0) {
+        toneParts.push(`- Example Phrasing: "${request.toneExamplePhrases[0]}"`);
+      }
+      if (request.toneInstructions) {
+        toneParts.push(`- Special Instructions: ${request.toneInstructions}`);
+      }
+
+      parts.push(toneParts.join('\\n'));
     }
 
     const requirements = [
@@ -211,6 +414,38 @@ export class OpenAIService {
       'Ensure total duration matches the requested time',
       'Focus on engagement and participation'
     ];
+
+    // Add audience-specific requirements if rich profile is available
+    if (request.audienceName) {
+      if (request.audienceExperienceLevel && request.audienceTechnicalDepth) {
+        requirements.push(`Tailor complexity to ${request.audienceExperienceLevel} experience level and ${request.audienceTechnicalDepth}/5 technical depth`);
+      }
+      if (request.audienceVocabularyLevel) {
+        requirements.push(`Use ${request.audienceVocabularyLevel} vocabulary level`);
+      }
+      if (request.audienceLearningStyle) {
+        requirements.push(`Include activities matching ${request.audienceLearningStyle} learning preferences`);
+      }
+      if (request.audienceExampleTypes && request.audienceExampleTypes.length > 0) {
+        requirements.push(`Use examples from relevant contexts: ${request.audienceExampleTypes.join(', ')}`);
+      }
+    }
+
+    // Add tone-specific requirements if rich profile is available
+    if (request.toneName) {
+      if (request.toneFormality) {
+        requirements.push(`Match writing style to ${request.toneFormality}/5 formality level`);
+      }
+      if (request.toneSentenceStructure) {
+        requirements.push(`Use ${request.toneSentenceStructure} sentence structure in descriptions`);
+      }
+      if (request.toneStyle) {
+        requirements.push(`Incorporate ${request.toneStyle} tone style throughout`);
+      }
+      if (request.toneEmotionalResonance && request.toneEmotionalResonance.length > 0) {
+        requirements.push(`Convey ${request.toneEmotionalResonance.join(', ')} emotional qualities in activity descriptions`);
+      }
+    }
 
     parts.push(`\\n\\nRequirements:\\n- ${requirements.join('\\n- ')}`);
 

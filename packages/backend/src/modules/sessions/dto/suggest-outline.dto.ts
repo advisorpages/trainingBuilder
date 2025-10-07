@@ -40,6 +40,12 @@ export class SuggestOutlineDto {
   @IsOptional()
   @IsString()
   audienceSize?: string;
+
+  @IsOptional()
+  audienceId?: number;
+
+  @IsOptional()
+  toneId?: number;
 }
 
 export interface TopicReference {

@@ -46,8 +46,17 @@ export const EditAudienceModal: React.FC<EditAudienceModalProps> = ({
     try {
       setIsSaving(true);
 
+      // Only send updateable fields, exclude read-only fields like id, createdAt, updatedAt, sessions
       const dataToSave = {
-        ...formData,
+        name: formData.name,
+        description: formData.description,
+        experienceLevel: formData.experienceLevel,
+        technicalDepth: formData.technicalDepth,
+        preferredLearningStyle: formData.preferredLearningStyle,
+        communicationStyle: formData.communicationStyle,
+        vocabularyLevel: formData.vocabularyLevel,
+        promptInstructions: formData.promptInstructions,
+        isActive: formData.isActive,
         exampleTypes: exampleTypesText
           .split(',')
           .map(t => t.trim())

@@ -358,6 +358,30 @@ export class SessionsService {
       ? Math.round((new Date(payload.endTime).getTime() - new Date(payload.startTime).getTime()) / 60000)
       : 60; // Default to 60 minutes
 
+    // Fetch audience data if audienceId is provided
+    let audience = null;
+    if (payload.audienceId) {
+      try {
+        audience = await this.sessionsRepository.manager.findOne('audiences', {
+          where: { id: payload.audienceId }
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to fetch audience ${payload.audienceId}:`, error.message);
+      }
+    }
+
+    // Fetch tone data if toneId is provided
+    let tone = null;
+    if (payload.toneId) {
+      try {
+        tone = await this.sessionsRepository.manager.findOne('tones', {
+          where: { id: payload.toneId }
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to fetch tone ${payload.toneId}:`, error.message);
+      }
+    }
+
     let useOpenAI = false;
     let aiOutline: any = null;
     let fallbackUsed = false;
@@ -375,8 +399,36 @@ export class SessionsService {
           currentProblem: payload.currentProblem,
           specificTopics: payload.specificTopics,
           duration,
-          audienceSize: '8-20', // Could be made configurable
+          audienceSize: payload.audienceSize || '8-20',
         };
+
+        // Add rich audience profile if available
+        if (audience) {
+          openAIRequest.audienceName = audience.name;
+          openAIRequest.audienceDescription = audience.description;
+          openAIRequest.audienceExperienceLevel = audience.experienceLevel;
+          openAIRequest.audienceTechnicalDepth = audience.technicalDepth;
+          openAIRequest.audienceCommunicationStyle = audience.communicationStyle;
+          openAIRequest.audienceVocabularyLevel = audience.vocabularyLevel;
+          openAIRequest.audienceLearningStyle = audience.preferredLearningStyle;
+          openAIRequest.audienceExampleTypes = audience.exampleTypes;
+          openAIRequest.audienceAvoidTopics = audience.avoidTopics;
+          openAIRequest.audienceInstructions = audience.promptInstructions;
+        }
+
+        // Add rich tone profile if available
+        if (tone) {
+          openAIRequest.toneName = tone.name;
+          openAIRequest.toneDescription = tone.description;
+          openAIRequest.toneStyle = tone.style;
+          openAIRequest.toneFormality = tone.formality;
+          openAIRequest.toneEnergyLevel = tone.energyLevel;
+          openAIRequest.toneSentenceStructure = tone.sentenceStructure;
+          openAIRequest.toneLanguageCharacteristics = tone.languageCharacteristics;
+          openAIRequest.toneEmotionalResonance = tone.emotionalResonance;
+          openAIRequest.toneExamplePhrases = tone.examplePhrases;
+          openAIRequest.toneInstructions = tone.promptInstructions;
+        }
 
         aiOutline = await this.openAIService.generateSessionOutline(openAIRequest);
         useOpenAI = true;

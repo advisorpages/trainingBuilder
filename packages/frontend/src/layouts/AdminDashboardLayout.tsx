@@ -7,7 +7,7 @@ interface AdminDashboardLayoutProps {
   children: React.ReactNode;
 }
 
-type AdminTabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones';
+type AdminTabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights';
 
 interface AdminTab {
   id: AdminTabType;
@@ -19,6 +19,7 @@ interface AdminTab {
 const adminTabs: AdminTab[] = [
   { id: 'prompts', label: 'AI Prompts', icon: '🤖', description: 'Configure AI generation prompts' },
   { id: 'analytics', label: 'Analytics', icon: '📊', description: 'Performance metrics & insights' },
+  { id: 'ai-insights', label: 'AI Insights', icon: '🔍', description: 'Track AI interactions & quality' },
   { id: 'categories', label: 'Categories', icon: '📁', description: 'Session categories' },
   { id: 'locations', label: 'Locations', icon: '🏢', description: 'Training venues' },
   { id: 'trainers', label: 'Trainers', icon: '👨‍🏫', description: 'Trainer management' },

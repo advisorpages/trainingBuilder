@@ -15,6 +15,7 @@ import { Category } from './category.entity';
 import { Location } from './location.entity';
 import { Audience } from './audience.entity';
 import { Tone } from './tone.entity';
+import { AIInteraction } from './ai-interaction.entity';
 
 export * from './base.entity';
 export * from './session.entity';
@@ -34,6 +35,7 @@ export * from './category.entity';
 export * from './location.entity';
 export * from './audience.entity';
 export * from './tone.entity';
+export * from './ai-interaction.entity';
 
 export const entities = [
   Session,
@@ -53,4 +55,5 @@ export const entities = [
   Location,
   Audience,
   Tone,
+  AIInteraction,
 ];

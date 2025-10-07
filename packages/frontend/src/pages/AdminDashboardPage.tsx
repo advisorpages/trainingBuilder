@@ -9,6 +9,7 @@ import { LocationsTabContent } from '../components/admin/LocationsTabContent';
 import { TrainersTabContent } from '../components/admin/TrainersTabContent';
 import { AudiencesTabContent } from '../components/admin/AudiencesTabContent';
 import { TonesTabContent } from '../components/admin/TonesTabContent';
+import { AIInsightsTabContent } from '../components/admin/AIInsightsTabContent';
 
 interface PromptSection {
   category: PromptCategory;
@@ -48,7 +49,7 @@ const CORE_PROMPTS = [
   }
 ];
 
-type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones';
+type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights';
 
 // Placeholder descriptions
 const PLACEHOLDER_DESCRIPTIONS: Record<string, string> = {
@@ -70,6 +71,7 @@ const PLACEHOLDER_DESCRIPTIONS: Record<string, string> = {
 
   // Content Enhancement - Audience
   audienceName: 'Name of the audience profile',
+  audienceDescription: 'General description of the audience characteristics',
   audienceExperienceLevel: 'Experience level (Beginner, Intermediate, Advanced, Mixed)',
   audienceTechnicalDepth: 'Technical depth rating (1-5 scale)',
   audienceCommunicationStyle: 'Preferred communication style (Formal, Conversational, Technical, Simplified)',
@@ -81,13 +83,14 @@ const PLACEHOLDER_DESCRIPTIONS: Record<string, string> = {
 
   // Content Enhancement - Tone
   toneName: 'Name of the tone profile',
-  toneStyle: 'Overall communication style',
-  toneFormality: 'Formality level (1-5 scale)',
-  toneEnergyLevel: 'Energy and enthusiasm level (1-5 scale)',
-  toneSentenceStructure: 'Preferred sentence structure (e.g., short and punchy, flowing)',
-  toneLanguageTraits: 'Specific language characteristics',
-  toneEmotionalQualities: 'Emotional qualities to convey (e.g., empathetic, authoritative)',
-  toneExamplePhrase: 'Example phrase demonstrating the tone',
+  toneDescription: 'General description of the tone characteristics',
+  toneStyle: 'Overall communication style (e.g., professional, casual, motivational)',
+  toneFormality: 'Formality level (1-5 scale: 1=very casual, 5=very formal)',
+  toneEnergyLevel: 'Energy and enthusiasm level (calm, moderate, energetic, passionate)',
+  toneSentenceStructure: 'Preferred sentence structure (simple, moderate, complex, varied)',
+  toneLanguageCharacteristics: 'Array of language traits (e.g., active-voice, direct, inclusive)',
+  toneEmotionalResonance: 'Array of emotional qualities to convey (e.g., empathy, confidence, urgency)',
+  toneExamplePhrases: 'Array of sample phrases that demonstrate the tone',
   toneInstructions: 'Special instructions for maintaining this tone',
 
   // Training Kit
@@ -116,14 +119,43 @@ const PLACEHOLDER_MAPPINGS: Record<PromptCategory, string[]> = {
     'duration',
     'currentProblem',
     'specificTopics',
-    'audienceSize'
+    'audienceSize',
+    'audienceName',
+    'audienceDescription',
+    'audienceExperienceLevel',
+    'audienceTechnicalDepth',
+    'audienceCommunicationStyle',
+    'audienceVocabularyLevel',
+    'audienceLearningStyle',
+    'audienceExampleTypes',
+    'audienceAvoidTopics',
+    'audienceInstructions',
+    'toneName',
+    'toneDescription',
+    'toneStyle',
+    'toneFormality',
+    'toneEnergyLevel',
+    'toneSentenceStructure',
+    'toneLanguageCharacteristics',
+    'toneEmotionalResonance',
+    'toneExamplePhrases',
+    'toneInstructions'
   ],
   [PromptCategory.TITLE_CREATION]: [
     'category',
     'sessionType',
     'desiredOutcome',
     'currentProblem',
-    'duration'
+    'duration',
+    'audienceName',
+    'audienceExperienceLevel',
+    'audienceVocabularyLevel',
+    'audienceCommunicationStyle',
+    'toneName',
+    'toneStyle',
+    'toneFormality',
+    'toneEnergyLevel',
+    'toneLanguageCharacteristics'
   ],
   [PromptCategory.CONTENT_ENHANCEMENT]: [
     'topicName',
@@ -153,14 +185,48 @@ const PLACEHOLDER_MAPPINGS: Record<PromptCategory, string[]> = {
     'sessionTitle',
     'sessionOutline',
     'audience',
-    'duration'
+    'duration',
+    'audienceName',
+    'audienceDescription',
+    'audienceExperienceLevel',
+    'audienceTechnicalDepth',
+    'audienceCommunicationStyle',
+    'audienceVocabularyLevel',
+    'audienceLearningStyle',
+    'audienceExampleTypes',
+    'audienceAvoidTopics',
+    'toneName',
+    'toneDescription',
+    'toneStyle',
+    'toneFormality',
+    'toneEnergyLevel',
+    'toneSentenceStructure',
+    'toneLanguageCharacteristics',
+    'toneEmotionalResonance',
+    'toneExamplePhrases'
   ],
   [PromptCategory.MARKETING_KIT]: [
     'sessionTitle',
     'sessionDescription',
     'keyBenefits',
     'targetAudience',
-    'duration'
+    'duration',
+    'audienceName',
+    'audienceDescription',
+    'audienceExperienceLevel',
+    'audienceTechnicalDepth',
+    'audienceVocabularyLevel',
+    'audienceCommunicationStyle',
+    'audienceExampleTypes',
+    'toneName',
+    'toneDescription',
+    'toneStyle',
+    'toneFormality',
+    'toneEnergyLevel',
+    'toneSentenceStructure',
+    'toneLanguageCharacteristics',
+    'toneEmotionalResonance',
+    'toneExamplePhrases'
   ],
   [PromptCategory.VALIDATION]: [
     'content',
@@ -520,6 +586,7 @@ export const AdminDashboardPage: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'prompts' && renderPromptsTab()}
         {activeTab === 'analytics' && <AnalyticsTabContent />}
+        {activeTab === 'ai-insights' && <AIInsightsTabContent />}
         {activeTab === 'categories' && <CategoriesTabContent />}
         {activeTab === 'locations' && <LocationsTabContent />}
         {activeTab === 'trainers' && <TrainersTabContent />}
