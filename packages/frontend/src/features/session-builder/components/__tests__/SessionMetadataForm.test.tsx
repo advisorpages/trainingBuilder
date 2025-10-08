@@ -1,20 +1,16 @@
-import { vi } from 'vitest';
+import { vi, beforeEach, describe, expect, it } from 'vitest';
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { SessionMetadataForm } from '../SessionMetadataForm';
+import { SessionMetadata } from '../../state/types';
+import { LocationType, MeetingPlatform } from '@leadership-training/shared';
 
-vi.mock('../../../components/ui/CategorySelect', () => ({
-  CategorySelect: ({
-    value,
-    onChange,
-    onCategoryChange,
-    placeholder,
-  }: {
-    value?: number | '';
-    onChange: (categoryId: number | '') => void;
-    onCategoryChange?: (category: { id: number; name: string } | null) => void;
-    placeholder?: string;
-  }) => (
+vi.mock('@/components/ui/CategorySelect', () => {
+  const Component: React.FC<any> = ({ value, onChange, onCategoryChange, placeholder }) => (
     <input
       data-testid="category-select"
       value={value === undefined || value === '' ? '' : String(value)}
+      placeholder={placeholder ?? 'Category'}
       onChange={(event) => {
         const rawValue = event.target.value;
         const parsedValue = rawValue ? Number(rawValue) : '';
@@ -23,39 +19,40 @@ vi.mock('../../../components/ui/CategorySelect', () => ({
           onCategoryChange(parsedValue === '' ? null : { id: Number(parsedValue), name: 'Mock Category' });
         }
       }}
-      placeholder={placeholder ?? 'Category'}
     />
-  ),
-}));
+  );
+  return { __esModule: true, default: Component, CategorySelect: Component };
+});
 
-vi.mock('../../../components/ui/LocationSelect', () => ({
-  LocationSelect: ({
-    value,
-    onChange,
-  }: {
-    value?: number | '';
-    onChange: (location: { id: number; name: string } | null) => void;
-  }) => (
+vi.mock('@/components/ui/LocationSelect', () => {
+  const Component: React.FC<any> = ({ value, onChange }) => (
     <input
       data-testid="location-select"
       value={value === undefined || value === '' ? '' : String(value)}
       onChange={(event) => {
         const rawValue = event.target.value;
-        onChange(rawValue ? { id: Number(rawValue), name: 'Mock Location' } : null);
+        onChange(
+          rawValue
+            ? {
+                id: Number(rawValue),
+                name: 'Mock Location',
+                locationType: 'physical',
+                meetingPlatform: 'zoom',
+                capacity: 25,
+                timezone: 'America/New_York',
+                notes: 'Arrive early',
+                accessInstructions: 'Check in at reception',
+              }
+            : null
+        );
       }}
-      placeholder="Location"
     />
-  ),
-}));
+  );
+  return { __esModule: true, default: Component, LocationSelect: Component };
+});
 
-vi.mock('../../../components/ui/AudienceSelect', () => ({
-  AudienceSelect: ({
-    value,
-    onChange,
-  }: {
-    value?: number | '';
-    onChange: (audience: { id: number; name: string } | null) => void;
-  }) => (
+vi.mock('@/components/ui/AudienceSelect', () => {
+  const Component: React.FC<any> = ({ value, onChange }) => (
     <input
       data-testid="audience-select"
       value={value === undefined || value === '' ? '' : String(value)}
@@ -63,19 +60,13 @@ vi.mock('../../../components/ui/AudienceSelect', () => ({
         const rawValue = event.target.value;
         onChange(rawValue ? { id: Number(rawValue), name: 'Mock Audience' } : null);
       }}
-      placeholder="Audience"
     />
-  ),
-}));
+  );
+  return { __esModule: true, default: Component, AudienceSelect: Component };
+});
 
-vi.mock('../../../components/ui/ToneSelect', () => ({
-  ToneSelect: ({
-    value,
-    onChange,
-  }: {
-    value?: number | '';
-    onChange: (tone: { id: number; name: string } | null) => void;
-  }) => (
+vi.mock('@/components/ui/ToneSelect', () => {
+  const Component: React.FC<any> = ({ value, onChange }) => (
     <input
       data-testid="tone-select"
       value={value === undefined || value === '' ? '' : String(value)}
@@ -83,23 +74,21 @@ vi.mock('../../../components/ui/ToneSelect', () => ({
         const rawValue = event.target.value;
         onChange(rawValue ? { id: Number(rawValue), name: 'Mock Tone' } : null);
       }}
-      placeholder="Tone"
     />
-  ),
-}));
+  );
+  return { __esModule: true, default: Component, ToneSelect: Component };
+});
 
-import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
-import { SessionMetadataForm } from '../SessionMetadataForm';
-import { SessionMetadata } from '../../state/types';
+vi.mock('../../../services/location.service', () => ({
+  locationService: {
+    getLocations: vi.fn().mockResolvedValue({ locations: [] })
+  }
+}));
 
 describe('SessionMetadataForm', () => {
   const mockOnChange = vi.fn();
-  const mockOnTriggerAI = vi.fn();
-  const mockOnAutosave = vi.fn();
 
-const defaultMetadata: SessionMetadata = {
+  const defaultMetadata: SessionMetadata = {
   title: 'Test Session',
   sessionType: 'workshop',
   category: 'Leadership',
@@ -113,11 +102,16 @@ const defaultMetadata: SessionMetadata = {
   timezone: 'America/New_York',
   location: 'Main Auditorium',
   locationId: 12,
+  locationType: LocationType.PHYSICAL,
+  meetingPlatform: MeetingPlatform.ZOOM,
+  locationCapacity: 40,
+  locationTimezone: 'America/New_York',
+  locationNotes: 'Arrive 15 minutes early',
   audienceId: 5,
   audienceName: 'Team Leads',
   toneId: 3,
   toneName: 'Inspirational',
-};
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -128,7 +122,6 @@ const defaultMetadata: SessionMetadata = {
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
@@ -144,7 +137,6 @@ const defaultMetadata: SessionMetadata = {
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
@@ -159,7 +151,6 @@ const defaultMetadata: SessionMetadata = {
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
@@ -174,7 +165,6 @@ const defaultMetadata: SessionMetadata = {
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
@@ -184,63 +174,27 @@ const defaultMetadata: SessionMetadata = {
     expect(mockOnChange).toHaveBeenCalledWith({ sessionType: 'training' });
   });
 
-  it('calls onTriggerAI when Generate Outline button is clicked', () => {
+  it('passes enriched location details when location changes', () => {
     render(
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
-    const generateButton = screen.getByRole('button', { name: 'Generate Variants' });
-    fireEvent.click(generateButton);
+    mockOnChange.mockClear();
+    const locationInput = screen.getByTestId('location-select');
+    fireEvent.change(locationInput, { target: { value: '21' } });
 
-    expect(mockOnTriggerAI).toHaveBeenCalledTimes(1);
-  });
-
-  it('displays autosave button when onAutosave is provided', () => {
-    render(
-      <SessionMetadataForm
-        metadata={defaultMetadata}
-        onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
-        onAutosave={mockOnAutosave}
-      />
-    );
-
-    expect(screen.getByRole('button', { name: 'Save Now' })).toBeInTheDocument();
-  });
-
-  it('calls onAutosave when Save Draft button is clicked', () => {
-    render(
-      <SessionMetadataForm
-        metadata={defaultMetadata}
-        onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
-        onAutosave={mockOnAutosave}
-      />
-    );
-
-    const saveButton = screen.getByRole('button', { name: 'Save Now' });
-    fireEvent.click(saveButton);
-
-    expect(mockOnAutosave).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows loading state on autosave button when isAutosaving is true', () => {
-    render(
-      <SessionMetadataForm
-        metadata={defaultMetadata}
-        onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
-        onAutosave={mockOnAutosave}
-        isAutosaving={true}
-      />
-    );
-
-    const savingButton = screen.getByRole('button', { name: /saving/i });
-    expect(savingButton).toBeDisabled();
+    expect(mockOnChange).toHaveBeenCalledWith({
+      locationId: 21,
+      location: 'Mock Location',
+      locationType: 'physical',
+      meetingPlatform: 'zoom',
+      locationCapacity: 25,
+      locationTimezone: 'America/New_York',
+      locationNotes: 'Arrive early',
+    });
   });
 
   it('handles textarea inputs correctly', () => {
@@ -248,7 +202,6 @@ const defaultMetadata: SessionMetadata = {
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
@@ -268,7 +221,6 @@ const defaultMetadata: SessionMetadata = {
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
@@ -284,7 +236,6 @@ const defaultMetadata: SessionMetadata = {
       <SessionMetadataForm
         metadata={defaultMetadata}
         onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
       />
     );
 
@@ -297,15 +248,4 @@ const defaultMetadata: SessionMetadata = {
     expect(mockOnChange).toHaveBeenCalled();
   });
 
-  it('does not show autosave button when onAutosave is not provided', () => {
-    render(
-      <SessionMetadataForm
-        metadata={defaultMetadata}
-        onChange={mockOnChange}
-        onTriggerAI={mockOnTriggerAI}
-      />
-    );
-
-    expect(screen.queryByRole('button', { name: 'Save Now' })).not.toBeInTheDocument();
-  });
 });

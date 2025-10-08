@@ -1,4 +1,5 @@
 import { api } from './api.service';
+import type { LocationType, MeetingPlatform } from '@leadership-training/shared';
 
 export interface SessionBuilderInput {
   title?: string;
@@ -15,6 +16,11 @@ export interface SessionBuilderInput {
   timezone?: string;
   locationId?: number;
   locationName?: string;
+  locationType?: LocationType;
+  meetingPlatform?: MeetingPlatform;
+  locationCapacity?: number;
+  locationTimezone?: string;
+  locationNotes?: string;
   audienceId?: number;
   audienceName?: string;
   toneId?: number;
@@ -248,9 +254,6 @@ const sanitizeSessionBuilderInput = (input: SessionBuilderInput) => {
     date: _date,
     categoryId: _categoryId,
     categoryName: _categoryName,
-    timezone: _timezone,
-    locationId: _locationId,
-    locationName: _locationName,
     toneName: _toneName,
     ...cleanInput
   } = input;
@@ -258,7 +261,7 @@ const sanitizeSessionBuilderInput = (input: SessionBuilderInput) => {
   return cleanInput;
 };
 
-class SessionBuilderService {
+export class SessionBuilderService {
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
       const params = templateId ? `?template=${templateId}` : '';

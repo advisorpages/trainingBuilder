@@ -8,6 +8,7 @@ import {
   SessionContentVersion,
   SessionStatusLog,
   SessionBuilderDraft,
+  Location,
 } from '../../entities';
 import { ReadinessScoringService } from './services/readiness-scoring.service';
 import { OpenAIService } from '../../services/openai.service';
@@ -16,6 +17,7 @@ import { RagIntegrationService } from '../../services/rag-integration.service';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
 import { AnalyticsTelemetryService } from '../../services/analytics-telemetry.service';
 import { AIInteractionType } from '../../entities/ai-interaction.entity';
+import { VariantConfigService } from '../../services/variant-config.service';
 import { SuggestOutlineDto, SuggestOutlineResponse, SuggestedSessionType } from './dto/suggest-outline.dto';
 
 type MockRepo<T> = Partial<Repository<T>> & {
@@ -114,10 +116,16 @@ interface ServiceBundle {
   mocks: {
     sessionRepo: MockRepo<Session>;
     topicsRepo: MockRepo<Topic>;
+    locationsRepo: MockRepo<Location>;
     ragService: { queryRAGWithRetry: jest.Mock };
     openAIService: { generateSessionOutline: jest.Mock };
     aiInteractionsService: { create: jest.Mock };
     analyticsTelemetry: { recordEvent: jest.Mock };
+    variantConfigService: {
+      getVariantLabel: jest.Mock;
+      getVariantDescription: jest.Mock;
+      getVariantInstruction: jest.Mock;
+    };
   };
 }
 
@@ -131,6 +139,7 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
   const contentRepo = createRepositoryMock<SessionContentVersion>();
   const statusLogsRepo = createRepositoryMock<SessionStatusLog>();
   const draftsRepo = createRepositoryMock<SessionBuilderDraft>();
+  const locationsRepo = createRepositoryMock<Location>();
 
   const readinessScoringService = {} as ReadinessScoringService;
   const openAIService = {
@@ -153,6 +162,11 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
   const analyticsTelemetry = {
     recordEvent: jest.fn(),
   };
+  const variantConfigService = {
+    getVariantLabel: jest.fn().mockResolvedValue('Precision'),
+    getVariantDescription: jest.fn().mockResolvedValue('Structured outline emphasizing clarity.'),
+    getVariantInstruction: jest.fn().mockResolvedValue('Follow a {{duration}}-minute precision structure.'),
+  };
 
   const configService = createConfigService(configOverrides);
 
@@ -163,6 +177,7 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     contentRepo as unknown as Repository<SessionContentVersion>,
     statusLogsRepo as unknown as Repository<SessionStatusLog>,
     draftsRepo as unknown as Repository<SessionBuilderDraft>,
+    locationsRepo as unknown as Repository<Location>,
     readinessScoringService,
     openAIService as unknown as OpenAIService,
     promptRegistry,
@@ -170,11 +185,12 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     aiInteractionsService as unknown as AIInteractionsService,
     configService,
     analyticsTelemetry as unknown as AnalyticsTelemetryService,
+    variantConfigService as unknown as VariantConfigService,
   );
 
   return {
     service,
-    mocks: { sessionRepo, topicsRepo, ragService, openAIService, aiInteractionsService, analyticsTelemetry },
+    mocks: { sessionRepo, topicsRepo, locationsRepo, ragService, openAIService, aiInteractionsService, analyticsTelemetry, variantConfigService },
   };
 };
 
@@ -257,6 +273,22 @@ describe('SessionsService – multi-variant generation', () => {
         metadata: expect.objectContaining({ variantMode: 'legacy_fallback' }),
       }),
     );
+  });
+
+  it('adjusts only the final section to resolve minor duration drift', () => {
+    const { service } = createService();
+    const sections = [
+      { id: 'seg-1', title: 'Opening', duration: 30 },
+      { id: 'seg-2', title: 'Deep Dive', duration: 30 },
+      { id: 'seg-3', title: 'Closing', duration: 30 },
+    ];
+
+    const balanced = (service as any).balanceDurations(sections, 92);
+
+    expect(balanced[0].duration).toBe(30);
+    expect(balanced[1].duration).toBe(30);
+    expect(balanced[2].duration).toBe(32);
+    expect(balanced.reduce((sum: number, section: any) => sum + section.duration, 0)).toBe(92);
   });
 });
 

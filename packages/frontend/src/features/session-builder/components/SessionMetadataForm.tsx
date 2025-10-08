@@ -1,18 +1,15 @@
 import * as React from 'react';
-import { Input, Button, Card, CardContent, CardHeader, CardTitle } from '../../../ui';
+import { Input, Card, CardContent, CardHeader, CardTitle, Button } from '../../../ui';
 import { SessionMetadata } from '../state/types';
 import { cn } from '../../../lib/utils';
-import { CategorySelect } from '../../../components/ui/CategorySelect';
-import { LocationSelect } from '../../../components/ui/LocationSelect';
-import { AudienceSelect } from '../../../components/ui/AudienceSelect';
-import { ToneSelect } from '../../../components/ui/ToneSelect';
+import { CategorySelect } from '@/components/ui/CategorySelect';
+import { LocationSelect } from '@/components/ui/LocationSelect';
+import { AudienceSelect } from '@/components/ui/AudienceSelect';
+import { ToneSelect } from '@/components/ui/ToneSelect';
 
 interface SessionMetadataFormProps {
   metadata: SessionMetadata;
   onChange: (updates: Partial<SessionMetadata>) => void;
-  onTriggerAI: () => void;
-  onAutosave?: () => void;
-  isAutosaving?: boolean;
 }
 
 const sessionTypes: SessionMetadata['sessionType'][] = [
@@ -46,13 +43,42 @@ const timeSegment = (value: string) => {
   return segment || '09:00';
 };
 
+// Generate static test data for development
+const generateTestData = (): SessionMetadata => {
+  const today = new Date();
+  const startTime = new Date(today);
+  startTime.setHours(9, 0, 0, 0); // 9:00 AM
+  const endTime = new Date(today);
+  endTime.setHours(12, 0, 0, 0); // 12:00 PM (3 hours)
+
+  return {
+    title: 'Effective Leadership Through Change',
+    sessionType: 'workshop',
+    category: 'Leadership',
+    categoryId: 1,
+    desiredOutcome: 'Participants will be able to lead their teams through organizational change with confidence and clear communication strategies',
+    currentProblem: 'Managers struggle to maintain team morale and productivity during periods of uncertainty and organizational transitions',
+    specificTopics: 'Change management frameworks, transparent communication, building psychological safety, managing resistance',
+    startDate: today.toISOString().slice(0, 10),
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
+    timezone: 'America/New_York',
+    location: 'Main Conference Room',
+    locationId: 1,
+    audienceId: 1,
+    audienceName: 'Mid-level Managers',
+    toneId: 1,
+    toneName: 'Professional',
+  };
+};
+
 
 // Field validation helper
 const getFieldValidation = (
   field: keyof SessionMetadata,
   value: SessionMetadata[keyof SessionMetadata],
 ) => {
-  const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'categoryId', 'sessionType', 'locationId'];
+  const requiredFields: (keyof SessionMetadata)[] = ['desiredOutcome', 'categoryId', 'sessionType', 'locationId'];
   const isRequired = requiredFields.includes(field);
   const isEmpty =
     value === undefined ||
@@ -71,9 +97,6 @@ const getFieldValidation = (
 export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   metadata,
   onChange,
-  onTriggerAI,
-  onAutosave,
-  isAutosaving,
 }) => {
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
 
@@ -88,31 +111,32 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
       }
     };
 
-  const validateForm = () => {
-    const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'categoryId', 'sessionType', 'location'];
-    let isValid = true;
-    const errors: Record<string, string> = {};
 
-    requiredFields.forEach(field => {
-      const validation = getFieldValidation(field, metadata[field]);
-      if (!validation.isValid) {
-        errors[field] = validation.errorMessage;
-        isValid = false;
-      }
-    });
-
-    setFieldErrors(errors);
-    return isValid;
-  };
-
-  const handleGenerateOutline = () => {
-    if (validateForm()) {
-      onTriggerAI();
-    }
+  const handleFillTestData = () => {
+    const testData = generateTestData();
+    onChange(testData);
   };
 
   return (
     <div className="space-y-6">
+      {/* Development Test Data Button */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            onClick={handleFillTestData}
+            variant="outline"
+            size="sm"
+            className="bg-purple-50 border-purple-300 text-purple-700 hover:bg-purple-100 hover:border-purple-400"
+          >
+            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+            Fill Test Data
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-xl font-bold text-slate-900">Session Setup</h2>
@@ -121,37 +145,37 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
         </p>
       </div>
 
-      {/* Basic Information */}
-      <Card className="w-full">
+      {/* Session Configuration */}
+      <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">
-            Basic Information
+            Session Configuration
             <span className="text-red-500 ml-1">*</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
+            {/* Audience */}
             <div className="space-y-2">
-              <label htmlFor="session-title" className="text-sm font-medium text-slate-700">
-                Session Title <span className="text-red-500">*</span>
+              <label className="text-sm font-medium text-slate-700">
+                Target Audience
               </label>
-              <Input
-                id="session-title"
-                value={metadata.title}
-                placeholder="e.g. Coaching Through Change"
-                onChange={handleStringChange('title')}
-                className={cn(
-                  fieldErrors.title && 'border-red-500 focus:border-red-500'
-                )}
+              <AudienceSelect
+                value={metadata.audienceId ?? ''}
+                selectedLabel={metadata.audienceName}
+                onChange={(audience) => {
+                  onChange({
+                    audienceId: audience?.id ?? undefined,
+                    audienceName: audience?.name ?? undefined,
+                  });
+                }}
               />
-              {fieldErrors.title && (
-                <p className="text-xs text-red-600">{fieldErrors.title}</p>
-              )}
               <p className="text-xs text-slate-500">
-                A clear, engaging title that describes your session
+                Optional — tailor prompts for a specific learner group
               </p>
             </div>
 
+            {/* Category */}
             <div className="space-y-2">
               <label htmlFor="session-category" className="text-sm font-medium text-slate-700">
                 Category <span className="text-red-500">*</span>
@@ -189,6 +213,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               )}
             </div>
 
+            {/* Session Type */}
             <div className="space-y-2">
               <label htmlFor="session-type" className="text-sm font-medium text-slate-700">
                 Session Type <span className="text-red-500">*</span>
@@ -213,6 +238,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               )}
             </div>
 
+            {/* Desired Outcome */}
             <div className="space-y-2">
               <label htmlFor="session-desired-outcome" className="text-sm font-medium text-slate-700">
                 Desired Outcome <span className="text-red-500">*</span>
@@ -235,52 +261,122 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 Be specific about the skills, behaviors, or knowledge participants will gain
               </p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Content Focus */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Content Focus</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
-              Current Problem or Challenge
-            </label>
-            <textarea
-              className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              value={metadata.currentProblem}
-              placeholder="What specific challenge or problem does this session address?"
-              onChange={handleStringChange('currentProblem')}
-              rows={3}
-            />
-            <p className="text-xs text-slate-500">
-              Describe the current situation that needs improvement (optional but recommended)
-            </p>
-          </div>
+            {/* Current Problem or Challenge */}
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Current Problem or Challenge
+              </label>
+              <textarea
+                className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                value={metadata.currentProblem}
+                placeholder="What specific challenge or problem does this session address?"
+                onChange={handleStringChange('currentProblem')}
+                rows={3}
+              />
+              <p className="text-xs text-slate-500">
+                Describe the current situation that needs improvement (optional but recommended)
+              </p>
+            </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
-              Specific Topics to Cover
-            </label>
-            <textarea
-              className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              value={metadata.specificTopics}
-              placeholder="List key topics, frameworks, or skills to include"
-              onChange={handleStringChange('specificTopics')}
-              rows={2}
-            />
-            <p className="text-xs text-slate-500">
-              Comma-separated list of topics, frameworks, or specific areas to focus on
-            </p>
+            {/* Specific Topics to Cover */}
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Specific Topics to Cover
+              </label>
+              <textarea
+                className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                value={metadata.specificTopics}
+                placeholder="List key topics, frameworks, or skills to include"
+                onChange={handleStringChange('specificTopics')}
+                rows={2}
+              />
+              <p className="text-xs text-slate-500">
+                Comma-separated list of topics, frameworks, or specific areas to focus on
+              </p>
+            </div>
+
+            {/* Session Tone */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Session Tone
+              </label>
+              <ToneSelect
+                value={metadata.toneId ?? ''}
+                selectedLabel={metadata.toneName}
+                onChange={(tone) => {
+                  onChange({
+                    toneId: tone?.id ?? undefined,
+                    toneName: tone?.name ?? undefined,
+                  });
+                }}
+              />
+              <p className="text-xs text-slate-500">
+                Optional — guide AI copy toward the right voice
+              </p>
+            </div>
+
+            {/* Session Location */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Session Location <span className="text-red-500">*</span>
+              </label>
+              <LocationSelect
+                value={metadata.locationId ?? ''}
+                selectedLabel={metadata.location}
+                data-testid="location-select"
+                onChange={(location) => {
+                  onChange({
+                    locationId: location?.id ?? undefined,
+                    location: location?.name ?? '',
+                    locationType: location?.locationType ?? undefined,
+                    meetingPlatform: location?.meetingPlatform ?? undefined,
+                    locationCapacity: location?.capacity ?? undefined,
+                    locationTimezone: location?.timezone ?? undefined,
+                    locationNotes: location ? (location.notes ?? location.accessInstructions ?? undefined) : undefined,
+                  });
+                  if (fieldErrors.locationId) {
+                    setFieldErrors(prev => ({ ...prev, locationId: '' }));
+                  }
+                }}
+                hasError={Boolean(fieldErrors.locationId)}
+                required
+              />
+              {fieldErrors.locationId && (
+                <p className="text-xs text-red-600">{fieldErrors.locationId}</p>
+              )}
+              <p className="text-xs text-slate-500">
+                Choose an approved venue or delivery space
+              </p>
+            </div>
+
+            {/* Session Title */}
+            <div className="space-y-2 sm:col-span-2">
+              <label htmlFor="session-title" className="text-sm font-medium text-slate-700">
+                Session Title
+              </label>
+              <Input
+                id="session-title"
+                value={metadata.title}
+                placeholder="e.g. Coaching Through Change"
+                onChange={handleStringChange('title')}
+                className={cn(
+                  fieldErrors.title && 'border-red-500 focus:border-red-500'
+                )}
+              />
+              {fieldErrors.title && (
+                <p className="text-xs text-red-600">{fieldErrors.title}</p>
+              )}
+              <p className="text-xs text-slate-500">
+                A clear, engaging title that describes your session
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Schedule & Logistics */}
-      <Card className="w-full">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Schedule & Logistics</CardTitle>
         </CardHeader>
@@ -371,117 +467,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* Advanced Options */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">Advanced Options</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                Session Location <span className="text-red-500">*</span>
-              </label>
-              <LocationSelect
-                value={metadata.locationId ?? ''}
-                selectedLabel={metadata.location}
-                onChange={(location) => {
-                  onChange({
-                    locationId: location?.id ?? undefined,
-                    location: location?.name ?? '',
-                  });
-                  if (fieldErrors.locationId) {
-                    setFieldErrors(prev => ({ ...prev, locationId: '' }));
-                  }
-                }}
-                hasError={Boolean(fieldErrors.locationId)}
-                required
-              />
-              {fieldErrors.locationId && (
-                <p className="text-xs text-red-600">{fieldErrors.locationId}</p>
-              )}
-              <p className="text-xs text-slate-500">
-                Choose an approved venue or delivery space
-              </p>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                Target Audience
-              </label>
-              <AudienceSelect
-                value={metadata.audienceId ?? ''}
-                selectedLabel={metadata.audienceName}
-                onChange={(audience) => {
-                  onChange({
-                    audienceId: audience?.id ?? undefined,
-                    audienceName: audience?.name ?? undefined,
-                  });
-                }}
-              />
-              <p className="text-xs text-slate-500">
-                Optional — tailor prompts for a specific learner group
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                Session Tone
-              </label>
-              <ToneSelect
-                value={metadata.toneId ?? ''}
-                selectedLabel={metadata.toneName}
-                onChange={(tone) => {
-                  onChange({
-                    toneId: tone?.id ?? undefined,
-                    toneName: tone?.name ?? undefined,
-                  });
-                }}
-              />
-              <p className="text-xs text-slate-500">
-                Optional — guide AI copy toward the right voice
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                Timezone
-              </label>
-              <Input
-                value={metadata.timezone}
-                placeholder="America/New_York"
-                onChange={handleStringChange('timezone')}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-        <div className="text-xs text-slate-500">
-          <p>Changes are automatically saved as you type</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {onAutosave && (
-            <Button variant="ghost" size="sm" onClick={onAutosave} disabled={isAutosaving}>
-              {isAutosaving ? (
-                <div className="flex items-center gap-1">
-                  <div className="animate-spin h-3 w-3 border border-slate-400 border-t-transparent rounded-full" />
-                  Saving...
-                </div>
-              ) : (
-                'Save Now'
-              )}
-            </Button>
-          )}
-          {onTriggerAI && (
-            <Button size="sm" onClick={handleGenerateOutline}>
-              Generate Variants
-            </Button>
-          )}
-        </div>
-      </div>
     </div>
   );
 };

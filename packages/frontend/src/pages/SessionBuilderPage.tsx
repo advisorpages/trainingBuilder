@@ -7,7 +7,6 @@ import { BuilderLayout } from '../layouts/BuilderLayout';
 import {
   AutosaveIndicator,
   AIComposer,
-  ArtifactsPreview,
   QuickAddModal,
   SessionMetadataForm,
   StepIndicator,
@@ -73,7 +72,6 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
   const [isQuickAddOpen, setQuickAddOpen] = React.useState(false);
   const [isVersionCompareOpen, setIsVersionCompareOpen] = React.useState(false);
   const [compareVersionIds, setCompareVersionIds] = React.useState<[string, string]>(['', '']);
-  const [isMobilePreviewOpen, setIsMobilePreviewOpen] = React.useState(false);
   const [isDebugOpen, setIsDebugOpen] = React.useState(false);
   const hasBootstrappedVariants = React.useRef(false);
 
@@ -89,8 +87,8 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
   // Check if required setup fields are populated
   const hasRequiredSetupFields = React.useMemo(() => {
     if (!draft) return false;
-    const { title, desiredOutcome, category, sessionType, locationId } = draft.metadata;
-    return !!(title?.trim() && desiredOutcome?.trim() && category?.trim() && sessionType && locationId);
+    const { desiredOutcome, category, sessionType, locationId } = draft.metadata;
+    return !!(desiredOutcome?.trim() && category?.trim() && sessionType && locationId);
   }, [draft]);
 
   // Determine if metadata has changed since last AI generation
@@ -152,7 +150,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
       return;
     }
 
-    if (!draft.metadata.title || !draft.metadata.desiredOutcome) {
+    if (!draft.metadata.desiredOutcome) {
       return;
     }
 
@@ -323,7 +321,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
           </Button>
           {!hasRequiredSetupFields && (
             <span className="text-xs text-slate-500">
-              Add the session title, desired outcome, category, and location to enable variant generation.
+              Add the desired outcome, category, and location to enable variant generation.
             </span>
           )}
         </div>
@@ -381,9 +379,6 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
           <SessionMetadataForm
             metadata={draft.metadata}
             onChange={updateMetadata}
-            onTriggerAI={handleGenerateAI}
-            onAutosave={manualAutosave}
-            isAutosaving={state.autosaveStatus === 'pending'}
           />
         );
       case 'generate':
@@ -557,25 +552,13 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
         title={getStepTitle()}
         subtitle={getStepSubtitle()}
         statusSlot={
-          <div className="flex items-center gap-4">
-            {/* Mobile Preview Toggle */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsMobilePreviewOpen(!isMobilePreviewOpen)}
-              className="lg:hidden"
-            >
-              {isMobilePreviewOpen ? 'Hide' : 'Show'} Preview
-            </Button>
-
-            <AutosaveIndicator
-              status={state.autosaveStatus}
-              lastSavedAt={draft.lastAutosaveAt}
-              onManualSave={manualAutosave}
-              canUndo={canUndoAutosave}
-              onUndo={undoAutosave}
-            />
-          </div>
+          <AutosaveIndicator
+            status={state.autosaveStatus}
+            lastSavedAt={draft.lastAutosaveAt}
+            onManualSave={manualAutosave}
+            canUndo={canUndoAutosave}
+            onUndo={undoAutosave}
+          />
         }
       >
         {/* Step Indicator */}
@@ -588,30 +571,27 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
         </div>
 
         {/* Main Content */}
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-[1fr,400px] xl:grid-cols-[1fr,480px]">
-          {/* Main Content Area */}
-          <div className="min-w-0">
-            {currentStepContent()}
+        <div className="max-w-5xl mx-auto">
+          {currentStepContent()}
 
-            {/* Step Navigation */}
-            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-4 mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-slate-200">
-              <Button
-                variant="ghost"
-                onClick={prevStep}
-                disabled={!canGoPrev}
-                className="w-full sm:w-auto order-2 sm:order-1"
-              >
-                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                <span className="hidden sm:inline">Previous</span>
-                <span className="sm:hidden">Back</span>
-              </Button>
+          {/* Step Navigation */}
+          <div className="mt-8 pt-6 border-t border-slate-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Left: Previous Button */}
+              {canGoPrev && (
+                <Button
+                  variant="ghost"
+                  onClick={prevStep}
+                  className="w-full sm:w-auto"
+                >
+                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </Button>
+              )}
 
-              <div className="text-xs sm:text-sm text-slate-500 text-center order-1 sm:order-2">
-                Step {['setup', 'generate', 'review', 'finalize'].indexOf(currentStep) + 1} of 4
-              </div>
-
+              {/* Right: Primary Action */}
               <Button
                 onClick={nextStep}
                 disabled={
@@ -619,46 +599,34 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
                   currentStep === 'generate' ? !draft.acceptedVersionId :
                   !canGoNext
                 }
-                className="w-full sm:w-auto order-3"
+                className="w-full sm:w-auto sm:ml-auto"
+                size="lg"
               >
-                <span className="hidden sm:inline">
-                  {currentStep === 'setup' ? 'Next: Create Outline' :
-                   currentStep === 'generate' ? 'Next: Review & Edit' :
-                   currentStep === 'review' ? 'Next: Publish' :
-                   'Next'}
-                </span>
-                <span className="sm:hidden">
-                  {currentStep === 'finalize' ? 'Finish' : 'Next'}
-                </span>
+                {currentStep === 'setup' && 'Continue to Generate Outline'}
+                {currentStep === 'generate' && 'Continue to Review'}
+                {currentStep === 'review' && 'Continue to Finalize'}
+                {currentStep === 'finalize' && 'Complete'}
                 <svg className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </Button>
             </div>
-          </div>
 
-          {/* Preview Sidebar - Desktop */}
-          <div className={cn(
-            'lg:block',
-            isMobilePreviewOpen ? 'block' : 'hidden lg:block'
-          )}>
-            <div className="sticky top-4">
-              <ArtifactsPreview
-                metadata={draft.metadata}
-                outline={draft.outline}
-                readinessScore={draft.readinessScore}
-                activeVersion={activeVersion}
-                onOpenQuickAdd={() => setQuickAddOpen(true)}
-                onSectionUpdate={handleUpdateSection}
-                onSectionDelete={handleDeleteSection}
-                onSectionMove={handleMoveSection}
-                onDuplicateSection={handleDuplicateSection}
-                onUpdateMetadata={updateMetadata}
-                onPublish={() => void publishSession()}
-                publishStatus={publishStatus}
-                canPublish={canPublish}
-              />
-            </div>
+            {/* Validation message for disabled state */}
+            {currentStep === 'setup' && !hasRequiredSetupFields && (
+              <div className="mt-3 text-center">
+                <p className="text-sm text-amber-600">
+                  Please fill in all required fields to continue
+                </p>
+              </div>
+            )}
+            {currentStep === 'generate' && !draft.acceptedVersionId && (
+              <div className="mt-3 text-center">
+                <p className="text-sm text-amber-600">
+                  Please select an outline to continue
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </BuilderLayout>

@@ -68,3 +68,4 @@ node_modules
 .cursor
 .bmad-core
 .github
+.aider*

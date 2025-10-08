@@ -2,6 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AIInteractionsService } from './ai-interactions.service';
 import { AIInteractionType, AIInteractionStatus } from '../entities/ai-interaction.entity';
+import { LocationType, MeetingPlatform } from '../entities/location.entity';
 
 export interface OpenAISessionOutlineRequest {
   title?: string;
@@ -36,10 +37,19 @@ export interface OpenAISessionOutlineRequest {
   toneExamplePhrases?: string[];
   toneInstructions?: string;
   toneId?: number;
+  // Location context
+  locationId?: number;
+  locationName?: string;
+  locationType?: LocationType;
+  meetingPlatform?: MeetingPlatform | null;
+  locationCapacity?: number | null;
+  locationTimezone?: string | null;
+  locationNotes?: string | null;
   ragWeight?: number;
   variantIndex?: number;
   variantLabel?: string;
   variantInstruction?: string;
+  variantDescription?: string;
 }
 
 export interface OpenAISessionSection {
@@ -113,8 +123,8 @@ export class OpenAIService {
       prompt = this.injectRAGContext(prompt, ragResults, ragWeight);
     }
 
-    // Build dynamic system prompt based on RAG weight
-    const systemPrompt = this.buildSystemPrompt(ragWeight || 0);
+    // Build system prompt for variant personality adaptation
+    const systemPrompt = this.buildSystemPrompt();
 
     const startTime = Date.now();
 
@@ -140,22 +150,25 @@ export class OpenAIService {
               'Content-Type': 'application/json',
             },
             signal: controller.signal,
-            body: JSON.stringify({
-              model: this.model,
-              messages: [
-                {
-                  role: 'system',
-                  content: systemPrompt
+              body: JSON.stringify({
+                model: this.model,
+                messages: [
+                  {
+                    role: 'system',
+                    content: systemPrompt
+                  },
+                  {
+                    role: 'user',
+                    content: prompt
+                  }
+                ],
+                temperature: this.temperature,
+                max_tokens: this.maxTokens,
+                response_format: {
+                  type: 'json_object',
                 },
-                {
-                  role: 'user',
-                  content: prompt
-                }
-              ],
-              temperature: this.temperature,
-              max_tokens: this.maxTokens,
-            }),
-          });
+              }),
+            });
 
           clearTimeout(timeoutId);
 
@@ -175,15 +188,67 @@ export class OpenAIService {
           }
 
           const data = await response.json();
-          const content = data.choices[0]?.message?.content;
+          let content = data.choices[0]?.message?.content;
 
           if (!content) {
             throw new Error('No content received from OpenAI');
           }
 
+          // Sanitize Markdown fenced code blocks to allow JSON parsing
+          if (typeof content === 'string') {
+            content = content
+              .replace(/```json/gi, '```')
+              .replace(/```/g, '')
+              .replace(/\u2028|\u2029/g, '\n')
+              .trim();
+          }
+
           // Parse the JSON response
           try {
-            const outline = JSON.parse(content) as OpenAISessionOutline;
+            let parsedContent = content;
+
+            const tryParse = (raw: string) => JSON.parse(raw) as OpenAISessionOutline;
+            let outline: OpenAISessionOutline;
+
+            try {
+              outline = tryParse(parsedContent);
+            } catch (initialError) {
+              this.logger.warn('Attempted to parse OpenAI outline JSON but failed', {
+                message: initialError instanceof Error ? initialError.message : String(initialError),
+              });
+              if (typeof parsedContent === 'string') {
+                const firstBrace = parsedContent.indexOf('{');
+                const lastBrace = parsedContent.lastIndexOf('}');
+
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                  const sliced = parsedContent.slice(firstBrace, lastBrace + 1);
+                  try {
+                    outline = tryParse(sliced);
+                    parsedContent = sliced;
+                  } catch (secondaryError) {
+                    this.logger.warn('Fallback slice JSON parse failed', {
+                      message: secondaryError instanceof Error ? secondaryError.message : String(secondaryError),
+                    });
+                    throw initialError;
+                  }
+                } else {
+                  throw initialError;
+                }
+              } else {
+                throw initialError;
+              }
+            }
+
+            try {
+              this.validateOutline(outline, request.duration);
+            } catch (validationError) {
+              const validationMessage = validationError instanceof Error ? validationError.message : String(validationError);
+              this.logger.error('OpenAI outline validation failed', { message: validationMessage });
+              const wrappedError = new Error(`OpenAI outline validation failed: ${validationMessage}`);
+              wrappedError.name = 'OpenAIOutlineValidationError';
+              throw wrappedError;
+            }
+
             this.logger.log(`Successfully generated outline with ${outline.sections.length} sections on attempt ${attempt}`);
 
             // Log successful interaction
@@ -208,6 +273,9 @@ export class OpenAIService {
 
             return outline;
           } catch (parseError) {
+            if (parseError instanceof Error && parseError.name === 'OpenAIOutlineValidationError') {
+              throw parseError;
+            }
             this.logger.error('Failed to parse OpenAI response as JSON:', content);
 
             // Log parsing failure
@@ -311,164 +379,183 @@ export class OpenAIService {
   }
 
   private buildPrompt(request: OpenAISessionOutlineRequest): string {
-    const parts = [
-      `Create a ${request.sessionType} session outline for "${request.category}"`,
-    ];
+    const formatLabel = (value?: string | null) => {
+      if (!value) return undefined;
+      return value
+        .toString()
+        .split(/[_\s]/g)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    };
 
+    const sections: string[] = [];
+
+    // 1. VARIANT PERSONALITY - FIRST AND PROMINENT!
+    if (request.variantLabel && request.variantInstruction) {
+      const variantLines = [`# VARIANT PERSONALITY: ${request.variantLabel}`, '', request.variantInstruction];
+      if (request.variantDescription) {
+        variantLines.push('', `Variant Emphasis: ${request.variantDescription}`);
+      }
+      sections.push(variantLines.join('\n'));
+    }
+
+    // 2. SESSION CONTEXT - Concise and clear
+    const sessionLines = [`# Session Context`];
+    sessionLines.push(`- Category: ${request.category}`);
+    sessionLines.push(`- Type: ${request.sessionType}`);
     if (request.title) {
-      parts.push(`Working title: "${request.title}"`);
+      sessionLines.push(`- Title: "${request.title}"`);
     }
-
-    parts.push(`Desired outcome: ${request.desiredOutcome}`);
-
+    sessionLines.push(`- Duration: ${request.duration} minutes`);
+    sessionLines.push(`- Desired Outcome: ${request.desiredOutcome}`);
     if (request.currentProblem) {
-      parts.push(`Current problem to solve: ${request.currentProblem}`);
+      sessionLines.push(`- Current Problem: ${request.currentProblem}`);
     }
-
     if (request.specificTopics) {
-      parts.push(`Must cover these topics: ${request.specificTopics}`);
+      sessionLines.push(`- Must Cover: ${request.specificTopics}`);
+    }
+    if (request.audienceSize) {
+      sessionLines.push(`- Audience Size: ${request.audienceSize}`);
+    }
+    sections.push(sessionLines.join('\n'));
+
+    // 2b. LOCATION CONTEXT - Delivery details matter
+    if (
+      request.locationName ||
+      request.locationType ||
+      request.meetingPlatform ||
+      request.locationCapacity ||
+      request.locationTimezone ||
+      request.locationNotes
+    ) {
+      const locationLines = [`# Location Details`];
+      if (request.locationName) {
+        locationLines.push(`- Name: ${request.locationName}`);
+      }
+      if (request.locationType) {
+        locationLines.push(`- Format: ${formatLabel(request.locationType)}`);
+      }
+      if (request.meetingPlatform) {
+        locationLines.push(`- Platform: ${formatLabel(request.meetingPlatform)}`);
+      }
+      if (request.locationCapacity) {
+        locationLines.push(`- Capacity: ${request.locationCapacity} participants`);
+      }
+      if (request.locationTimezone) {
+        locationLines.push(`- Time Zone: ${request.locationTimezone}`);
+      }
+      if (request.locationNotes) {
+        locationLines.push(`- Special Considerations: ${request.locationNotes}`);
+      }
+      sections.push(locationLines.join('\n'));
     }
 
-    parts.push(`Session duration: ${request.duration} minutes`);
-
-    // Rich audience profile
+    // 3. AUDIENCE CONTEXT - Special instructions FIRST
     if (request.audienceName) {
-      const audienceParts = [`\\n\\nAudience Profile:\\n- Profile: ${request.audienceName}`];
+      const audienceLines = [`# Audience Context`, `- Profile: ${request.audienceName}`];
+
+      // PRIORITY: Special instructions at the top
+      if (request.audienceInstructions) {
+        audienceLines.push(`- **Key Guidance**: ${request.audienceInstructions}`);
+      }
 
       if (request.audienceDescription) {
-        audienceParts.push(`- Description: ${request.audienceDescription}`);
+        audienceLines.push(`- Description: ${request.audienceDescription}`);
       }
       if (request.audienceExperienceLevel) {
-        audienceParts.push(`- Experience Level: ${request.audienceExperienceLevel}`);
+        audienceLines.push(`- Experience Level: ${request.audienceExperienceLevel}`);
       }
       if (request.audienceTechnicalDepth) {
-        audienceParts.push(`- Technical Depth: ${request.audienceTechnicalDepth}/5`);
+        audienceLines.push(`- Technical Depth: ${request.audienceTechnicalDepth}/5`);
       }
       if (request.audienceCommunicationStyle) {
-        audienceParts.push(`- Communication Style: ${request.audienceCommunicationStyle}`);
+        audienceLines.push(`- Communication Style: ${request.audienceCommunicationStyle}`);
       }
       if (request.audienceVocabularyLevel) {
-        audienceParts.push(`- Vocabulary Level: ${request.audienceVocabularyLevel}`);
+        audienceLines.push(`- Vocabulary Level: ${request.audienceVocabularyLevel}`);
       }
       if (request.audienceLearningStyle) {
-        audienceParts.push(`- Preferred Learning Style: ${request.audienceLearningStyle}`);
+        audienceLines.push(`- Learning Preferences: ${request.audienceLearningStyle}`);
       }
       if (request.audienceExampleTypes && request.audienceExampleTypes.length > 0) {
-        audienceParts.push(`- Use Examples From: ${request.audienceExampleTypes.join(', ')}`);
+        audienceLines.push(`- Use Examples From: ${request.audienceExampleTypes.join(', ')}`);
       }
       if (request.audienceAvoidTopics && request.audienceAvoidTopics.length > 0) {
-        audienceParts.push(`- Avoid Topics: ${request.audienceAvoidTopics.join(', ')}`);
-      }
-      if (request.audienceInstructions) {
-        audienceParts.push(`- Special Instructions: ${request.audienceInstructions}`);
+        audienceLines.push(`- **Avoid Topics**: ${request.audienceAvoidTopics.join(', ')}`);
       }
 
-      parts.push(audienceParts.join('\\n'));
-    } else if (request.audienceSize) {
-      parts.push(`Audience size: ${request.audienceSize}`);
+      sections.push(audienceLines.join('\n'));
     }
 
-    // Rich tone profile
+    // 4. TONE GUIDELINES - Emotional resonance emphasized
     if (request.toneName) {
-      const toneParts = [`\\n\\nTone Profile:\\n- Profile: ${request.toneName}`];
+      const toneLines = [`# Tone Guidelines`, `- Profile: ${request.toneName}`];
 
+      // PRIORITY: Special instructions first
+      if (request.toneInstructions) {
+        toneLines.push(`- **Key Guidance**: ${request.toneInstructions}`);
+      }
+
+      // PRIORITY: Emotional resonance and example phrases
+      if (request.toneEmotionalResonance && request.toneEmotionalResonance.length > 0) {
+        toneLines.push(`- **Emotional Qualities**: ${request.toneEmotionalResonance.join(', ')}`);
+      }
       if (request.toneDescription) {
-        toneParts.push(`- Description: ${request.toneDescription}`);
+        toneLines.push(`- Description: ${request.toneDescription}`);
       }
       if (request.toneStyle) {
-        toneParts.push(`- Style: ${request.toneStyle}`);
-      }
-      if (request.toneFormality) {
-        toneParts.push(`- Formality Level: ${request.toneFormality}/5`);
+        toneLines.push(`- Style: ${request.toneStyle}`);
       }
       if (request.toneEnergyLevel) {
-        toneParts.push(`- Energy: ${request.toneEnergyLevel}`);
+        toneLines.push(`- Energy: ${request.toneEnergyLevel}`);
+      }
+      if (request.toneFormality) {
+        toneLines.push(`- Formality: ${request.toneFormality}/5`);
       }
       if (request.toneSentenceStructure) {
-        toneParts.push(`- Sentence Structure: ${request.toneSentenceStructure}`);
+        toneLines.push(`- Sentence Structure: ${request.toneSentenceStructure}`);
       }
       if (request.toneLanguageCharacteristics && request.toneLanguageCharacteristics.length > 0) {
-        toneParts.push(`- Language Traits: ${request.toneLanguageCharacteristics.join(', ')}`);
-      }
-      if (request.toneEmotionalResonance && request.toneEmotionalResonance.length > 0) {
-        toneParts.push(`- Emotional Qualities: ${request.toneEmotionalResonance.join(', ')}`);
+        toneLines.push(`- Language Traits: ${request.toneLanguageCharacteristics.join(', ')}`);
       }
       if (request.toneExamplePhrases && request.toneExamplePhrases.length > 0) {
-        toneParts.push(`- Example Phrasing: "${request.toneExamplePhrases[0]}"`);
-      }
-      if (request.toneInstructions) {
-        toneParts.push(`- Special Instructions: ${request.toneInstructions}`);
+        toneLines.push(`- Example Phrases:`);
+        request.toneExamplePhrases.forEach(phrase => {
+          toneLines.push(`  "${phrase}"`);
+        });
       }
 
-      parts.push(toneParts.join('\\n'));
+      sections.push(toneLines.join('\n'));
     }
 
-    const requirements = [
-      'Create 3-6 sections that flow logically',
-      'Include an opening/welcome section',
-      'Include interactive elements and practice opportunities',
-      'Include a closing section with next steps',
-      'Make it practical and immediately applicable',
-      'Ensure total duration matches the requested time',
-      'Focus on engagement and participation'
-    ];
+    // 5. OUTPUT REQUIREMENTS - Minimal, non-prescriptive
+    const requirements = [`# Output Requirements`];
+    requirements.push(`- Return valid JSON with the specified structure`);
+    requirements.push(`- Ensure totalDuration equals ${request.duration} minutes exactly`);
+    requirements.push(`- Create 3-6 sections that flow logically`);
+    requirements.push(`- Include opening/welcome and closing/commitments sections`);
+    requirements.push(`- Make it practical, engaging, and immediately applicable`);
 
-    // Add audience-specific requirements if rich profile is available
-    if (request.audienceName) {
-      if (request.audienceExperienceLevel && request.audienceTechnicalDepth) {
-        requirements.push(`Tailor complexity to ${request.audienceExperienceLevel} experience level and ${request.audienceTechnicalDepth}/5 technical depth`);
-      }
-      if (request.audienceVocabularyLevel) {
-        requirements.push(`Use ${request.audienceVocabularyLevel} vocabulary level`);
-      }
-      if (request.audienceLearningStyle) {
-        requirements.push(`Include activities matching ${request.audienceLearningStyle} learning preferences`);
-      }
-      if (request.audienceExampleTypes && request.audienceExampleTypes.length > 0) {
-        requirements.push(`Use examples from relevant contexts: ${request.audienceExampleTypes.join(', ')}`);
-      }
+    // Note about conflicting instructions
+    if (request.audienceInstructions && request.toneInstructions) {
+      requirements.push(`\nNote: When audience and tone instructions conflict, prioritize audience needs.`);
     }
 
-    // Add tone-specific requirements if rich profile is available
-    if (request.toneName) {
-      if (request.toneFormality) {
-        requirements.push(`Match writing style to ${request.toneFormality}/5 formality level`);
-      }
-      if (request.toneSentenceStructure) {
-        requirements.push(`Use ${request.toneSentenceStructure} sentence structure in descriptions`);
-      }
-      if (request.toneStyle) {
-        requirements.push(`Incorporate ${request.toneStyle} tone style throughout`);
-      }
-      if (request.toneEmotionalResonance && request.toneEmotionalResonance.length > 0) {
-        requirements.push(`Convey ${request.toneEmotionalResonance.join(', ')} emotional qualities in activity descriptions`);
-      }
-    }
+    sections.push(requirements.join('\n'));
 
-    if (typeof request.ragWeight === 'number') {
-      requirements.push(`Match the reliance on existing knowledge materials to approximately ${Math.round(request.ragWeight * 100)}% emphasis`);
-    }
-
-    if (request.variantInstruction) {
-      requirements.push(request.variantInstruction);
-    }
-
-    if (request.variantLabel) {
-      parts.push(`Variant goal: ${request.variantLabel}`);
-    }
-
-    parts.push(`\\n\\nRequirements:\\n- ${requirements.join('\\n- ')}`);
-
-    return parts.join('\\n\\n');
+    return sections.join('\n\n');
   }
 
   /**
-   * Build dynamic system prompt based on RAG weight
+   * Build system prompt that emphasizes variant personality adaptation
    */
-  private buildSystemPrompt(ragWeight: number): string {
-    const basePrompt = `You are an expert training content designer specializing in creating engaging, outcome-focused training sessions for financial professionals.
+  private buildSystemPrompt(): string {
+    return `You are an expert training content designer specializing in creating engaging, outcome-focused training sessions for financial professionals.
 
-You excel at creating practical, immediately applicable session structures that drive measurable results.
+You excel at adapting your content design to match different learning and delivery styles based on the VARIANT PERSONALITY provided in each request. Each variant represents a distinct approach to training design - you must follow the personality instructions precisely to create measurably different outputs.
+
+CRITICAL: The VARIANT PERSONALITY instructions define HOW you should structure, describe, and present the content. Make each variant feel genuinely different in tone, pacing, structure, and activities.
 
 Respond ONLY with valid JSON matching this exact structure:
 {
@@ -488,29 +575,9 @@ Respond ONLY with valid JSON matching this exact structure:
   "recommendedAudienceSize": "string"
 }
 
-IMPORTANT: Create sections that flow logically:
-- Section 1: Opening/Welcome (10-15% of time)
-- Sections 2-3: Core Content Topics (60-70% of time)
-- Section 4: Closing/Commitments (10-15% of time)
+When knowledge base materials are provided, use them as inspiration and reference points while maintaining the variant personality. Adapt proven frameworks to match the variant's unique style.
 
-Make sessions practical, engaging, and outcome-focused. Include interactive elements.`;
-
-    if (ragWeight >= 0.5) {
-      // Heavy RAG: emphasize fidelity to source materials
-      return `${basePrompt}
-
-Your task is to create a session outline that draws heavily from the provided training materials. Stay faithful to the frameworks, examples, and terminology found in the knowledge base. Adapt the structure to fit the desired outcome while preserving the proven approaches documented in the sources.`;
-    } else if (ragWeight > 0) {
-      // Light RAG: use as inspiration
-      return `${basePrompt}
-
-Use the provided training materials as inspiration and reference points, but feel free to combine them creatively with your expertise to create a fresh, engaging session structure.`;
-    } else {
-      // No RAG: pure creativity
-      return `${basePrompt}
-
-Create an innovative session outline using your expertise and industry best practices. Focus on practical, immediately applicable content that drives the desired outcome.`;
-    }
+Make sessions practical, engaging, and outcome-focused. Adapt your section titles, descriptions, activities, and flow to embody the variant personality.`;
   }
 
   /**
@@ -537,17 +604,210 @@ ${r.text.substring(0, 500)}...
 ---`
     ).join('\n\n');
 
-    return `# Retrieved Training Materials from Knowledge Base
+    return `${basePrompt}
+
+## Knowledge Base Inspiration
 
 ${ragContext}
 
-# Your Task
-
-Using the above materials as reference and inspiration, ${basePrompt}`;
+Use these materials as inspiration—blend useful insights without overriding the variant personality.`;
   }
 
   isConfigured(): boolean {
     return !!this.apiKey;
+  }
+
+  private validateOutline(outline: OpenAISessionOutline, expectedDuration: number): void {
+    if (!outline || !Array.isArray(outline.sections) || outline.sections.length === 0) {
+      throw new Error('Outline is missing sections');
+    }
+
+    outline.sections.forEach((section, index) => {
+      if (!section || typeof section.title !== 'string' || section.title.trim().length === 0) {
+        throw new Error(`Section ${index + 1} is missing a valid title`);
+      }
+
+      if (typeof section.duration !== 'number' || !Number.isFinite(section.duration) || section.duration <= 0) {
+        throw new Error(`Section ${index + 1} has an invalid duration`);
+      }
+
+      if (typeof section.description !== 'string' || section.description.trim().length === 0) {
+        throw new Error(`Section ${index + 1} is missing a description`);
+      }
+    });
+
+    if (typeof outline.totalDuration !== 'number' || !Number.isFinite(outline.totalDuration) || outline.totalDuration <= 0) {
+      throw new Error('Outline totalDuration is invalid');
+    }
+
+    const summedDuration = outline.sections.reduce((sum, section) => sum + section.duration, 0);
+    let normalizedTotal = Number(summedDuration.toFixed(2));
+    const originalTotalDuration = outline.totalDuration;
+    const durationDifference = Math.abs(normalizedTotal - originalTotalDuration);
+    const baseTolerance = Math.max(5, outline.sections.length, originalTotalDuration * 0.1);
+    const hasExpectedDuration =
+      typeof expectedDuration === 'number' &&
+      Number.isFinite(expectedDuration) &&
+      expectedDuration > 0;
+    const expectedTolerance = hasExpectedDuration ? Math.max(5, expectedDuration * 0.1) : null;
+
+    let totalDurationAdjusted = false;
+    let sectionsRebalanced = false;
+    const adjustTotalDuration = (message: string, level: 'warn' | 'debug' = 'warn') => {
+      const details = {
+        originalTotalDuration,
+        normalizedTotalDuration: normalizedTotal,
+        summedSectionDuration: normalizedTotal,
+      };
+
+      if (level === 'warn') {
+        this.logger.warn(message, details);
+      } else {
+        this.logger.debug?.(message, details);
+      }
+
+      outline.totalDuration = normalizedTotal;
+      totalDurationAdjusted = true;
+    };
+
+    if (durationDifference > baseTolerance) {
+      const rebalanceCandidates: Array<{ target: number; tolerance: number }> = [];
+
+      if (hasExpectedDuration && expectedTolerance !== null) {
+        rebalanceCandidates.push({ target: expectedDuration, tolerance: expectedTolerance });
+      }
+
+      rebalanceCandidates.push({ target: originalTotalDuration, tolerance: baseTolerance });
+
+      for (const candidate of rebalanceCandidates) {
+        const { target, tolerance } = candidate;
+
+        if (!Number.isFinite(target) || target <= 0) {
+          continue;
+        }
+
+        const { sections: adjustedSections, total } = this.rebalanceSectionDurations(outline.sections, target);
+        const adjustedDifference = Math.abs(total - target);
+
+        if (adjustedSections.length > 0 && adjustedDifference <= tolerance) {
+          outline.sections = adjustedSections;
+          normalizedTotal = Number(total.toFixed(2));
+          outline.totalDuration = normalizedTotal;
+          totalDurationAdjusted = true;
+          sectionsRebalanced = true;
+          break;
+        }
+      }
+
+      if (!sectionsRebalanced) {
+        adjustTotalDuration(
+          'Large mismatch between outline totalDuration and summed section durations; normalizing to section totals'
+        );
+      }
+    } else if (durationDifference > 0.01) {
+      adjustTotalDuration('Normalizing outline totalDuration to match summed section durations');
+    } else if (durationDifference > 0) {
+      adjustTotalDuration('Correcting minor floating point drift in outline totalDuration', 'debug');
+    }
+
+    if (!totalDurationAdjusted) {
+      outline.totalDuration = normalizedTotal;
+    }
+
+    if (hasExpectedDuration && expectedTolerance !== null) {
+      const differenceToExpected = Math.abs(outline.totalDuration - expectedDuration);
+      if (differenceToExpected > expectedTolerance) {
+        this.logger.warn(
+          `Generated outline duration (${outline.totalDuration}) differs from requested duration (${expectedDuration})`,
+          {
+            expectedDuration,
+            tolerance: expectedTolerance,
+            summedSectionDuration: normalizedTotal,
+          }
+        );
+      }
+    }
+  }
+
+  private rebalanceSectionDurations(
+    sections: OpenAISessionSection[],
+    targetDuration: number,
+  ): { sections: OpenAISessionSection[]; total: number } {
+    if (!Array.isArray(sections) || sections.length === 0) {
+      return { sections, total: 0 };
+    }
+
+    if (!Number.isFinite(targetDuration) || targetDuration <= 0) {
+      const total = sections.reduce(
+        (sum, section) => sum + (Number.isFinite(section?.duration) ? section.duration : 0),
+        0,
+      );
+      return { sections, total };
+    }
+
+    const sanitized = sections.map(section => ({
+      ...section,
+      duration:
+        typeof section.duration === 'number' && Number.isFinite(section.duration) && section.duration > 0
+          ? section.duration
+          : 1,
+    }));
+
+    const currentTotal = sanitized.reduce((sum, section) => sum + section.duration, 0);
+
+    let adjusted: OpenAISessionSection[];
+
+    if (!Number.isFinite(currentTotal) || currentTotal <= 0) {
+      const baseline = targetDuration / sanitized.length;
+      adjusted = sanitized.map(section => ({
+        ...section,
+        duration: Math.max(1, Math.round(baseline)),
+      }));
+    } else {
+      const ratio = targetDuration / currentTotal;
+      adjusted = sanitized.map(section => {
+        const scaled = section.duration * ratio;
+        const duration = Number.isFinite(scaled) ? Math.max(1, Math.round(scaled)) : 1;
+        return {
+          ...section,
+          duration,
+        };
+      });
+    }
+
+    let adjustedTotal = adjusted.reduce((sum, section) => sum + section.duration, 0);
+    let delta = Math.round(targetDuration - adjustedTotal);
+
+    if (delta !== 0 && adjusted.length > 0) {
+      while (delta !== 0) {
+        let changed = false;
+        const direction = delta > 0 ? 1 : -1;
+
+        for (let i = adjusted.length - 1; i >= 0 && delta !== 0; i--) {
+          if (direction < 0 && adjusted[i].duration <= 1) {
+            continue;
+          }
+
+          adjusted[i] = {
+            ...adjusted[i],
+            duration: adjusted[i].duration + direction,
+          };
+          delta -= direction;
+          changed = true;
+        }
+
+        if (!changed) {
+          break;
+        }
+      }
+
+      adjustedTotal = adjusted.reduce((sum, section) => sum + section.duration, 0);
+    }
+
+    return {
+      sections: adjusted,
+      total: adjustedTotal,
+    };
   }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {

@@ -11,6 +11,11 @@ import {
   SessionStatus,
   SessionStatusLog,
   Topic,
+  Location,
+  Audience,
+  Tone,
+  LocationType,
+  MeetingPlatform,
 } from '../../entities';
 import { ReadinessScore, ReadinessScoringService } from './services/readiness-scoring.service';
 import { CreateSessionDto } from './dto/create-session.dto';
@@ -134,6 +139,16 @@ export interface SessionOutlinePayload {
   convertedAt?: string;
 }
 
+interface LocationPromptContext {
+  id?: number;
+  name?: string;
+  locationType?: LocationType;
+  meetingPlatform?: MeetingPlatform | null;
+  capacity?: number | null;
+  timezone?: string | null;
+  notes?: string | null;
+}
+
 @Injectable()
 export class SessionsService {
   constructor(
@@ -149,6 +164,8 @@ export class SessionsService {
     private readonly statusLogsRepository: Repository<SessionStatusLog>,
     @InjectRepository(SessionBuilderDraft)
     private readonly draftsRepository: Repository<SessionBuilderDraft>,
+    @InjectRepository(Location)
+    private readonly locationsRepository: Repository<Location>,
     private readonly readinessScoringService: ReadinessScoringService,
     private readonly openAIService: OpenAIService,
     private readonly promptRegistry: PromptRegistryService,
@@ -526,6 +543,17 @@ export class SessionsService {
       }
     }
 
+    // Fetch location data if provided (useful for prompt enrichment)
+    let location: Location | null = null;
+    if (payload.locationId) {
+      try {
+        location = await this.locationsRepository.findOne({ where: { id: payload.locationId } });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Failed to fetch location ${payload.locationId}: ${message}`);
+      }
+    }
+
     let useOpenAI = false;
     let aiOutline: any = null;
     let fallbackUsed = false;
@@ -544,6 +572,15 @@ export class SessionsService {
           specificTopics: payload.specificTopics,
           duration,
           audienceSize: payload.audienceSize || '8-20',
+          audienceId: payload.audienceId,
+          toneId: payload.toneId,
+          locationId: location?.id ?? payload.locationId,
+          locationName: location?.name ?? payload.locationName,
+          locationType: location?.locationType ?? payload.locationType,
+          meetingPlatform: location?.meetingPlatform ?? payload.meetingPlatform,
+          locationCapacity: location?.capacity ?? payload.locationCapacity,
+          locationTimezone: location?.timezone ?? payload.locationTimezone,
+          locationNotes: (location?.notes ?? location?.accessInstructions) ?? payload.locationNotes,
         };
 
         // Add rich audience profile if available
@@ -1511,33 +1548,63 @@ export class SessionsService {
       ? Math.round((new Date(payload.endTime).getTime() - new Date(payload.startTime).getTime()) / 60000)
       : 90; // Default 90 minutes
 
-    // Fetch audience and tone profiles for enriched RAG query
-    let audience = null;
-    let tone = null;
+    // Fetch audience, tone, and location profiles for enriched prompts
+    let audience: Audience | null = null;
+    let tone: Tone | null = null;
+    let location: Location | null = null;
 
     if (payload.audienceId) {
       try {
-        audience = await this.sessionsRepository.manager.findOne('audiences', {
+        audience = await this.sessionsRepository.manager.findOne(Audience, {
           where: { id: payload.audienceId }
         });
       } catch (error) {
-        this.logger.warn(`Failed to fetch audience ${payload.audienceId}:`, error.message);
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Failed to fetch audience ${payload.audienceId}: ${message}`);
       }
     }
 
     if (payload.toneId) {
       try {
-        tone = await this.sessionsRepository.manager.findOne('tones', {
+        tone = await this.sessionsRepository.manager.findOne(Tone, {
           where: { id: payload.toneId }
         });
       } catch (error) {
-        this.logger.warn(`Failed to fetch tone ${payload.toneId}:`, error.message);
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Failed to fetch tone ${payload.toneId}: ${message}`);
       }
     }
 
-    // Note: Location data would be fetched from session metadata if available
-    // For now, location enrichment is skipped during outline generation
-    // as it's typically set later in the session builder workflow
+    if (payload.locationId) {
+      try {
+        location = await this.locationsRepository.findOne({ where: { id: payload.locationId } });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Failed to fetch location ${payload.locationId}: ${message}`);
+      }
+    }
+
+    const locationContext: LocationPromptContext | undefined = location
+      ? {
+          id: location.id,
+          name: location.name,
+          locationType: location.locationType,
+          meetingPlatform: location.meetingPlatform ?? null,
+          capacity: location.capacity ?? null,
+          timezone: location.timezone ?? null,
+          notes: location.notes ?? location.accessInstructions ?? null,
+        }
+      : (payload.locationName || payload.locationType || payload.meetingPlatform || payload.locationCapacity || payload.locationTimezone || payload.locationNotes)
+        ? {
+            id: payload.locationId,
+            name: payload.locationName,
+            locationType: payload.locationType,
+            meetingPlatform: payload.meetingPlatform ?? null,
+            capacity: payload.locationCapacity ?? null,
+            timezone: payload.locationTimezone ?? null,
+            notes: payload.locationNotes ?? null,
+          }
+        : undefined;
 
     // Step 1: Query RAG once with retry (reuse for all variants)
     let ragResults: any[] = [];
@@ -1551,7 +1618,7 @@ export class SessionsService {
         currentProblem: payload.currentProblem,
         sessionType: payload.sessionType,
         specificTopics: payload.specificTopics,
-        duration: duration,
+        duration,
         audienceSize: payload.audienceSize,
         // Audience details
         experienceLevel: audience?.experienceLevel,
@@ -1569,7 +1636,12 @@ export class SessionsService {
         toneDescription: tone?.description,
         sentenceStructure: tone?.sentenceStructure,
         languageCharacteristics: tone?.languageCharacteristics,
-        emotionalResonance: tone?.emotionalResonance
+        emotionalResonance: tone?.emotionalResonance,
+        // Location details
+        locationType: locationContext?.locationType,
+        meetingPlatform: locationContext?.meetingPlatform,
+        locationCapacity: locationContext?.capacity,
+        locationTimezone: locationContext?.timezone,
       });
       ragAvailable = ragResults.length > 0;
 
@@ -1588,14 +1660,33 @@ export class SessionsService {
       this.logger.warn(`RAG query failed completely, proceeding with baseline only: ${message}`);
     }
 
-    // Step 2: Generate 4 variants in parallel with different RAG weights
-    const ragWeights = [0.8, 0.5, 0.2, 0.0]; // Heavy, Balanced, Light, None
+    const ragWeight = ragResults.length > 0 ? 0.5 : 0.0;
 
-    const variantPromises = ragWeights.map((weight, index) =>
-      this.generateSingleVariant(payload, ragResults, weight, index)
+    const variantMeta = await Promise.all(
+      [0, 1, 2, 3].map(async index => ({
+        index,
+        label: await this.getVariantLabel(index),
+        instruction: await this.getVariantInstruction(index, payload.category, duration),
+        description: await this.getVariantDescription(index, payload.category),
+      }))
+    );
+
+    // Step 2: Generate 4 variants in parallel with shared RAG weight
+    const variantPromises = variantMeta.map(meta =>
+      this.generateSingleVariant(
+        payload,
+        duration,
+        audience,
+        tone,
+        locationContext,
+        ragResults,
+        ragWeight,
+        meta
+      )
         .then(result => {
-          this.logger.log(`Variant ${index + 1} generated`, {
-            ragWeight: weight,
+          this.logger.log(`Variant ${meta.index + 1} generated`, {
+            variantLabel: meta.label,
+            ragWeight,
             sectionsCount: result.outline.sections.length,
             totalDuration: result.outline.totalDuration,
           });
@@ -1603,39 +1694,29 @@ export class SessionsService {
         })
         .catch(error => {
           const message = error instanceof Error ? error.message : String(error);
-          this.logger.error(`Variant ${index + 1} generation failed: ${message}`);
+          this.logger.error(`Variant ${meta.index + 1} generation failed: ${message}`);
           return null;
         })
     );
 
     const variantResults = await Promise.all(variantPromises);
 
-    // Filter out failed variants and add labels/descriptions with RAG sources
-    const variantsWithMetadata = await Promise.all(
-      variantResults.map(async (result, index): Promise<Variant | null> => {
-        if (!result) {
-          return null;
-        }
+    const ragSourcesSummary = ragWeight > 0 && ragResults.length > 0
+      ? this.convertRagResultsToSources(ragResults)
+      : undefined;
 
-        const weight = ragWeights[index];
-        const ragSources = weight > 0 && ragResults.length > 0
-          ? this.convertRagResultsToSources(ragResults)
-          : undefined;
-
-        return {
-          id: `variant-${index + 1}`,
-          outline: result.outline,
-          generationSource: weight > 0 ? 'rag' as const : 'baseline' as const,
-          ragWeight: weight,
-          ragSourcesUsed: weight > 0 ? ragResults.length : 0,
-          ragSources,
-          label: await this.getVariantLabel(index),
-          description: await this.getVariantDescription(index, payload.category),
-        };
-      })
-    );
-
-    const variants = variantsWithMetadata.filter((variant): variant is Variant => variant !== null);
+    const variants = variantResults
+      .filter((result): result is { outline: any; meta: { index: number; label: string; description: string; ragWeight: number } } => result !== null)
+      .map(result => ({
+        id: `variant-${result.meta.index + 1}`,
+        outline: result.outline,
+        generationSource: ragWeight > 0 && ragResults.length > 0 ? 'rag' as const : 'baseline' as const,
+        ragWeight: result.meta.ragWeight,
+        ragSourcesUsed: ragWeight > 0 ? ragResults.length : 0,
+        ragSources: ragSourcesSummary,
+        label: result.meta.label,
+        description: result.meta.description,
+      }));
 
     if (variants.length === 0) {
       this.logger.warn('All variant generation attempts failed, falling back to legacy outline', {
@@ -1656,6 +1737,8 @@ export class SessionsService {
           ragAvailable: legacyFallback.metadata.ragAvailable,
           rolloutPercentage: this.variantRolloutPercentage,
           rolloutSample: decision.rolloutSample,
+          locationType: locationContext?.locationType ?? null,
+          meetingPlatform: locationContext?.meetingPlatform ?? null,
         },
       });
 
@@ -1671,7 +1754,8 @@ export class SessionsService {
     this.logger.log('Multi-variant generation complete', {
       totalVariants: variants.length,
       totalTime: totalProcessingTime,
-      ragAvailable
+      ragAvailable,
+      locationType: locationContext?.locationType ?? 'unknown',
     });
 
     this.analyticsTelemetry.recordEvent('ai_content_generated', {
@@ -1685,6 +1769,8 @@ export class SessionsService {
         averageSimilarity: avgSimilarity,
         rolloutPercentage: this.variantRolloutPercentage,
         rolloutSample: decision.rolloutSample,
+        locationType: locationContext?.locationType ?? null,
+        meetingPlatform: locationContext?.meetingPlatform ?? null,
       },
     });
 
@@ -1705,49 +1791,15 @@ export class SessionsService {
    */
   private async generateSingleVariant(
     payload: SuggestOutlineDto,
+    duration: number,
+    audience: Audience | null,
+    tone: Tone | null,
+    location: LocationPromptContext | undefined,
     ragResults: any[],
     ragWeight: number,
-    variantIndex: number
-  ): Promise<{ outline: any }> {
-    // Calculate session duration from start/end times
-    const duration = payload.startTime && payload.endTime
-      ? Math.round((new Date(payload.endTime).getTime() - new Date(payload.startTime).getTime()) / 60000)
-      : 90; // Default 90 minutes
-
-    // Load audience and tone profiles (same as existing suggestOutline)
-    let audience = null;
-    let tone = null;
-
-    if (payload.audienceId) {
-      try {
-        audience = await this.sessionsRepository.manager.findOne('audiences', {
-          where: { id: payload.audienceId }
-        });
-      } catch (error) {
-        this.logger.warn(`Failed to fetch audience ${payload.audienceId}:`, error.message);
-      }
-    }
-
-    if (payload.toneId) {
-      try {
-        tone = await this.sessionsRepository.manager.findOne('tones', {
-          where: { id: payload.toneId }
-        });
-      } catch (error) {
-        this.logger.warn(`Failed to fetch tone ${payload.toneId}:`, error.message);
-      }
-    }
-
-    const variantLabel = await this.getVariantLabel(variantIndex);
-    const variantInstruction = await this.getVariantInstruction(
-      variantIndex,
-      payload.category,
-      ragResults.length > 0,
-      ragWeight,
-    );
-
-    // Build OpenAI request
-    const openAIRequest: any = {
+    meta: { index: number; label: string; instruction: string; description: string }
+  ): Promise<{ outline: any; meta: { index: number; label: string; description: string; ragWeight: number } }> {
+    const openAIRequest: OpenAISessionOutlineRequest = {
       title: payload.title,
       category: payload.category,
       sessionType: payload.sessionType,
@@ -1756,13 +1808,22 @@ export class SessionsService {
       specificTopics: payload.specificTopics,
       duration,
       audienceSize: payload.audienceSize || '8-20',
+      audienceId: payload.audienceId,
+      toneId: payload.toneId,
+      locationId: location?.id ?? payload.locationId,
+      locationName: location?.name ?? payload.locationName,
+      locationType: location?.locationType ?? payload.locationType,
+      meetingPlatform: location?.meetingPlatform ?? payload.meetingPlatform,
+      locationCapacity: location?.capacity ?? payload.locationCapacity,
+      locationTimezone: location?.timezone ?? payload.locationTimezone,
+      locationNotes: location?.notes ?? payload.locationNotes,
+      ragWeight,
+      variantIndex: meta.index,
+      variantLabel: meta.label,
+      variantInstruction: meta.instruction,
+      variantDescription: meta.description,
     };
-    openAIRequest.ragWeight = ragWeight;
-    openAIRequest.variantIndex = variantIndex;
-    openAIRequest.variantLabel = variantLabel;
-    openAIRequest.variantInstruction = variantInstruction;
 
-    // Add audience profile
     if (audience) {
       openAIRequest.audienceName = audience.name;
       openAIRequest.audienceDescription = audience.description;
@@ -1776,7 +1837,6 @@ export class SessionsService {
       openAIRequest.audienceInstructions = audience.promptInstructions;
     }
 
-    // Add tone profile
     if (tone) {
       openAIRequest.toneName = tone.name;
       openAIRequest.toneDescription = tone.description;
@@ -1790,16 +1850,14 @@ export class SessionsService {
       openAIRequest.toneInstructions = tone.promptInstructions;
     }
 
-    // Generate with OpenAI (inject RAG context based on weight)
     const aiOutline = await this.openAIService.generateSessionOutline(
       openAIRequest,
       ragResults,
       ragWeight
     );
 
-    // Convert to our format
     const sections = aiOutline.sections.map((section: any, index: number) => ({
-      id: `ai-${Date.now()}-${variantIndex}-${index}`,
+      id: `ai-${Date.now()}-${meta.index}-${index}`,
       type: this.mapSectionType(section.title, index),
       position: index,
       title: section.title,
@@ -1809,10 +1867,8 @@ export class SessionsService {
       suggestedActivities: section.suggestedActivities || [],
     }));
 
-    // Balance durations to match target
     const balancedSections = this.balanceDurations(sections, duration);
 
-    // Find matching topics
     const matchingTopics = await this.findMatchingTopics(balancedSections);
     const enhancedSections = await this.associateTopicsWithSections(balancedSections, matchingTopics);
 
@@ -1828,7 +1884,13 @@ export class SessionsService {
         recommendedAudienceSize: aiOutline.recommendedAudienceSize || '8-20',
         fallbackUsed: false,
         generatedAt: new Date().toISOString(),
-      }
+      },
+      meta: {
+        index: meta.index,
+        label: meta.label,
+        description: meta.description,
+        ragWeight,
+      },
     };
   }
 
@@ -1838,18 +1900,29 @@ export class SessionsService {
   private balanceDurations(sections: any[], targetDuration: number): any[] {
     const totalDuration = sections.reduce((sum, s) => sum + s.duration, 0);
 
-    // If within 10% tolerance, keep as-is
-    if (Math.abs(totalDuration - targetDuration) <= targetDuration * 0.1) {
-      return sections;
+    let adjustedSections = sections.map(section => ({ ...section }));
+
+    // If the gap is larger than 10%, proportionally adjust first
+    if (Math.abs(totalDuration - targetDuration) > targetDuration * 0.1 && totalDuration > 0) {
+      const ratio = targetDuration / totalDuration;
+      adjustedSections = sections.map(section => ({
+        ...section,
+        duration: Math.max(1, Math.round(section.duration * ratio)),
+      }));
     }
 
-    // Proportionally adjust all sections
-    const ratio = targetDuration / totalDuration;
+    const currentTotal = adjustedSections.reduce((sum, s) => sum + s.duration, 0);
+    const delta = targetDuration - currentTotal;
 
-    return sections.map(section => ({
-      ...section,
-      duration: Math.round(section.duration * ratio)
-    }));
+    if (delta !== 0 && adjustedSections.length > 0) {
+      const lastIndex = adjustedSections.length - 1;
+      adjustedSections[lastIndex] = {
+        ...adjustedSections[lastIndex],
+        duration: Math.max(1, adjustedSections[lastIndex].duration + delta),
+      };
+    }
+
+    return adjustedSections;
   }
 
   /**
@@ -1896,30 +1969,24 @@ export class SessionsService {
   private async getVariantInstruction(
     index: number,
     category: string,
-    hasRagResults: boolean,
-    ragWeight: number,
+    duration: number,
   ): Promise<string> {
     try {
       const instruction = await this.variantConfigService.getVariantInstruction(index);
       // Replace {{category}} placeholder if present
-      return instruction.replace(/\{\{category\}\}/g, category);
+      return instruction
+        .replace(/\{\{category\}\}/g, category)
+        .replace(/\{\{duration\}\}/g, String(duration));
     } catch (error) {
       // Fallback to hardcoded instructions if database lookup fails
       const instructions = [
-        hasRagResults
-          ? `Lean heavily on the supplied knowledge base insights about ${category}. Reference the retrieved materials throughout, reinforcing proven frameworks and terminology. Make this variant feel like the trusted playbook version while still matching the desired outcome.`
-          : `Simulate a knowledge-base heavy outline for ${category}. Reference established internal playbooks, past success stories, and proven frameworks even without direct source excerpts. Keep the structure disciplined, data-backed, and familiar.`,
-        `Blend reliable teaching moments with collaborative practice for ${category}. Include at least one breakout or group-working segment and one guided reflection checkpoint. Balance knowledge transfer with application so this option feels like the well-rounded agenda.`,
-        `Deliver a creative spin on ${category}. Start with an energizing warm-up, weave in storytelling or role-play, and introduce an unexpected activity that stretches participants. Encourage experimentation and emotional engagement so this outline feels imaginative and high-energy.`,
-        `Reframe ${category} into shorter, high-momentum segments leading to concrete commitments. Use rapid cycles of activity, peer coaching, and checkpoint debriefs, finishing with an action-planning close. This option should feel fast-paced and accountability-focused.`,
+        `Craft a precision-focused outline for ${category}. Use clearly labeled segments, sequential steps, and detailed trainer guidance so the flow feels predictable and easy to follow across ${duration} minutes.`,
+        `Design an insight-driven experience for ${category}. Highlight research, data points, and analysis activities that help participants draw evidence-backed conclusions within the ${duration}-minute agenda.`,
+        `Build an ignite-style session for ${category}. Keep the pacing energetic with rapid application sprints, collaborative challenges, and momentum-building checkpoints over ${duration} minutes.`,
+        `Shape a connect-oriented agenda for ${category}. Emphasize storytelling, peer interaction, and reflection moments that deepen relationships and shared learning throughout the ${duration}-minute session.`,
       ];
 
-      const baseInstruction = instructions[index] ?? instructions[instructions.length - 1];
-      const differentiationNote = ragWeight > 0
-        ? 'Ensure this outline is measurably different from the other variants by how it applies the knowledge base versus new ideas.'
-        : 'Ensure this outline is measurably different from the other variants through its structure, pacing, and activity choices.';
-
-      return `${baseInstruction} ${differentiationNote}`;
+      return `${instructions[index] ?? instructions[instructions.length - 1]} Make it feel distinctly different from the other variants through tone, pacing, and activity choices while still meeting the desired outcome.`;
     }
   }
 

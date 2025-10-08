@@ -160,13 +160,13 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
               className="border border-gray-200 rounded-lg p-4 sm:p-5 md:p-6 hover:shadow-lg hover:border-blue-300 transition-all"
             >
               {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-gray-900">{variant.label}</h3>
-                  <p className="text-sm text-gray-600 mt-1">{variant.description}</p>
+              <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-base sm:text-lg text-gray-900">{variant.label}</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">{variant.description}</p>
                 </div>
                 <span
-                  className={`ml-3 px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
+                  className={`flex-shrink-0 ml-2 px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
                     variant.generationSource === 'rag'
                       ? 'bg-blue-100 text-blue-700'
                       : 'bg-gray-100 text-gray-700'
@@ -221,8 +221,8 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
               )}
 
               {/* Preview */}
-              <div className="space-y-3 mb-4 p-4 bg-gray-50 rounded max-h-96 overflow-y-auto">
-                <p className="text-sm font-medium text-gray-900">
+              <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4 p-3 sm:p-4 bg-gray-50 rounded max-h-64 sm:max-h-80 md:max-h-96 overflow-y-auto">
+                <p className="text-sm font-medium text-gray-900 leading-tight">
                   {variant.outline.suggestedSessionTitle}
                 </p>
                 <p className="text-xs text-gray-500">
@@ -230,14 +230,14 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                 </p>
 
                 {/* Detailed section list with descriptions */}
-                <div className="space-y-3 mt-3">
+                <div className="space-y-2 sm:space-y-3 mt-2 sm:mt-3">
                   {variant.outline.sections.map((section: any) => (
-                    <div key={section.id} className="border-l-2 border-blue-200 pl-3">
-                      <div className="flex items-baseline gap-2">
+                    <div key={section.id} className="border-l-2 border-blue-200 pl-2 sm:pl-3">
+                      <div className="flex flex-wrap items-baseline gap-1 sm:gap-2">
                         <span className="text-xs font-semibold text-gray-900">
                           • {section.title}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 whitespace-nowrap">
                           ({section.duration} min)
                         </span>
                       </div>
@@ -255,10 +255,12 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
               <div className="flex gap-2">
                 <Button
                   onClick={() => onSelect(variant.id)}
-                  className="flex-1"
+                  className="flex-1 text-sm sm:text-base"
                   variant="default"
+                  aria-label="Select & Edit"
                 >
-                  Select & Edit
+                  <span className="hidden sm:inline" aria-hidden="true">Select & Edit</span>
+                  <span className="sm:hidden" aria-hidden="true">Select</span>
                 </Button>
                 {onSaveForLater && (
                   <Button
@@ -266,6 +268,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                     variant="outline"
                     size="sm"
                     title="Save for later"
+                    className="px-3"
                   >
                     💾
                   </Button>

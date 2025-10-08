@@ -1,4 +1,5 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { LocationType, MeetingPlatform } from '../../../entities';
 
 export enum SuggestedSessionType {
   EVENT = 'event',
@@ -39,6 +40,10 @@ export class SuggestOutlineDto {
 
   @IsOptional()
   @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsString()
   audienceSize?: string;
 
   @IsOptional()
@@ -50,6 +55,32 @@ export class SuggestOutlineDto {
 
   @IsOptional()
   toneId?: number;
+
+  @IsOptional()
+  locationId?: number;
+
+  @IsOptional()
+  @IsString()
+  locationName?: string;
+
+  @IsOptional()
+  @IsEnum(LocationType)
+  locationType?: LocationType;
+
+  @IsOptional()
+  @IsEnum(MeetingPlatform)
+  meetingPlatform?: MeetingPlatform;
+
+  @IsOptional()
+  locationCapacity?: number;
+
+  @IsOptional()
+  @IsString()
+  locationTimezone?: string;
+
+  @IsOptional()
+  @IsString()
+  locationNotes?: string;
 }
 
 export interface TopicReference {
@@ -105,4 +136,3 @@ export interface SuggestOutlineResponse {
     topicsFound: number;
   };
 }
-

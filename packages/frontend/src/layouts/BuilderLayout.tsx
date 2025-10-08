@@ -208,31 +208,39 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
       {/* Main content area */}
       <div className="flex w-full flex-1 flex-col lg:ml-0">
         {/* Header with hamburger menu */}
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 shadow-sm lg:px-6 lg:py-5">
+        <header className="flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-200 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-4 lg:px-6 lg:py-5">
           {/* Title and subtitle */}
-          <div className="flex-1">
-            <h2 className="text-xl font-semibold sm:text-2xl">{title}</h2>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-semibold sm:text-xl md:text-2xl truncate">{title}</h2>
             {subtitle ? (
-              <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+              <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-slate-500 line-clamp-1">{subtitle}</p>
             ) : null}
           </div>
 
           {/* Status slot */}
-          {statusSlot ? <div className="mr-4">{statusSlot}</div> : null}
+          {statusSlot ? <div className="flex-shrink-0 hidden sm:block">{statusSlot}</div> : null}
 
           {/* Hamburger menu button */}
           <button
             onClick={() => setIsMobileMenuOpen(true)}
-            className="p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            className="flex-shrink-0 p-2 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            aria-label="Open menu"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
         </header>
 
+        {/* Status slot for mobile - shown below header */}
+        {statusSlot && (
+          <div className="sm:hidden border-b border-slate-200 bg-white px-3 py-2">
+            {statusSlot}
+          </div>
+        )}
+
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-10">
+        <main className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-6 lg:px-10">
           {children}
         </main>
       </div>

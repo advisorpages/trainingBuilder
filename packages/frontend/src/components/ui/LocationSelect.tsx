@@ -6,12 +6,13 @@ import { cn } from '../../lib/utils';
 interface LocationSelectProps {
   value?: number | '';
   selectedLabel?: string;
-  onChange: (location: { id: number; name: string } | null) => void;
+  onChange: (location: Location | null) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
   required?: boolean;
   hasError?: boolean;
+  'data-testid'?: string;
 }
 
 export const LocationSelect: React.FC<LocationSelectProps> = ({
@@ -23,6 +24,7 @@ export const LocationSelect: React.FC<LocationSelectProps> = ({
   disabled = false,
   required = false,
   hasError = false,
+  'data-testid': dataTestId,
 }) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -114,7 +116,7 @@ export const LocationSelect: React.FC<LocationSelectProps> = ({
   );
 
   const handleSelectLocation = (location: Location) => {
-    onChange({ id: location.id, name: location.name });
+    onChange(location);
     setIsOpen(false);
     setSearchTerm('');
   };
@@ -131,6 +133,7 @@ export const LocationSelect: React.FC<LocationSelectProps> = ({
         <input
           ref={inputRef}
           type="text"
+          data-testid={dataTestId}
           value={displayValue}
           onChange={(event) => {
             setSearchTerm(event.target.value);

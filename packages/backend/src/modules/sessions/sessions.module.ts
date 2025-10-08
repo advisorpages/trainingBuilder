@@ -19,6 +19,7 @@ import {
   LandingPage,
   Topic,
   Incentive,
+  Location,
 } from '../../entities';
 
 @Module({
@@ -32,6 +33,7 @@ import {
       LandingPage,
       Topic,
       Incentive,
+      Location,
       AIInteraction,
     ]),
     PromptsModule,

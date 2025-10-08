@@ -82,6 +82,11 @@ function buildDefaultMetadata(): SessionMetadata {
     timezone: DEFAULT_TIMEZONE,
     location: '',
     locationId: undefined,
+    locationType: undefined,
+    meetingPlatform: undefined,
+    locationCapacity: undefined,
+    locationTimezone: undefined,
+    locationNotes: undefined,
     audienceId: undefined,
     audienceName: undefined,
     toneId: undefined,
@@ -105,6 +110,11 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     timezone: metadata.timezone,
     locationId: metadata.locationId,
     locationName: metadata.location,
+    locationType: metadata.locationType,
+    meetingPlatform: metadata.meetingPlatform,
+    locationCapacity: metadata.locationCapacity,
+    locationTimezone: metadata.locationTimezone ?? metadata.timezone,
+    locationNotes: metadata.locationNotes,
     audienceId: metadata.audienceId,
     audienceName: metadata.audienceName,
     toneId: metadata.toneId,
@@ -130,6 +140,11 @@ function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
     timezone: input.timezone ?? DEFAULT_TIMEZONE,
     location: input.locationName ?? '',
     locationId: input.locationId,
+    locationType: input.locationType,
+    meetingPlatform: input.meetingPlatform,
+    locationCapacity: input.locationCapacity,
+    locationTimezone: input.locationTimezone ?? input.timezone ?? DEFAULT_TIMEZONE,
+    locationNotes: input.locationNotes ?? undefined,
     audienceId: input.audienceId,
     audienceName: input.audienceName ?? undefined,
     toneId: input.toneId,
@@ -425,6 +440,19 @@ export const SessionBuilderProvider: React.FC<{
             timezone: metadataFromDraft?.timezone ?? serverDraft.timezone ?? DEFAULT_TIMEZONE,
             location: metadataFromDraft?.location ?? serverDraft.locationName ?? '',
             locationId: metadataFromDraft?.locationId ?? serverDraft.locationId,
+            locationType: metadataFromDraft?.locationType ?? serverDraft.location?.locationType,
+            meetingPlatform: metadataFromDraft?.meetingPlatform ?? serverDraft.location?.meetingPlatform,
+            locationCapacity: metadataFromDraft?.locationCapacity ?? serverDraft.location?.capacity,
+            locationTimezone:
+              metadataFromDraft?.locationTimezone ??
+              serverDraft.location?.timezone ??
+              serverDraft.timezone ??
+              DEFAULT_TIMEZONE,
+            locationNotes:
+              metadataFromDraft?.locationNotes ??
+              serverDraft.location?.notes ??
+              serverDraft.location?.accessInstructions ??
+              undefined,
             audienceId: metadataFromDraft?.audienceId ?? serverDraft.audienceId,
             audienceName: metadataFromDraft?.audienceName ?? serverDraft.audienceName ?? undefined,
             toneId: metadataFromDraft?.toneId ?? serverDraft.toneId,
@@ -720,8 +748,8 @@ export const SessionBuilderProvider: React.FC<{
     }
 
     const { metadata } = state.draft;
-    if (!metadata.title || !metadata.desiredOutcome || !metadata.category) {
-      const message = 'Add a title, outcome, and category before generating variants.';
+    if (!metadata.desiredOutcome || !metadata.category || !metadata.sessionType || !metadata.locationId) {
+      const message = 'Please fill in all required fields (desired outcome, category, session type, and location) before generating variants.';
       setVariantsStatus('error');
       setVariantsError(message);
       publish({

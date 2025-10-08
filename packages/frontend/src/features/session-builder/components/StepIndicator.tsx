@@ -51,6 +51,11 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
 
   return (
     <div className={cn('w-full', className)}>
+      {/* Progress Header */}
+      <div className="mb-4 sm:mb-5">
+        <h3 className="text-sm font-semibold text-slate-700">Session Builder Progress</h3>
+      </div>
+
       {/* Desktop/Tablet Step Indicator */}
       <nav aria-label="Session builder progress" className="hidden sm:block">
         <ol className="flex items-center justify-between w-full">
@@ -60,61 +65,81 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
 
             return (
               <li key={step.key} className="flex-1">
-                <div className="flex items-center">
-                  {/* Step Circle */}
-                  <button
-                    onClick={() => isClickable && onStepClick(step.key)}
-                    disabled={!isClickable}
-                    className={cn(
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-200',
-                      status === 'completed' && 'border-green-600 bg-green-600 text-white hover:bg-green-700 hover:scale-105',
-                      status === 'active' && 'border-blue-600 bg-blue-600 text-white ring-4 ring-blue-100',
-                      status === 'pending' && 'border-slate-300 bg-slate-100 text-slate-400 opacity-60',
-                      isClickable && 'cursor-pointer hover:border-blue-500',
-                      !isClickable && 'cursor-not-allowed opacity-50'
-                    )}
-                    title={isClickable ? `Go to ${step.label}` : `Complete previous steps to unlock`}
-                  >
-                    {status === 'completed' ? (
-                      <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path
-                          fillRule="evenodd"
-                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                    ) : (
-                      index + 1
-                    )}
-                  </button>
-
-                  {/* Step Content */}
-                  <div className="ml-3 md:ml-4 min-w-0 flex-1">
+                <button
+                  onClick={() => isClickable && onStepClick(step.key)}
+                  disabled={!isClickable}
+                  className={cn(
+                    'w-full text-left group transition-all duration-200',
+                    isClickable && 'cursor-pointer',
+                    !isClickable && 'cursor-not-allowed'
+                  )}
+                  title={isClickable ? `Click to go to ${step.label}` : `Complete previous steps to unlock ${step.label}`}
+                >
+                  <div className="flex items-center">
+                    {/* Step Circle */}
                     <div
                       className={cn(
-                        'text-xs sm:text-sm font-medium truncate',
-                        status === 'completed' && 'text-green-600',
-                        status === 'active' && 'text-blue-600',
-                        status === 'pending' && 'text-slate-400'
+                        'flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-200',
+                        status === 'completed' && 'border-green-600 bg-green-600 text-white group-hover:bg-green-700 group-hover:scale-110 shadow-md',
+                        status === 'active' && 'border-blue-600 bg-blue-600 text-white ring-4 ring-blue-100 shadow-lg',
+                        status === 'pending' && 'border-slate-300 bg-slate-100 text-slate-400',
+                        !isClickable && 'opacity-50'
                       )}
                     >
-                      {step.label}
-                    </div>
-                    <div className="hidden md:block text-xs text-slate-500 truncate">
-                      {step.description}
-                    </div>
-                  </div>
-
-                  {/* Connector Line */}
-                  {index < steps.length - 1 && (
-                    <div
-                      className={cn(
-                        'ml-2 md:ml-4 h-px w-full transition-colors',
-                        status === 'completed' ? 'bg-green-600' : 'bg-slate-200'
+                      {status === 'completed' ? (
+                        <svg className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                          <path
+                            fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      ) : (
+                        index + 1
                       )}
-                    />
-                  )}
-                </div>
+                    </div>
+
+                    {/* Step Content */}
+                    <div className="ml-3 md:ml-4 min-w-0 flex-1 pr-3 md:pr-4">
+                      <div
+                        className={cn(
+                          'text-sm sm:text-base font-bold mb-0.5 transition-colors',
+                          status === 'completed' && 'text-green-600 group-hover:text-green-700',
+                          status === 'active' && 'text-blue-600',
+                          status === 'pending' && 'text-slate-400'
+                        )}
+                      >
+                        {step.label}
+                      </div>
+                      <div className={cn(
+                        'text-xs sm:text-sm',
+                        status === 'completed' && 'text-green-600/80 group-hover:text-green-600',
+                        status === 'active' && 'text-blue-600/80 font-medium',
+                        status === 'pending' && 'text-slate-400'
+                      )}>
+                        {step.description}
+                      </div>
+                      {status === 'completed' && isClickable && (
+                        <div className="text-xs text-green-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 font-medium">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                          </svg>
+                          Go back
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Connector Line */}
+                    {index < steps.length - 1 && (
+                      <div
+                        className={cn(
+                          'h-0.5 w-full max-w-[60px] md:max-w-[80px] transition-colors flex-shrink-0',
+                          status === 'completed' ? 'bg-green-600' : 'bg-slate-200'
+                        )}
+                      />
+                    )}
+                  </div>
+                </button>
               </li>
             );
           })}
@@ -126,35 +151,35 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold',
+              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold shadow-sm',
               'border-blue-600 bg-blue-600 text-white ring-4 ring-blue-100'
             )}>
               {currentStepIndex + 1}
             </div>
             <div>
-              <div className="text-sm font-semibold text-blue-600">
+              <div className="text-base font-bold text-blue-600">
                 {steps[currentStepIndex].label}
               </div>
-              <div className="text-xs text-slate-500">
-                Step {currentStepIndex + 1} of {steps.length}
+              <div className="text-xs text-slate-600 font-medium">
+                {steps[currentStepIndex].description}
               </div>
             </div>
           </div>
-          <div className="text-xs font-medium text-slate-600">
+          <div className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded">
             {Math.round(((currentStepIndex + 1) / steps.length) * 100)}%
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
+        <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden shadow-inner">
           <div
-            className="h-full bg-blue-600 transition-all duration-500 ease-out"
+            className="h-full bg-blue-600 transition-all duration-500 ease-out shadow-sm"
             style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
           />
         </div>
 
-        {/* Step Dots */}
-        <div className="flex items-center justify-center gap-2 mt-3">
+        {/* Step Dots with Labels */}
+        <div className="flex items-center justify-between gap-1 mt-4">
           {steps.map((step, index) => {
             const status = getStepStatus(step.key, index);
             const isClickable = onStepClick && (status === 'completed' || status === 'active');
@@ -165,16 +190,29 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                 onClick={() => isClickable && onStepClick(step.key)}
                 disabled={!isClickable}
                 className={cn(
-                  'h-2 rounded-full transition-all duration-200',
-                  status === 'completed' && 'w-2 bg-green-600',
-                  status === 'active' && 'w-8 bg-blue-600',
-                  status === 'pending' && 'w-2 bg-slate-300',
-                  isClickable && 'cursor-pointer hover:scale-125',
-                  !isClickable && 'cursor-not-allowed'
+                  'flex flex-col items-center gap-1 flex-1 transition-all duration-200',
+                  isClickable && 'cursor-pointer',
+                  !isClickable && 'cursor-not-allowed opacity-50'
                 )}
                 title={step.label}
                 aria-label={step.label}
-              />
+              >
+                <div className={cn(
+                  'h-2 w-full rounded-full transition-all duration-200',
+                  status === 'completed' && 'bg-green-600',
+                  status === 'active' && 'bg-blue-600 shadow-sm',
+                  status === 'pending' && 'bg-slate-300',
+                  isClickable && 'hover:scale-105'
+                )} />
+                <span className={cn(
+                  'text-xs font-medium text-center',
+                  status === 'completed' && 'text-green-600',
+                  status === 'active' && 'text-blue-600 font-semibold',
+                  status === 'pending' && 'text-slate-400'
+                )}>
+                  {step.label}
+                </span>
+              </button>
             );
           })}
         </div>

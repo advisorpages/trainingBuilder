@@ -1,4 +1,5 @@
 import { SessionOutline } from '../../../services/session-builder.service';
+import type { LocationType, MeetingPlatform } from '@leadership-training/shared';
 
 export type BuilderStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type AutosaveStatus = 'idle' | 'pending' | 'success' | 'error';
@@ -19,6 +20,11 @@ export interface SessionMetadata {
   timezone: string;
   location: string; // Human-readable location name
   locationId?: number;
+  locationType?: LocationType;
+  meetingPlatform?: MeetingPlatform;
+  locationCapacity?: number;
+  locationTimezone?: string;
+  locationNotes?: string;
   audienceId?: number;
   audienceName?: string;
   toneId?: number;

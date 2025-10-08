@@ -440,6 +440,8 @@ describe('SessionBuilderProvider variant generation', () => {
         title: 'Variant Ready Session',
         desiredOutcome: 'Drive variant testing',
         category: 'Leadership',
+        locationId: 101,
+        location: 'Leadership Hub',
       });
     });
 
@@ -481,6 +483,8 @@ describe('SessionBuilderProvider variant generation', () => {
         title: 'Variant Selection',
         desiredOutcome: 'Pick the best variant',
         category: 'Leadership',
+        locationId: 202,
+        location: 'Innovation Lab',
       });
     });
 
