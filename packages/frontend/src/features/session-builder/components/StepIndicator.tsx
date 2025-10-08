@@ -13,23 +13,23 @@ interface StepIndicatorProps {
 const steps: { key: BuilderStep; label: string; description: string }[] = [
   {
     key: 'setup',
-    label: 'Setup',
-    description: 'Session details and requirements'
+    label: 'Details',
+    description: 'Session information and goals'
   },
   {
     key: 'generate',
-    label: 'Generate',
-    description: 'AI-powered outline creation'
+    label: 'Create Outline',
+    description: 'Generate and select outline'
   },
   {
     key: 'review',
-    label: 'Review',
-    description: 'Compare and edit content'
+    label: 'Review & Edit',
+    description: 'Refine your session content'
   },
   {
     key: 'finalize',
-    label: 'Finalize',
-    description: 'Publish and export options'
+    label: 'Publish',
+    description: 'Review and publish session'
   }
 ];
 
@@ -51,7 +51,8 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
 
   return (
     <div className={cn('w-full', className)}>
-      <nav aria-label="Session builder progress">
+      {/* Desktop/Tablet Step Indicator */}
+      <nav aria-label="Session builder progress" className="hidden sm:block">
         <ol className="flex items-center justify-between w-full">
           {steps.map((step, index) => {
             const status = getStepStatus(step.key, index);
@@ -65,13 +66,14 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                     onClick={() => isClickable && onStepClick(step.key)}
                     disabled={!isClickable}
                     className={cn(
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors',
-                      status === 'completed' && 'border-green-600 bg-green-600 text-white hover:bg-green-700',
-                      status === 'active' && 'border-blue-600 bg-blue-600 text-white',
-                      status === 'pending' && 'border-slate-300 bg-white text-slate-400',
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-200',
+                      status === 'completed' && 'border-green-600 bg-green-600 text-white hover:bg-green-700 hover:scale-105',
+                      status === 'active' && 'border-blue-600 bg-blue-600 text-white ring-4 ring-blue-100',
+                      status === 'pending' && 'border-slate-300 bg-slate-100 text-slate-400 opacity-60',
                       isClickable && 'cursor-pointer hover:border-blue-500',
-                      !isClickable && 'cursor-not-allowed'
+                      !isClickable && 'cursor-not-allowed opacity-50'
                     )}
+                    title={isClickable ? `Go to ${step.label}` : `Complete previous steps to unlock`}
                   >
                     {status === 'completed' ? (
                       <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -87,10 +89,10 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                   </button>
 
                   {/* Step Content */}
-                  <div className="ml-4 min-w-0 flex-1">
+                  <div className="ml-3 md:ml-4 min-w-0 flex-1">
                     <div
                       className={cn(
-                        'text-sm font-medium',
+                        'text-xs sm:text-sm font-medium truncate',
                         status === 'completed' && 'text-green-600',
                         status === 'active' && 'text-blue-600',
                         status === 'pending' && 'text-slate-400'
@@ -98,7 +100,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                     >
                       {step.label}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className="hidden md:block text-xs text-slate-500 truncate">
                       {step.description}
                     </div>
                   </div>
@@ -107,7 +109,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                   {index < steps.length - 1 && (
                     <div
                       className={cn(
-                        'ml-4 h-px w-full transition-colors',
+                        'ml-2 md:ml-4 h-px w-full transition-colors',
                         status === 'completed' ? 'bg-green-600' : 'bg-slate-200'
                       )}
                     />
@@ -119,17 +121,62 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         </ol>
       </nav>
 
-      {/* Mobile Progress Bar */}
-      <div className="mt-4 block sm:hidden">
-        <div className="flex justify-between text-xs text-slate-500">
-          <span>Step {currentStepIndex + 1} of {steps.length}</span>
-          <span>{Math.round(((currentStepIndex + 1) / steps.length) * 100)}% Complete</span>
+      {/* Mobile Step Indicator - Compact View */}
+      <div className="sm:hidden">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              'flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold',
+              'border-blue-600 bg-blue-600 text-white ring-4 ring-blue-100'
+            )}>
+              {currentStepIndex + 1}
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-blue-600">
+                {steps[currentStepIndex].label}
+              </div>
+              <div className="text-xs text-slate-500">
+                Step {currentStepIndex + 1} of {steps.length}
+              </div>
+            </div>
+          </div>
+          <div className="text-xs font-medium text-slate-600">
+            {Math.round(((currentStepIndex + 1) / steps.length) * 100)}%
+          </div>
         </div>
-        <div className="mt-2 h-2 w-full rounded-full bg-slate-200">
+
+        {/* Progress Bar */}
+        <div className="h-2 w-full rounded-full bg-slate-200 overflow-hidden">
           <div
-            className="h-2 rounded-full bg-blue-600 transition-all duration-300"
+            className="h-full bg-blue-600 transition-all duration-500 ease-out"
             style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
           />
+        </div>
+
+        {/* Step Dots */}
+        <div className="flex items-center justify-center gap-2 mt-3">
+          {steps.map((step, index) => {
+            const status = getStepStatus(step.key, index);
+            const isClickable = onStepClick && (status === 'completed' || status === 'active');
+
+            return (
+              <button
+                key={step.key}
+                onClick={() => isClickable && onStepClick(step.key)}
+                disabled={!isClickable}
+                className={cn(
+                  'h-2 rounded-full transition-all duration-200',
+                  status === 'completed' && 'w-2 bg-green-600',
+                  status === 'active' && 'w-8 bg-blue-600',
+                  status === 'pending' && 'w-2 bg-slate-300',
+                  isClickable && 'cursor-pointer hover:scale-125',
+                  !isClickable && 'cursor-not-allowed'
+                )}
+                title={step.label}
+                aria-label={step.label}
+              />
+            );
+          })}
         </div>
       </div>
     </div>

@@ -16,6 +16,8 @@ import { Location } from './location.entity';
 import { Audience } from './audience.entity';
 import { Tone } from './tone.entity';
 import { AIInteraction } from './ai-interaction.entity';
+import { VariantConfig } from './variant-config.entity';
+import { RagSettings } from './rag-settings.entity';
 
 export * from './base.entity';
 export * from './session.entity';
@@ -36,6 +38,8 @@ export * from './location.entity';
 export * from './audience.entity';
 export * from './tone.entity';
 export * from './ai-interaction.entity';
+export * from './variant-config.entity';
+export * from './rag-settings.entity';
 
 export const entities = [
   Session,
@@ -56,4 +60,6 @@ export const entities = [
   Audience,
   Tone,
   AIInteraction,
+  VariantConfig,
+  RagSettings,
 ];

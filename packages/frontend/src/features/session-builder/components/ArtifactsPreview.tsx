@@ -12,7 +12,10 @@ interface ArtifactsPreviewProps {
   readinessScore: number;
   activeVersion?: AIContentVersion;
   onOpenQuickAdd: () => void;
-  onUpdateOutline?: (outline: SessionOutline) => void;
+  onSectionUpdate?: (sectionId: string, updates: Partial<FlexibleSessionSection>) => void;
+  onSectionDelete?: (sectionId: string) => void;
+  onSectionMove?: (sectionId: string, direction: 'up' | 'down') => void;
+  onDuplicateSection?: (sectionId: string) => void;
   onUpdateMetadata?: (updates: Partial<SessionMetadata>) => void;
   onPublish?: () => void;
   publishStatus?: 'idle' | 'pending' | 'success' | 'error';
@@ -28,6 +31,8 @@ interface EditableSectionProps {
   onMoveDown: () => void;
   isFirst: boolean;
   isLast: boolean;
+  isEditable: boolean;
+  onDuplicate?: () => void;
 }
 
 const EditableSection: React.FC<EditableSectionProps> = ({
@@ -37,20 +42,28 @@ const EditableSection: React.FC<EditableSectionProps> = ({
   onMoveUp,
   onMoveDown,
   isFirst,
-  isLast
+  isLast,
+  isEditable,
+  onDuplicate,
 }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editedTitle, setEditedTitle] = React.useState(section.title);
   const [editedDescription, setEditedDescription] = React.useState(section.description);
   const [editedDuration, setEditedDuration] = React.useState(section.duration.toString());
+  const [isPending, setIsPending] = React.useState(false);
 
-  const handleSave = () => {
-    onUpdate({
-      title: editedTitle,
-      description: editedDescription,
-      duration: parseInt(editedDuration) || section.duration
-    });
-    setIsEditing(false);
+  const handleSave = async () => {
+    setIsPending(true);
+    try {
+      await onUpdate({
+        title: editedTitle,
+        description: editedDescription,
+        duration: parseInt(editedDuration) || section.duration
+      });
+      setIsEditing(false);
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const handleCancel = () => {
@@ -60,7 +73,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({
     setIsEditing(false);
   };
 
-  if (isEditing) {
+  if (isEditable && isEditing) {
     return (
       <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
         <div className="space-y-3">
@@ -90,11 +103,11 @@ const EditableSection: React.FC<EditableSectionProps> = ({
           />
 
           <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={handleCancel}>
+            <Button size="sm" variant="ghost" onClick={handleCancel} disabled={isPending}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleSave}>
-              Save
+            <Button size="sm" onClick={handleSave} disabled={isPending}>
+              {isPending ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>
@@ -103,7 +116,7 @@ const EditableSection: React.FC<EditableSectionProps> = ({
   }
 
   return (
-    <div className="group rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors">
+    <div className={`group rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors ${isPending ? 'opacity-60 pointer-events-none' : ''}`}>
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
@@ -111,61 +124,111 @@ const EditableSection: React.FC<EditableSectionProps> = ({
             <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
               {section.duration} min
             </span>
+            {isPending && (
+              <span className="text-xs text-blue-600 animate-pulse">Updating...</span>
+            )}
           </div>
           <p className="text-sm text-slate-600">{section.description}</p>
         </div>
 
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setIsEditing(true)}
-            className="h-8 w-8 p-0"
-            title="Edit section"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-          </Button>
+        {isEditable && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setIsEditing(true)}
+              disabled={isPending}
+              className="h-8 w-8 p-0"
+              title="Edit section"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </Button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onMoveUp}
-            disabled={isFirst}
-            className="h-8 w-8 p-0"
-            title="Move up"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                setIsPending(true);
+                try {
+                  await onMoveUp();
+                } finally {
+                  setIsPending(false);
+                }
+              }}
+              disabled={isFirst || isPending}
+              className="h-8 w-8 p-0"
+              title="Move up"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </Button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onMoveDown}
-            disabled={isLast}
-            className="h-8 w-8 p-0"
-            title="Move down"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                setIsPending(true);
+                try {
+                  await onMoveDown();
+                } finally {
+                  setIsPending(false);
+                }
+              }}
+              disabled={isLast || isPending}
+              className="h-8 w-8 p-0"
+              title="Move down"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </Button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onDelete}
-            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-            title="Delete section"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </Button>
-        </div>
+            {onDuplicate && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  setIsPending(true);
+                  try {
+                    await onDuplicate();
+                  } finally {
+                    setIsPending(false);
+                  }
+                }}
+                disabled={isPending}
+                className="h-8 w-8 p-0"
+                title="Duplicate section"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16h8m-6 4h4m-9-8V7a2 2 0 012-2h7l4 4v9a2 2 0 01-2 2h-3" />
+                </svg>
+              </Button>
+            )}
+
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={async () => {
+                setIsPending(true);
+                try {
+                  await onDelete();
+                } finally {
+                  setIsPending(false);
+                }
+              }}
+              disabled={isPending}
+              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+              title="Delete section"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -177,7 +240,10 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
   readinessScore,
   activeVersion,
   onOpenQuickAdd,
-  onUpdateOutline,
+  onSectionUpdate,
+  onSectionDelete,
+  onSectionMove,
+  onDuplicateSection,
   onUpdateMetadata,
   onPublish,
   publishStatus = 'idle',
@@ -192,64 +258,22 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
     setEditedTitle(metadata.title);
   }, [metadata.title]);
 
-  const handleUpdateSection = (sectionId: string, updates: Partial<FlexibleSessionSection>) => {
-    if (!outline || !onUpdateOutline) return;
+  const canEditSections = Boolean(outline && onSectionUpdate && onSectionDelete && onSectionMove);
 
-    const updatedSections = outline.sections.map(section =>
-      section.id === sectionId ? { ...section, ...updates } : section
-    );
+  const handleUpdateSection = React.useCallback((sectionId: string, updates: Partial<FlexibleSessionSection>) => {
+    if (!outline || !onSectionUpdate) return;
+    onSectionUpdate(sectionId, updates);
+  }, [outline, onSectionUpdate]);
 
-    const totalDuration = updatedSections.reduce((sum, section) => sum + section.duration, 0);
+  const handleDeleteSection = React.useCallback((sectionId: string) => {
+    if (!outline || !onSectionDelete) return;
+    onSectionDelete(sectionId);
+  }, [outline, onSectionDelete]);
 
-    onUpdateOutline({
-      ...outline,
-      sections: updatedSections,
-      totalDuration
-    });
-  };
-
-  const handleDeleteSection = (sectionId: string) => {
-    if (!outline || !onUpdateOutline) return;
-
-    const updatedSections = outline.sections
-      .filter(section => section.id !== sectionId)
-      .map((section, index) => ({ ...section, position: index + 1 }));
-
-    const totalDuration = updatedSections.reduce((sum, section) => sum + section.duration, 0);
-
-    onUpdateOutline({
-      ...outline,
-      sections: updatedSections,
-      totalDuration
-    });
-  };
-
-  const handleMoveSection = (sectionId: string, direction: 'up' | 'down') => {
-    if (!outline || !onUpdateOutline) return;
-
-    const sections = [...outline.sections];
-    const sectionIndex = sections.findIndex(s => s.id === sectionId);
-
-    if (sectionIndex === -1) return;
-
-    const newIndex = direction === 'up' ? sectionIndex - 1 : sectionIndex + 1;
-
-    if (newIndex < 0 || newIndex >= sections.length) return;
-
-    // Swap sections
-    [sections[sectionIndex], sections[newIndex]] = [sections[newIndex], sections[sectionIndex]];
-
-    // Update positions
-    const updatedSections = sections.map((section, index) => ({
-      ...section,
-      position: index + 1
-    }));
-
-    onUpdateOutline({
-      ...outline,
-      sections: updatedSections
-    });
-  };
+  const handleMoveSection = React.useCallback((sectionId: string, direction: 'up' | 'down') => {
+    if (!outline || !onSectionMove) return;
+    onSectionMove(sectionId, direction);
+  }, [outline, onSectionMove]);
 
   const handleSaveTitle = () => {
     if (onUpdateMetadata && editedTitle !== metadata.title) {
@@ -409,10 +433,10 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
                     <div>
                       <h3 className="text-sm font-semibold text-slate-900">Interactive Outline</h3>
                       <p className="text-xs text-slate-500 mt-1">
-                        {onUpdateOutline ? 'Click to edit, drag to reorder' : 'Read-only preview'} • {outline.sections.length} sections • {outline.totalDuration} minutes
+                        {canEditSections ? 'Click to edit, drag to reorder' : 'Read-only preview'} • {outline.sections.length} sections • {outline.totalDuration} minutes
                       </p>
                     </div>
-                    {onUpdateOutline && (
+                    {canEditSections && (
                       <div className="text-xs text-slate-500">
                         <span className="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1"></span>
                         Hover sections to edit
@@ -422,7 +446,7 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
 
                   <div className="space-y-3">
                     {outline.sections.map((section, index) => (
-                      onUpdateOutline ? (
+                      canEditSections ? (
                         <EditableSection
                           key={section.id}
                           section={section}
@@ -432,6 +456,8 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
                           onMoveDown={() => handleMoveSection(section.id, 'down')}
                           isFirst={index === 0}
                           isLast={index === outline.sections.length - 1}
+                          isEditable
+                          onDuplicate={onDuplicateSection ? () => onDuplicateSection(section.id) : undefined}
                         />
                       ) : (
                         <div key={section.id} className="rounded-lg border border-slate-200 bg-white p-4">
@@ -447,7 +473,7 @@ export const ArtifactsPreview: React.FC<ArtifactsPreviewProps> = ({
                     ))}
                   </div>
 
-                  {onUpdateOutline && (
+                  {canEditSections && (
                     <div className="border-t border-slate-200 pt-4">
                       <Button
                         variant="outline"

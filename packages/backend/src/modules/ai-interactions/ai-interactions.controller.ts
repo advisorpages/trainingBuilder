@@ -2,6 +2,7 @@ import { Controller, Get, Post, Param, Body, Query, UseGuards } from '@nestjs/co
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { UserRole } from '../../entities/user.entity';
 import {
   AIInteractionsService,
@@ -116,6 +117,22 @@ export class AIInteractionsController {
       format: format || 'json',
       data,
     };
+  }
+
+  @Public()
+  @Get('variant-selection-metrics')
+  async getVariantSelectionMetrics(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('category') category?: string
+  ) {
+    const filters: AIInteractionFilters = {};
+
+    if (startDate) filters.startDate = new Date(startDate);
+    if (endDate) filters.endDate = new Date(endDate);
+    if (category) filters.category = category;
+
+    return this.aiInteractionsService.getVariantSelectionMetrics(filters);
   }
 
   @Get(':id')

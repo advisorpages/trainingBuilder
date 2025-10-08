@@ -3,6 +3,9 @@ import {
   sessionBuilderService,
   SessionBuilderInput,
   SessionOutline,
+  MultiVariantResponse,
+  SectionType,
+  FlexibleSessionSection,
 } from '../../../services/session-builder.service';
 import { useToast } from '../../../ui';
 import { AIContentVersion, BuilderState, SessionDraftData, SessionMetadata } from './types';
@@ -25,6 +28,17 @@ interface SessionBuilderContextValue {
   publishSession: () => Promise<void>;
   canUndoAutosave: boolean;
   undoAutosave: () => void;
+  variants: MultiVariantResponse['variants'];
+  variantsStatus: 'idle' | 'pending' | 'success' | 'error';
+  variantsError: string | null;
+  variantSelectionTime: number;
+  generateMultipleVariants: () => Promise<boolean>;
+  selectVariant: (variantId: string) => Promise<void>;
+  addOutlineSection: (sectionType: SectionType, position?: number) => Promise<void>;
+  updateOutlineSection: (sectionId: string, updates: Partial<FlexibleSessionSection>) => Promise<void>;
+  removeOutlineSection: (sectionId: string) => Promise<void>;
+  moveOutlineSection: (sectionId: string, direction: 'up' | 'down') => Promise<void>;
+  duplicateOutlineSection: (sectionId: string) => Promise<void>;
 }
 
 const SessionBuilderContext =
@@ -58,7 +72,7 @@ function buildDefaultMetadata(): SessionMetadata {
   return {
     title: '',
     sessionType: 'workshop',
-    category: 'Leadership',
+    category: '',
     desiredOutcome: '',
     currentProblem: '',
     specificTopics: '',
@@ -69,7 +83,9 @@ function buildDefaultMetadata(): SessionMetadata {
     location: '',
     locationId: undefined,
     audienceId: undefined,
+    audienceName: undefined,
     toneId: undefined,
+    toneName: undefined,
   };
 }
 
@@ -77,6 +93,8 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
   return {
     title: metadata.title,
     category: metadata.category,
+    categoryId: metadata.categoryId,
+    categoryName: metadata.category,
     sessionType: metadata.sessionType,
     desiredOutcome: metadata.desiredOutcome,
     currentProblem: metadata.currentProblem,
@@ -84,9 +102,13 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     date: metadata.startDate,
     startTime: metadata.startTime,
     endTime: metadata.endTime,
+    timezone: metadata.timezone,
     locationId: metadata.locationId,
+    locationName: metadata.location,
     audienceId: metadata.audienceId,
+    audienceName: metadata.audienceName,
     toneId: metadata.toneId,
+    toneName: metadata.toneName,
   };
 }
 
@@ -97,24 +119,29 @@ function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
   return {
     title: input.title ?? '',
     sessionType: input.sessionType,
-    category: input.category,
+    category: input.categoryName ?? input.category,
+    categoryId: input.categoryId,
     desiredOutcome: input.desiredOutcome,
     currentProblem: input.currentProblem ?? '',
     specificTopics: input.specificTopics ?? '',
     startDate: input.date,
     startTime,
     endTime,
-    timezone: DEFAULT_TIMEZONE,
-    location: '',
+    timezone: input.timezone ?? DEFAULT_TIMEZONE,
+    location: input.locationName ?? '',
     locationId: input.locationId,
     audienceId: input.audienceId,
+    audienceName: input.audienceName ?? undefined,
     toneId: input.toneId,
+    toneName: input.toneName ?? undefined,
   };
 }
 
 function buildPrompt(metadata: SessionMetadata): string {
   const segments = [
-    `Design a ${metadata.sessionType} session about ${metadata.category}.`,
+    metadata.category?.trim()
+      ? `Design a ${metadata.sessionType} session about ${metadata.category}.`
+      : `Design a ${metadata.sessionType} session.`,
   ];
   if (metadata.title) {
     segments.push(`Working title: ${metadata.title}.`);
@@ -171,8 +198,7 @@ function outlineToVersion(outline: SessionOutline, prompt: string): AIContentVer
 
   // Extract suggested topics from sections that have associated topics
   const suggestedTopics = sections
-    .filter(section => section.associatedTopic)
-    .map(section => section.associatedTopic!)
+    .flatMap((section) => (section.associatedTopic ? [section.associatedTopic] : []))
     .filter((topic, index, self) =>
       index === self.findIndex(t => t.id === topic.id) // Remove duplicates
     );
@@ -326,6 +352,22 @@ export const SessionBuilderProvider: React.FC<{
   const lastSavedRef = React.useRef<SessionDraftData | null>(null);
   const undoTimerRef = React.useRef<number | null>(null);
   const [canUndoAutosave, setCanUndoAutosave] = React.useState(false);
+  const [variants, setVariants] = React.useState<MultiVariantResponse['variants']>([]);
+  const [variantsStatus, setVariantsStatus] =
+    React.useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+  const [variantsError, setVariantsError] = React.useState<string | null>(null);
+  const [variantSelectionTime, setVariantSelectionTime] = React.useState<number>(0);
+  const variantGenerationStartRef = React.useRef<number | null>(null);
+  const variantReadyAtRef = React.useRef<number | null>(null);
+
+  const handleOutlineError = React.useCallback((title: string, error: unknown) => {
+    const message = error instanceof Error ? error.message : (error as any)?.message ?? 'Please try again.';
+    publish({
+      variant: 'error',
+      title,
+      description: message,
+    });
+  }, [publish]);
 
   const showUndoTemporarily = React.useCallback(() => {
     setCanUndoAutosave(true);
@@ -358,56 +400,35 @@ export const SessionBuilderProvider: React.FC<{
   const loadDraft = React.useCallback(async (): Promise<SessionDraftData> => {
     if (sessionId && sessionId !== 'new') {
       try {
-        const localDraft = await sessionBuilderService.loadOutlineDraft(sessionId);
-        if (localDraft) {
-          const metadata = inputToMetadata(localDraft.metadata);
-          const aiPrompt = localDraft.aiPrompt || buildPrompt(metadata);
-          return {
-            sessionId,
-            metadata,
-            outline: localDraft.outline,
-            aiPrompt,
-            aiVersions: localDraft.aiVersions || [],
-            acceptedVersionId: localDraft.acceptedVersionId,
-            selectedVersionId: localDraft.acceptedVersionId,
-            readinessScore: localDraft.readinessScore ?? calculateReadiness({
-              sessionId,
-              metadata,
-              outline: localDraft.outline,
-              aiPrompt,
-              aiVersions: localDraft.aiVersions || [],
-              acceptedVersionId: localDraft.acceptedVersionId,
-              selectedVersionId: localDraft.acceptedVersionId,
-              readinessScore: 0,
-              lastAutosaveAt: localDraft.savedAt,
-              isDirty: false,
-            }),
-            lastAutosaveAt: localDraft.savedAt,
-            isDirty: false,
-          };
-        }
-      } catch (error) {
-        console.warn('Unable to load local draft, falling back to defaults', error);
-      }
-
-      try {
         const serverDraft = await sessionBuilderService.getCompleteSessionData(sessionId);
         if (serverDraft) {
+          const draftMetadataInput = serverDraft.builderDraft?.metadata as SessionBuilderInput | undefined;
+          const metadataFromDraft = draftMetadataInput ? inputToMetadata(draftMetadataInput) : undefined;
+
           const metadata: SessionMetadata = {
-            title: serverDraft.title ?? '',
-            sessionType: serverDraft.sessionType ?? 'workshop',
-            category: serverDraft.category?.name ?? 'Leadership',
-            desiredOutcome: serverDraft.desiredOutcome ?? '',
-            currentProblem: serverDraft.currentProblem ?? '',
-            specificTopics: serverDraft.specificTopics ?? '',
-            startDate: serverDraft.startTime?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-            startTime: serverDraft.startTime ?? new Date().toISOString(),
-            endTime: serverDraft.endTime ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-            timezone: serverDraft.timezone ?? DEFAULT_TIMEZONE,
-            location: serverDraft.location ?? '',
-            locationId: serverDraft.locationId,
-            audienceId: serverDraft.audienceId,
-            toneId: serverDraft.toneId,
+            title: serverDraft.title ?? metadataFromDraft?.title ?? '',
+            sessionType: serverDraft.sessionType ?? metadataFromDraft?.sessionType ?? 'workshop',
+            category: metadataFromDraft?.category ?? serverDraft.category?.name ?? 'Leadership',
+            categoryId: metadataFromDraft?.categoryId ?? serverDraft.category?.id,
+            desiredOutcome: serverDraft.desiredOutcome ?? metadataFromDraft?.desiredOutcome ?? '',
+            currentProblem: metadataFromDraft?.currentProblem ?? '',
+            specificTopics: metadataFromDraft?.specificTopics ?? '',
+            startDate:
+              metadataFromDraft?.startDate ??
+              serverDraft.startTime?.slice(0, 10) ??
+              new Date().toISOString().slice(0, 10),
+            startTime: metadataFromDraft?.startTime ?? serverDraft.startTime ?? new Date().toISOString(),
+            endTime:
+              metadataFromDraft?.endTime ??
+              serverDraft.endTime ??
+              new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            timezone: metadataFromDraft?.timezone ?? serverDraft.timezone ?? DEFAULT_TIMEZONE,
+            location: metadataFromDraft?.location ?? serverDraft.locationName ?? '',
+            locationId: metadataFromDraft?.locationId ?? serverDraft.locationId,
+            audienceId: metadataFromDraft?.audienceId ?? serverDraft.audienceId,
+            audienceName: metadataFromDraft?.audienceName ?? serverDraft.audienceName ?? undefined,
+            toneId: metadataFromDraft?.toneId ?? serverDraft.toneId,
+            toneName: metadataFromDraft?.toneName ?? serverDraft.toneName ?? undefined,
           };
 
           const outline: SessionOutline | null = serverDraft.aiGeneratedContent?.outline ?? createEmptyOutline();
@@ -494,7 +515,7 @@ export const SessionBuilderProvider: React.FC<{
     if (nextReadiness !== state.draft.readinessScore) {
       dispatch({ type: 'UPDATE_READINESS', payload: nextReadiness });
     }
-  }, [state.draft?.metadata, state.draft?.outline, state.draft?.acceptedVersionId]);
+  }, [state.draft]);
 
   const manualAutosave = React.useCallback(async () => {
     if (!state.draft) return;
@@ -521,30 +542,24 @@ export const SessionBuilderProvider: React.FC<{
   }, [state.draft, publish, showUndoTemporarily]);
 
   React.useEffect(() => {
-    if (!state.draft || !state.draft.isDirty || state.status !== 'ready') {
+    const draftSnapshot = state.draft;
+    if (!draftSnapshot || !draftSnapshot.isDirty || state.status !== 'ready') {
       return;
     }
 
     const timer = window.setTimeout(() => {
       dispatch({ type: 'AUTOSAVE_PENDING' });
       sessionBuilderService
-        .autosaveDraft(state.draft!.sessionId, convertAutosavePayload(state.draft!))
+        .autosaveDraft(draftSnapshot.sessionId, convertAutosavePayload(draftSnapshot))
         .then((response) => {
           const savedAt = response?.savedAt ?? new Date().toISOString();
           lastSavedRef.current = cloneDraft({
-            ...state.draft!,
+            ...draftSnapshot,
             lastAutosaveAt: savedAt,
             isDirty: false,
           });
           dispatch({ type: 'AUTOSAVE_SUCCESS', payload: savedAt });
           showUndoTemporarily();
-          if (response?.viaFallback) {
-            publish({
-              variant: 'info',
-              title: 'Draft saved locally',
-              description: 'You are offline. Changes will sync once you are back online.',
-            });
-          }
         })
         .catch((error: any) => {
           const message = error?.message ?? 'Autosave failed';
@@ -564,6 +579,12 @@ export const SessionBuilderProvider: React.FC<{
 
   const updateMetadata = React.useCallback((updates: Partial<SessionMetadata>) => {
     dispatch({ type: 'UPDATE_METADATA', payload: updates });
+    setVariants([]);
+    setVariantsStatus('idle');
+    setVariantsError(null);
+    setVariantSelectionTime(0);
+    variantGenerationStartRef.current = null;
+    variantReadyAtRef.current = null;
   }, []);
 
   const updatePrompt = React.useCallback((prompt: string) => {
@@ -573,6 +594,103 @@ export const SessionBuilderProvider: React.FC<{
   const updateOutline = React.useCallback((outline: SessionOutline) => {
     dispatch({ type: 'UPDATE_OUTLINE', payload: outline });
   }, []);
+
+  const applyServerOutline = React.useCallback((outline: SessionOutline) => {
+    if (!state.draft) {
+      return;
+    }
+
+    const savedAt = new Date().toISOString();
+    const updatedDraft: SessionDraftData = {
+      ...state.draft,
+      outline,
+      lastAutosaveAt: savedAt,
+      isDirty: false,
+    };
+
+    lastSavedRef.current = cloneDraft(updatedDraft);
+    dispatch({ type: 'UPDATE_OUTLINE', payload: outline });
+    dispatch({ type: 'AUTOSAVE_SUCCESS', payload: savedAt });
+  }, [state.draft]);
+
+  const addOutlineSection = React.useCallback(async (sectionType: SectionType, position?: number) => {
+    if (!state.draft) {
+      return;
+    }
+
+    try {
+      const updatedOutline = await sessionBuilderService.addSection(state.draft.sessionId, sectionType, position);
+      applyServerOutline(updatedOutline);
+    } catch (error) {
+      handleOutlineError('Unable to add section', error);
+    }
+  }, [state.draft, applyServerOutline, handleOutlineError]);
+
+  const updateOutlineSection = React.useCallback(async (sectionId: string, updates: Partial<FlexibleSessionSection>) => {
+    if (!state.draft) {
+      return;
+    }
+
+    try {
+      const updatedOutline = await sessionBuilderService.updateSection(state.draft.sessionId, sectionId, updates);
+      applyServerOutline(updatedOutline);
+    } catch (error) {
+      handleOutlineError('Unable to update section', error);
+    }
+  }, [state.draft, applyServerOutline, handleOutlineError]);
+
+  const removeOutlineSection = React.useCallback(async (sectionId: string) => {
+    if (!state.draft) {
+      return;
+    }
+
+    try {
+      const updatedOutline = await sessionBuilderService.removeSection(state.draft.sessionId, sectionId);
+      applyServerOutline(updatedOutline);
+    } catch (error) {
+      handleOutlineError('Unable to remove section', error);
+    }
+  }, [state.draft, applyServerOutline, handleOutlineError]);
+
+  const moveOutlineSection = React.useCallback(async (sectionId: string, direction: 'up' | 'down') => {
+    if (!state.draft?.outline) {
+      return;
+    }
+
+    const sections = [...state.draft.outline.sections];
+    const index = sections.findIndex((section) => section.id === sectionId);
+    if (index < 0) {
+      return;
+    }
+
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= sections.length) {
+      return;
+    }
+
+    [sections[index], sections[targetIndex]] = [sections[targetIndex], sections[index]];
+    const orderedIds = sections.map((section) => section.id);
+
+    try {
+      const updatedOutline = await sessionBuilderService.reorderSections(state.draft.sessionId, orderedIds);
+      applyServerOutline(updatedOutline);
+    } catch (error) {
+      handleOutlineError('Unable to reorder sections', error);
+    }
+  }, [state.draft, applyServerOutline, handleOutlineError]);
+
+  const duplicateOutlineSection = React.useCallback(async (sectionId: string) => {
+    if (!state.draft) {
+      return;
+    }
+
+    try {
+      const updatedOutline = await sessionBuilderService.duplicateSection(state.draft.sessionId, sectionId);
+      applyServerOutline(updatedOutline);
+    } catch (error) {
+      handleOutlineError('Unable to duplicate section', error);
+    }
+  }, [state.draft, applyServerOutline, handleOutlineError]);
 
   const acceptVersion = React.useCallback((versionId: string) => {
     dispatch({ type: 'ACCEPT_AI_VERSION', payload: versionId });
@@ -596,6 +714,171 @@ export const SessionBuilderProvider: React.FC<{
     dispatch({ type: 'SELECT_AI_VERSION', payload: versionId });
   }, []);
 
+  const generateMultipleVariants = React.useCallback(async (): Promise<boolean> => {
+    if (!state.draft) {
+      return false;
+    }
+
+    const { metadata } = state.draft;
+    if (!metadata.title || !metadata.desiredOutcome || !metadata.category) {
+      const message = 'Add a title, outcome, and category before generating variants.';
+      setVariantsStatus('error');
+      setVariantsError(message);
+      publish({
+        variant: 'warning',
+        title: 'More details needed',
+        description: message,
+      });
+      return false;
+    }
+
+    setVariants([]);
+    setVariantsStatus('pending');
+    setVariantsError(null);
+    setVariantSelectionTime(0);
+    variantReadyAtRef.current = null;
+    variantGenerationStartRef.current = Date.now();
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Session Builder v2] Generating variants...', {
+        category: metadata.category,
+        sessionType: metadata.sessionType,
+        desiredOutcome: metadata.desiredOutcome,
+      });
+    }
+
+    try {
+      const response = await sessionBuilderService.generateMultipleOutlines(
+        metadataToInput(metadata)
+      );
+
+      const completedAt = Date.now();
+      const generationDuration = variantGenerationStartRef.current
+        ? completedAt - variantGenerationStartRef.current
+        : response.metadata?.processingTime ?? 0;
+
+      setVariants(response.variants ?? []);
+      setVariantsStatus('success');
+      setVariantsError(null);
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Session Builder v2] Variant generation complete', {
+          generationMs: generationDuration,
+          ragAvailable: response.metadata?.ragAvailable,
+          totalVariants: response.metadata?.totalVariants,
+          averageSimilarity: response.metadata?.averageSimilarity,
+        });
+        console.table(
+          (response.variants ?? []).map((variant) => ({
+            Label: variant.label,
+            Source: variant.generationSource,
+            'RAG Weight': `${Math.round(variant.ragWeight * 100)}%`,
+            Sections: variant.outline.sections.length,
+            Duration: `${variant.outline.totalDuration}m`,
+          }))
+        );
+      }
+
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'variant_generation_complete', {
+          event_category: 'Session Builder v2',
+          event_label: response.metadata?.ragAvailable ? 'rag' : 'baseline',
+          value: Math.max(
+            0,
+            Math.round(response.metadata?.processingTime ?? generationDuration)
+          ),
+        });
+      }
+
+      variantReadyAtRef.current = completedAt;
+      variantGenerationStartRef.current = null;
+      return true;
+    } catch (error: any) {
+      const message = error?.message ?? 'Failed to generate session variants.';
+      setVariantsStatus('error');
+      setVariantsError(message);
+      variantGenerationStartRef.current = null;
+      variantReadyAtRef.current = null;
+
+      publish({
+        variant: 'error',
+        title: 'Variant generation failed',
+        description: message,
+      });
+
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Session Builder v2] Variant generation failed', error);
+      }
+      return false;
+    }
+  }, [state.draft, publish]);
+
+  const selectVariant = React.useCallback(
+    async (variantId: string) => {
+      if (!state.draft) {
+        return;
+      }
+      const selected = variants.find((variant) => variant.id === variantId);
+      if (!selected) {
+        return;
+      }
+
+      const selectionTimestamp = Date.now();
+      const timeToSelect = variantReadyAtRef.current
+        ? selectionTimestamp - variantReadyAtRef.current
+        : 0;
+      setVariantSelectionTime(Math.max(0, timeToSelect));
+      variantReadyAtRef.current = null;
+
+      const version = outlineToVersion(
+        selected.outline,
+        state.draft.aiPrompt || buildPrompt(state.draft.metadata)
+      );
+      const versionWithContext: AIContentVersion = {
+        ...version,
+        summary: selected.description || version.summary,
+        source:
+          selected.generationSource === 'rag' ? 'ai' : (version.source ?? 'ai'),
+      };
+
+      dispatch({ type: 'AI_REQUEST_SUCCESS', payload: versionWithContext });
+      dispatch({ type: 'ACCEPT_AI_VERSION', payload: versionWithContext.id });
+      dispatch({ type: 'UPDATE_OUTLINE', payload: selected.outline });
+
+      try {
+        await sessionBuilderService.logVariantSelection(state.draft.sessionId, {
+          variantId: selected.id,
+          generationSource: selected.generationSource,
+          ragWeight: selected.ragWeight,
+          ragSourcesUsed: selected.ragSourcesUsed,
+          category: state.draft.metadata.category || '',
+        });
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[Session Builder v2] Failed to log variant selection', error);
+        }
+      }
+
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'variant_selected', {
+          event_category: 'Session Builder v2',
+          event_label: selected.label,
+          value: Math.round(selected.ragWeight * 100),
+        });
+      }
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Session Builder v2] Variant selected', {
+          id: selected.id,
+          label: selected.label,
+          source: selected.generationSource,
+          selectionMs: timeToSelect,
+        });
+      }
+    },
+    [state.draft, variants]
+  );
+
   const generateAIContent = React.useCallback(
     async (options?: { prompt?: string }) => {
       if (!state.draft) return;
@@ -618,11 +901,12 @@ export const SessionBuilderProvider: React.FC<{
       } catch (error) {
         console.error('AI generation failed:', error);
         // Show the actual error to the user instead of silently falling back
-        dispatch({ type: 'AI_REQUEST_FAILURE', payload: error.message });
+        const errorMessage = (error as Error)?.message || 'AI generation failed';
+        dispatch({ type: 'AI_REQUEST_FAILURE', payload: errorMessage });
         publish({
           variant: 'error',
           title: 'AI Generation Failed',
-          description: error.message || 'Unable to generate AI content. Please try again.',
+          description: errorMessage || 'Unable to generate AI content. Please try again.',
         });
       }
     },
@@ -716,6 +1000,11 @@ export const SessionBuilderProvider: React.FC<{
     updateMetadata,
     updatePrompt,
     updateOutline,
+    addOutlineSection,
+    updateOutlineSection,
+    removeOutlineSection,
+    moveOutlineSection,
+    duplicateOutlineSection,
     generateAIContent,
     acceptVersion,
     rejectAcceptedVersion,
@@ -724,11 +1013,22 @@ export const SessionBuilderProvider: React.FC<{
     publishSession,
     canUndoAutosave,
     undoAutosave,
+    variants,
+    variantsStatus,
+    variantsError,
+    variantSelectionTime,
+    generateMultipleVariants,
+    selectVariant,
   }), [
     state,
     updateMetadata,
     updatePrompt,
     updateOutline,
+    addOutlineSection,
+    updateOutlineSection,
+    removeOutlineSection,
+    moveOutlineSection,
+    duplicateOutlineSection,
     generateAIContent,
     acceptVersion,
     rejectAcceptedVersion,
@@ -737,6 +1037,12 @@ export const SessionBuilderProvider: React.FC<{
     publishSession,
     canUndoAutosave,
     undoAutosave,
+    variants,
+    variantsStatus,
+    variantsError,
+    variantSelectionTime,
+    generateMultipleVariants,
+    selectVariant,
   ]);
 
   return (

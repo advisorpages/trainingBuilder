@@ -6,6 +6,8 @@ import { cn } from '../../lib/utils';
 interface CategorySelectProps {
   value?: number | '';
   onChange: (categoryId: number | '') => void;
+  selectedLabel?: string;
+  onCategoryChange?: (category: Category | null) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -17,6 +19,8 @@ interface CategorySelectProps {
 export const CategorySelect: React.FC<CategorySelectProps> = ({
   value,
   onChange,
+  selectedLabel,
+  onCategoryChange,
   placeholder = 'Select category...',
   className,
   disabled = false,
@@ -83,6 +87,7 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
       // Add the new category to the list and select it
       setCategories(prev => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)));
       onChange(newCategory.id);
+      onCategoryChange?.(newCategory);
       setSearchTerm('');
       setIsOpen(false);
       setError(null);
@@ -97,7 +102,9 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
   };
 
   const handleSelectCategory = (categoryId: number) => {
+    const selected = categories.find(cat => cat.id === categoryId) ?? null;
     onChange(categoryId);
+    onCategoryChange?.(selected);
     setIsOpen(false);
     setSearchTerm('');
   };
@@ -115,6 +122,7 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
 
   const handleClearSelection = () => {
     onChange('');
+    onCategoryChange?.(null);
     setSearchTerm('');
     setIsOpen(false);
   };
@@ -141,7 +149,7 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
         <input
           ref={inputRef}
           type="text"
-          value={isOpen ? searchTerm : (selectedCategory?.name || '')}
+          value={isOpen ? searchTerm : (selectedCategory?.name || selectedLabel || '')}
           onChange={handleInputChange}
           onClick={handleInputClick}
           placeholder={loading ? 'Loading categories...' : placeholder}
@@ -157,7 +165,7 @@ export const CategorySelect: React.FC<CategorySelectProps> = ({
         />
 
         {/* Clear button */}
-        {selectedCategory && !disabled && (
+        {value && !disabled && (
           <button
             type="button"
             onClick={handleClearSelection}

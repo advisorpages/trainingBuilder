@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -6,6 +6,15 @@ import { CreateContentVersionDto } from './dto/create-content-version.dto';
 import { BuilderAutosaveDto } from './dto/builder-autosave.dto';
 import { SuggestOutlineDto } from './dto/suggest-outline.dto';
 import { SessionStatus } from '../../entities';
+import { Public } from '../../common/decorators/public.decorator';
+import { CreateBuilderDraftDto } from './dto/create-builder-draft.dto';
+import {
+  AddOutlineSectionDto,
+  UpdateOutlineSectionDto,
+  RemoveOutlineSectionDto,
+  ReorderOutlineSectionsDto,
+  DuplicateOutlineSectionDto,
+} from './dto/outline-section.dto';
 
 @Controller('sessions')
 export class SessionsController {
@@ -32,6 +41,51 @@ export class SessionsController {
     return this.sessionsService.autosaveBuilderDraft(id, dto);
   }
 
+  @Post('builder/drafts')
+  async createDraft(@Body() dto: CreateBuilderDraftDto) {
+    return this.sessionsService.createBuilderDraft(dto);
+  }
+
+  @Put('builder/:id/outlines/sections/add')
+  async addOutlineSection(
+    @Param('id') id: string,
+    @Body() dto: AddOutlineSectionDto,
+  ) {
+    return this.sessionsService.addOutlineSection(id, dto);
+  }
+
+  @Put('builder/:id/outlines/sections/update')
+  async updateOutlineSection(
+    @Param('id') id: string,
+    @Body() dto: UpdateOutlineSectionDto,
+  ) {
+    return this.sessionsService.updateOutlineSection(id, dto);
+  }
+
+  @Put('builder/:id/outlines/sections/remove')
+  async removeOutlineSection(
+    @Param('id') id: string,
+    @Body() dto: RemoveOutlineSectionDto,
+  ) {
+    return this.sessionsService.removeOutlineSection(id, dto);
+  }
+
+  @Put('builder/:id/outlines/sections/reorder')
+  async reorderOutlineSections(
+    @Param('id') id: string,
+    @Body() dto: ReorderOutlineSectionsDto,
+  ) {
+    return this.sessionsService.reorderOutlineSections(id, dto);
+  }
+
+  @Put('builder/:id/outlines/sections/duplicate')
+  async duplicateOutlineSection(
+    @Param('id') id: string,
+    @Body() dto: DuplicateOutlineSectionDto,
+  ) {
+    return this.sessionsService.duplicateOutlineSection(id, dto);
+  }
+
   @Get('builder/:id/complete-data')
   async builderCompleteData(@Param('id') id: string) {
     return this.sessionsService.getBuilderCompleteData(id);
@@ -40,6 +94,44 @@ export class SessionsController {
   @Post('builder/suggest-outline')
   async suggestOutline(@Body() dto: SuggestOutlineDto) {
     return this.sessionsService.suggestOutline(dto);
+  }
+
+  @Post('builder/suggest-outline-v2')
+  async suggestMultipleOutlines(@Body() dto: SuggestOutlineDto) {
+    return this.sessionsService.suggestMultipleOutlines(dto);
+  }
+
+  @Public()
+  @Post('builder/:sessionId/log-variant-selection')
+  async logVariantSelection(
+    @Param('sessionId') sessionId: string,
+    @Body() variantDetails: {
+      variantId: string;
+      generationSource: 'rag' | 'baseline';
+      ragWeight: number;
+      ragSourcesUsed: number;
+      category: string;
+    }
+  ) {
+    await this.sessionsService.logVariantSelection(sessionId, variantDetails);
+    return { success: true };
+  }
+
+  @Get('readiness-checklist')
+  async getReadinessChecklist(@Query('category') category?: string) {
+    return this.sessionsService.getReadinessChecklist(category);
+  }
+
+  @Public()
+  @Get('public')
+  async getPublishedSessions() {
+    return this.sessionsService.findAll({ status: SessionStatus.PUBLISHED });
+  }
+
+  @Public()
+  @Get('public/:id')
+  async getPublicSession(@Param('id') id: string) {
+    return this.sessionsService.findOne(id);
   }
 
   @Get(':id')
@@ -56,6 +148,11 @@ export class SessionsController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: UpdateSessionDto) {
     return this.sessionsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.sessionsService.remove(id);
   }
 
   @Post(':id/content')
@@ -96,6 +193,14 @@ export class SessionsController {
     return result;
   }
 
+  @Post('bulk/delete')
+  async bulkDelete(@Body('sessionIds') sessionIds: string[]) {
+    console.log('Backend controller - bulkDelete called with:', { sessionIds });
+    const result = await this.sessionsService.bulkDelete(sessionIds);
+    console.log('Backend controller - bulkDelete result:', result);
+    return result;
+  }
+
   @Post(':id/publish')
   async publishSession(@Param('id') id: string) {
     return this.sessionsService.publishSession(id);
@@ -104,10 +209,5 @@ export class SessionsController {
   @Get(':id/readiness')
   async getReadinessScore(@Param('id') id: string) {
     return this.sessionsService.getReadinessScore(id);
-  }
-
-  @Get('readiness-checklist')
-  async getReadinessChecklist(@Query('category') category?: string) {
-    return this.sessionsService.getReadinessChecklist(category);
   }
 }

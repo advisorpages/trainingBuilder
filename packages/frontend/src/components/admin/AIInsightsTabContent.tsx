@@ -8,9 +8,10 @@ import {
   AIInteractionStatus,
   UserFeedback,
 } from '../../services/ai-interactions.service';
+import { VariantAnalyticsDashboard } from './VariantAnalyticsDashboard';
 
 export const AIInsightsTabContent: React.FC = () => {
-  const [activeView, setActiveView] = useState<'metrics' | 'log' | 'failures' | 'quality'>('metrics');
+  const [activeView, setActiveView] = useState<'metrics' | 'log' | 'failures' | 'quality' | 'variants'>('metrics');
   const [metrics, setMetrics] = useState<AIInteractionMetrics | null>(null);
   const [interactions, setInteractions] = useState<AIInteraction[]>([]);
   const [selectedInteraction, setSelectedInteraction] = useState<AIInteraction | null>(null);
@@ -432,10 +433,20 @@ export const AIInsightsTabContent: React.FC = () => {
         >
           Data Quality Issues
         </button>
+        <button
+          onClick={() => setActiveView('variants')}
+          className={`px-4 py-2 font-medium text-sm ${
+            activeView === 'variants'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Variant Analytics
+        </button>
       </div>
 
-      {/* Date Range Filter (shown for all views) */}
-      {activeView === 'metrics' && (
+      {/* Date Range Filter (shown for metrics and variants views) */}
+      {(activeView === 'metrics' || activeView === 'variants') && (
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -470,6 +481,11 @@ export const AIInsightsTabContent: React.FC = () => {
       )}
       {activeView === 'failures' && renderInteractionTable()}
       {activeView === 'quality' && renderInteractionTable()}
+      {activeView === 'variants' && (
+        <VariantAnalyticsDashboard
+          dateRange={dateRange.startDate || dateRange.endDate ? dateRange : undefined}
+        />
+      )}
 
       {/* Detail Modal */}
       {selectedInteraction && (

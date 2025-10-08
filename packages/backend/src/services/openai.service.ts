@@ -36,6 +36,10 @@ export interface OpenAISessionOutlineRequest {
   toneExamplePhrases?: string[];
   toneInstructions?: string;
   toneId?: number;
+  ragWeight?: number;
+  variantIndex?: number;
+  variantLabel?: string;
+  variantInstruction?: string;
 }
 
 export interface OpenAISessionSection {
@@ -92,12 +96,26 @@ export class OpenAIService {
     }
   }
 
-  async generateSessionOutline(request: OpenAISessionOutlineRequest): Promise<OpenAISessionOutline> {
+  async generateSessionOutline(
+    request: OpenAISessionOutlineRequest,
+    ragResults?: any[],
+    ragWeight?: number
+  ): Promise<OpenAISessionOutline> {
     if (!this.apiKey) {
       throw new Error('OpenAI API key not configured');
     }
 
-    const prompt = this.buildPrompt(request);
+    // Build base prompt
+    let prompt = this.buildPrompt(request);
+
+    // Inject RAG context if provided
+    if (ragResults && ragWeight > 0) {
+      prompt = this.injectRAGContext(prompt, ragResults, ragWeight);
+    }
+
+    // Build dynamic system prompt based on RAG weight
+    const systemPrompt = this.buildSystemPrompt(ragWeight || 0);
+
     const startTime = Date.now();
 
     // Track missing variables
@@ -127,27 +145,7 @@ export class OpenAIService {
               messages: [
                 {
                   role: 'system',
-                  content: `You are an expert training designer who creates engaging, practical session outlines.
-
-                  Respond ONLY with valid JSON matching this exact structure:
-                  {
-                    "suggestedTitle": "string",
-                    "summary": "string (2-3 sentences)",
-                    "sections": [
-                      {
-                        "title": "string",
-                        "duration": number,
-                        "description": "string (2-3 sentences)",
-                        "learningObjectives": ["string", "string"],
-                        "suggestedActivities": ["string", "string"]
-                      }
-                    ],
-                    "totalDuration": number,
-                    "difficulty": "Beginner|Intermediate|Advanced",
-                    "recommendedAudienceSize": "string"
-                  }
-
-                  Make sessions practical, engaging, and outcome-focused. Include interactive elements.`
+                  content: systemPrompt
                 },
                 {
                   role: 'user',
@@ -447,9 +445,105 @@ export class OpenAIService {
       }
     }
 
+    if (typeof request.ragWeight === 'number') {
+      requirements.push(`Match the reliance on existing knowledge materials to approximately ${Math.round(request.ragWeight * 100)}% emphasis`);
+    }
+
+    if (request.variantInstruction) {
+      requirements.push(request.variantInstruction);
+    }
+
+    if (request.variantLabel) {
+      parts.push(`Variant goal: ${request.variantLabel}`);
+    }
+
     parts.push(`\\n\\nRequirements:\\n- ${requirements.join('\\n- ')}`);
 
     return parts.join('\\n\\n');
+  }
+
+  /**
+   * Build dynamic system prompt based on RAG weight
+   */
+  private buildSystemPrompt(ragWeight: number): string {
+    const basePrompt = `You are an expert training content designer specializing in creating engaging, outcome-focused training sessions for financial professionals.
+
+You excel at creating practical, immediately applicable session structures that drive measurable results.
+
+Respond ONLY with valid JSON matching this exact structure:
+{
+  "suggestedTitle": "string",
+  "summary": "string (2-3 sentences)",
+  "sections": [
+    {
+      "title": "string",
+      "duration": number,
+      "description": "string (2-3 sentences)",
+      "learningObjectives": ["string", "string"],
+      "suggestedActivities": ["string", "string"]
+    }
+  ],
+  "totalDuration": number,
+  "difficulty": "Beginner|Intermediate|Advanced",
+  "recommendedAudienceSize": "string"
+}
+
+IMPORTANT: Create sections that flow logically:
+- Section 1: Opening/Welcome (10-15% of time)
+- Sections 2-3: Core Content Topics (60-70% of time)
+- Section 4: Closing/Commitments (10-15% of time)
+
+Make sessions practical, engaging, and outcome-focused. Include interactive elements.`;
+
+    if (ragWeight >= 0.5) {
+      // Heavy RAG: emphasize fidelity to source materials
+      return `${basePrompt}
+
+Your task is to create a session outline that draws heavily from the provided training materials. Stay faithful to the frameworks, examples, and terminology found in the knowledge base. Adapt the structure to fit the desired outcome while preserving the proven approaches documented in the sources.`;
+    } else if (ragWeight > 0) {
+      // Light RAG: use as inspiration
+      return `${basePrompt}
+
+Use the provided training materials as inspiration and reference points, but feel free to combine them creatively with your expertise to create a fresh, engaging session structure.`;
+    } else {
+      // No RAG: pure creativity
+      return `${basePrompt}
+
+Create an innovative session outline using your expertise and industry best practices. Focus on practical, immediately applicable content that drives the desired outcome.`;
+    }
+  }
+
+  /**
+   * Inject RAG context into prompt
+   */
+  private injectRAGContext(basePrompt: string, ragResults: any[], weight: number): string {
+    if (!ragResults?.length) return basePrompt;
+
+    const contextLimit = Math.floor(3000 * weight);
+    let totalChars = 0;
+    const selectedResults = [];
+
+    for (const result of ragResults) {
+      if (totalChars + result.text.length > contextLimit * 4) break;
+      selectedResults.push(result);
+      totalChars += result.text.length;
+    }
+
+    if (selectedResults.length === 0) return basePrompt;
+
+    const ragContext = selectedResults.map((r, idx) =>
+      `## Source ${idx + 1}: ${r.metadata?.filename || 'Unknown'}
+${r.text.substring(0, 500)}...
+---`
+    ).join('\n\n');
+
+    return `# Retrieved Training Materials from Knowledge Base
+
+${ragContext}
+
+# Your Task
+
+Using the above materials as reference and inspiration, ${basePrompt}`;
   }
 
   isConfigured(): boolean {

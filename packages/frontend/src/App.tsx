@@ -14,16 +14,12 @@ import TrainerDashboardPage from './pages/TrainerDashboardPage'
 import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
 import { SessionBuilderPage } from './pages/SessionBuilderPage'
 import DashboardPage from './pages/DashboardPage'
-import AnalyticsPage from './pages/AnalyticsPage'
 import SessionWorksheetPage from './pages/SessionWorksheetPage'
 import ManageLocationsPage from './pages/ManageLocationsPage'
 import ManageAudiencesPage from './pages/ManageAudiencesPage'
 import ManageTonesPage from './pages/ManageTonesPage'
 import ManageCategoriesPage from './pages/ManageCategoriesPage'
 import IncentiveWorksheetPage from './pages/IncentiveWorksheetPage'
-import BrokerSessionsPage from './pages/BrokerSessionsPage'
-import BrokerIncentivesPage from './pages/BrokerIncentivesPage'
-import BrokerReportsPage from './pages/BrokerReportsPage'
 import { AISettingsPage } from './pages/AISettingsPage'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import HomePage from './pages/HomePage'
@@ -89,14 +85,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/sessions/manage"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <ManageSessionsPage />
-              </ProtectedRoute>
-            }
-          />
           {/* Redirect to admin dashboard with tabs */}
           <Route path="/admin/locations" element={<Navigate to="/admin/dashboard?tab=locations" replace />} />
           <Route path="/admin/trainers" element={<Navigate to="/admin/dashboard?tab=trainers" replace />} />
@@ -156,38 +144,9 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/analytics"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <AnalyticsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/broker/sessions"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.BROKER]}>
-                <BrokerSessionsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/broker/incentives"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.BROKER]}>
-                <BrokerIncentivesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/broker/reports"
-            element={
-              <ProtectedRoute requiredRoles={[UserRole.BROKER]}>
-                <BrokerReportsPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/broker/sessions" element={<Navigate to="/sessions" replace />} />
+          <Route path="/broker/incentives" element={<Navigate to="/incentives" replace />} />
+          <Route path="/broker/reports" element={<Navigate to="/admin/dashboard?tab=analytics" replace />} />
           </Routes>
         </main>
 

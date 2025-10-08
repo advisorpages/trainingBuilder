@@ -1,6 +1,96 @@
+import { vi } from 'vitest';
+
+vi.mock('../../../components/ui/CategorySelect', () => ({
+  CategorySelect: ({
+    value,
+    onChange,
+    onCategoryChange,
+    placeholder,
+  }: {
+    value?: number | '';
+    onChange: (categoryId: number | '') => void;
+    onCategoryChange?: (category: { id: number; name: string } | null) => void;
+    placeholder?: string;
+  }) => (
+    <input
+      data-testid="category-select"
+      value={value === undefined || value === '' ? '' : String(value)}
+      onChange={(event) => {
+        const rawValue = event.target.value;
+        const parsedValue = rawValue ? Number(rawValue) : '';
+        onChange(parsedValue);
+        if (onCategoryChange) {
+          onCategoryChange(parsedValue === '' ? null : { id: Number(parsedValue), name: 'Mock Category' });
+        }
+      }}
+      placeholder={placeholder ?? 'Category'}
+    />
+  ),
+}));
+
+vi.mock('../../../components/ui/LocationSelect', () => ({
+  LocationSelect: ({
+    value,
+    onChange,
+  }: {
+    value?: number | '';
+    onChange: (location: { id: number; name: string } | null) => void;
+  }) => (
+    <input
+      data-testid="location-select"
+      value={value === undefined || value === '' ? '' : String(value)}
+      onChange={(event) => {
+        const rawValue = event.target.value;
+        onChange(rawValue ? { id: Number(rawValue), name: 'Mock Location' } : null);
+      }}
+      placeholder="Location"
+    />
+  ),
+}));
+
+vi.mock('../../../components/ui/AudienceSelect', () => ({
+  AudienceSelect: ({
+    value,
+    onChange,
+  }: {
+    value?: number | '';
+    onChange: (audience: { id: number; name: string } | null) => void;
+  }) => (
+    <input
+      data-testid="audience-select"
+      value={value === undefined || value === '' ? '' : String(value)}
+      onChange={(event) => {
+        const rawValue = event.target.value;
+        onChange(rawValue ? { id: Number(rawValue), name: 'Mock Audience' } : null);
+      }}
+      placeholder="Audience"
+    />
+  ),
+}));
+
+vi.mock('../../../components/ui/ToneSelect', () => ({
+  ToneSelect: ({
+    value,
+    onChange,
+  }: {
+    value?: number | '';
+    onChange: (tone: { id: number; name: string } | null) => void;
+  }) => (
+    <input
+      data-testid="tone-select"
+      value={value === undefined || value === '' ? '' : String(value)}
+      onChange={(event) => {
+        const rawValue = event.target.value;
+        onChange(rawValue ? { id: Number(rawValue), name: 'Mock Tone' } : null);
+      }}
+      placeholder="Tone"
+    />
+  ),
+}));
+
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { SessionMetadataForm } from '../SessionMetadataForm';
 import { SessionMetadata } from '../../state/types';
 
@@ -9,18 +99,25 @@ describe('SessionMetadataForm', () => {
   const mockOnTriggerAI = vi.fn();
   const mockOnAutosave = vi.fn();
 
-  const defaultMetadata: SessionMetadata = {
-    title: 'Test Session',
-    sessionType: 'workshop',
-    category: 'Leadership',
-    desiredOutcome: 'Improve team collaboration',
-    currentProblem: 'Communication gaps',
-    specificTopics: 'Active listening, feedback',
-    startDate: '2025-09-26',
-    startTime: '2025-09-26T09:00:00.000Z',
-    endTime: '2025-09-26T10:30:00.000Z',
-    timezone: 'America/New_York',
-  };
+const defaultMetadata: SessionMetadata = {
+  title: 'Test Session',
+  sessionType: 'workshop',
+  category: 'Leadership',
+  categoryId: 42,
+  desiredOutcome: 'Improve team collaboration',
+  currentProblem: 'Communication gaps',
+  specificTopics: 'Active listening, feedback',
+  startDate: '2025-09-26',
+  startTime: '2025-09-26T09:00:00.000Z',
+  endTime: '2025-09-26T10:30:00.000Z',
+  timezone: 'America/New_York',
+  location: 'Main Auditorium',
+  locationId: 12,
+  audienceId: 5,
+  audienceName: 'Team Leads',
+  toneId: 3,
+  toneName: 'Inspirational',
+};
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,7 +133,6 @@ describe('SessionMetadataForm', () => {
     );
 
     expect(screen.getByDisplayValue('Test Session')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Leadership')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /session type/i })).toHaveValue('workshop');
     expect(screen.getByDisplayValue('Improve team collaboration')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Communication gaps')).toBeInTheDocument();
@@ -97,7 +193,7 @@ describe('SessionMetadataForm', () => {
       />
     );
 
-    const generateButton = screen.getByRole('button', { name: 'Generate Outline' });
+    const generateButton = screen.getByRole('button', { name: 'Generate Variants' });
     fireEvent.click(generateButton);
 
     expect(mockOnTriggerAI).toHaveBeenCalledTimes(1);
@@ -175,8 +271,6 @@ describe('SessionMetadataForm', () => {
         onTriggerAI={mockOnTriggerAI}
       />
     );
-
-    const sessionTypeSelect = screen.getByRole('combobox', { name: /session type/i });
 
     // Check that all expected options are present
     expect(screen.getByText('Workshop')).toBeInTheDocument();

@@ -42,6 +42,10 @@ export class SuggestOutlineDto {
   audienceSize?: string;
 
   @IsOptional()
+  @IsString()
+  audienceName?: string;
+
+  @IsOptional()
   audienceId?: number;
 
   @IsOptional()

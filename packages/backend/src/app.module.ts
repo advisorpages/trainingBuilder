@@ -24,6 +24,8 @@ import { AudiencesModule } from './modules/audiences/audiences.module';
 import { TonesModule } from './modules/tones/tones.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AIInteractionsModule } from './modules/ai-interactions/ai-interactions.module';
+import { VariantConfigsModule } from './modules/variant-configs/variant-configs.module';
+import { RagSettingsModule } from './modules/rag-settings/rag-settings.module';
 import { entities } from './entities';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -70,6 +72,8 @@ import { SnakeNamingStrategy } from './config/snake-naming.strategy';
     TonesModule,
     AdminModule,
     AIInteractionsModule,
+    VariantConfigsModule,
+    RagSettingsModule,
   ],
   controllers: [AppController],
   providers: [

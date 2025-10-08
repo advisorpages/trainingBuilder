@@ -118,6 +118,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const [locations, setLocations] = useState<Location[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [tones, setTones] = useState<Tone[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [sessionTopicDetails, setSessionTopicDetails] = useState<SessionTopicDetail[]>([]);
@@ -157,12 +158,14 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           locationsResponse,
           audiencesResponse,
           tonesResponse,
+          categoriesResponse,
           topicsResponse
         ] = await Promise.all([
           trainerService.getActiveTrainers(),
           locationService.getActiveLocations(),
           attributesService.getAudiences(),
           attributesService.getTones(),
+          attributesService.getCategories(),
           topicService.getActiveTopics()
         ]);
 
@@ -170,6 +173,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         setLocations(locationsResponse);
         setAudiences(audiencesResponse);
         setTones(tonesResponse);
+        setCategories(categoriesResponse);
         setTopics(topicsResponse);
 
         // Debug logging for topics

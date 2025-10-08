@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
 import {
   Incentive,
   Session,
@@ -21,8 +23,116 @@ import {
   SuggestedSessionSection,
   TopicReference,
 } from './dto/suggest-outline.dto';
+import { CreateBuilderDraftDto } from './dto/create-builder-draft.dto';
+import {
+  AddOutlineSectionDto,
+  UpdateOutlineSectionDto,
+  RemoveOutlineSectionDto,
+  ReorderOutlineSectionsDto,
+  DuplicateOutlineSectionDto,
+} from './dto/outline-section.dto';
 import { OpenAIService, OpenAISessionOutlineRequest } from '../../services/openai.service';
 import { PromptRegistryService } from '../../services/prompt-registry.service';
+import { RagIntegrationService } from '../../services/rag-integration.service';
+import { AIInteractionsService } from '../../services/ai-interactions.service';
+import { AIInteractionType, AIInteractionStatus } from '../../entities/ai-interaction.entity';
+import { AnalyticsTelemetryService } from '../../services/analytics-telemetry.service';
+import { VariantConfigService } from '../../services/variant-config.service';
+
+export interface RagSource {
+  filename: string;
+  category: string;
+  similarity: number;
+  excerpt: string;
+  createdAt?: string;
+}
+
+export interface Variant {
+  id: string;
+  outline: any;
+  generationSource: 'rag' | 'baseline';
+  ragWeight: number;
+  ragSourcesUsed: number;
+  ragSources?: RagSource[]; // NEW: Include RAG sources per variant
+  label: string;
+  description: string;
+}
+
+export interface MultiVariantResponse {
+  variants: Variant[];
+  metadata: {
+    processingTime: number;
+    ragAvailable: boolean;
+    ragSourcesFound: number;
+    totalVariants: number;
+    averageSimilarity?: number;
+  };
+}
+
+type SectionType =
+  | 'opener'
+  | 'topic'
+  | 'exercise'
+  | 'inspiration'
+  | 'closing'
+  | 'video'
+  | 'discussion'
+  | 'presentation'
+  | 'break'
+  | 'assessment'
+  | 'custom';
+
+interface FlexibleSessionSection {
+  id: string;
+  type: SectionType;
+  position: number;
+  title: string;
+  duration: number;
+  description?: string;
+  isRequired?: boolean;
+  isCollapsible?: boolean;
+  icon?: string;
+  isExercise?: boolean;
+  exerciseType?: string;
+  engagementType?: string;
+  inspirationType?: string;
+  learningObjectives?: string[];
+  suggestedActivities?: string[];
+  materialsNeeded?: string[];
+  keyTakeaways?: string[];
+  actionItems?: string[];
+  nextSteps?: string[];
+  trainerId?: number;
+  trainerName?: string;
+  associatedTopic?: {
+    id: number;
+    name: string;
+    description?: string;
+    learningOutcomes?: string;
+    trainerNotes?: string;
+    materialsNeeded?: string;
+    deliveryGuidance?: string;
+    matchScore?: number;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+}
+
+export interface SessionOutlinePayload {
+  sections: FlexibleSessionSection[];
+  totalDuration: number;
+  suggestedSessionTitle: string;
+  suggestedDescription: string;
+  difficulty: string;
+  recommendedAudienceSize: string;
+  ragSuggestions?: unknown;
+  ragSources?: RagSource[]; // NEW: Store RAG sources with outline
+  fallbackUsed: boolean;
+  generatedAt: string;
+  convertedFromLegacy?: boolean;
+  convertedAt?: string;
+}
 
 @Injectable()
 export class SessionsService {
@@ -42,7 +152,16 @@ export class SessionsService {
     private readonly readinessScoringService: ReadinessScoringService,
     private readonly openAIService: OpenAIService,
     private readonly promptRegistry: PromptRegistryService,
-  ) {}
+    private readonly ragService: RagIntegrationService,
+    private readonly aiInteractionsService: AIInteractionsService,
+    private readonly configService: ConfigService,
+    private readonly analyticsTelemetry: AnalyticsTelemetryService,
+    private readonly variantConfigService: VariantConfigService,
+  ) {
+    this.enableVariantGenerationV2 = this.configService.get<boolean>('ENABLE_VARIANT_GENERATION_V2', false);
+    this.variantRolloutPercentage = this.configService.get<number>('VARIANT_GENERATION_ROLLOUT_PERCENTAGE', 0);
+    this.logVariantSelections = this.configService.get<boolean>('LOG_VARIANT_SELECTIONS', true);
+  }
 
   private applyPublishTimestamp(session: Session, previousStatus: SessionStatus) {
     if (session.status === SessionStatus.PUBLISHED && previousStatus !== SessionStatus.PUBLISHED) {
@@ -235,6 +354,28 @@ export class SessionsService {
     return saved;
   }
 
+  async remove(id: string): Promise<void> {
+    const session = await this.findOne(id);
+    await this.sessionsRepository.remove(session);
+  }
+
+  async bulkDelete(sessionIds: string[]): Promise<{ deleted: number }> {
+    if (!sessionIds || sessionIds.length === 0) {
+      return { deleted: 0 };
+    }
+
+    const sessions = await this.sessionsRepository.find({
+      where: { id: In(sessionIds) },
+    });
+
+    if (sessions.length === 0) {
+      return { deleted: 0 };
+    }
+
+    await this.sessionsRepository.remove(sessions);
+    return { deleted: sessions.length };
+  }
+
   async createContentVersion(sessionId: string, payload: CreateContentVersionDto) {
     const session = await this.findOne(sessionId);
     const version = this.contentRepository.create({ ...payload, session });
@@ -242,6 +383,9 @@ export class SessionsService {
   }
 
   private readonly logger = new Logger(SessionsService.name);
+  private readonly enableVariantGenerationV2: boolean;
+  private readonly variantRolloutPercentage: number;
+  private readonly logVariantSelections: boolean;
 
   private async findMatchingTopics(sections: SuggestedSessionSection[]): Promise<TopicReference[]> {
     try {
@@ -566,28 +710,46 @@ export class SessionsService {
   }
 
   async getBuilderCompleteData(sessionId: string) {
-    const session = await this.findOne(sessionId);
+    let session: Session | null = null;
+    try {
+      session = await this.findOne(sessionId);
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) {
+        throw error;
+      }
+      session = null;
+    }
+
     const draft = await this.draftsRepository.findOne({ where: { draftKey: sessionId } });
     const payload = draft?.payload ?? null;
     const metadata = (payload?.metadata as Record<string, any>) ?? {};
-    const outline = payload?.outline ?? null;
+    const outline = payload?.outline ? this.ensureOutline(payload.outline as SessionOutlinePayload) : null;
 
-    const sessionStart = metadata.startTime ?? session.scheduledAt?.toISOString() ?? null;
+    if (payload && outline) {
+      payload.outline = outline;
+    }
+
+    if (!session && !draft) {
+      throw new NotFoundException(`Session or draft ${sessionId} not found`);
+    }
+
+    const sessionStart = metadata.startTime ?? session?.scheduledAt?.toISOString() ?? null;
     let sessionEnd: string | null = metadata.endTime ?? null;
-    if (!sessionEnd && session.scheduledAt && session.durationMinutes) {
+    if (!sessionEnd && session?.scheduledAt && session.durationMinutes) {
       sessionEnd = new Date(
         session.scheduledAt.getTime() + session.durationMinutes * 60 * 1000,
       ).toISOString();
     }
 
     return {
-      id: session.id,
-      title: session.title,
-      subtitle: session.subtitle,
-      readinessScore: session.readinessScore,
-      status: session.status,
+      id: session?.id ?? sessionId,
+      draftId: sessionId,
+      title: session?.title ?? metadata.title ?? '',
+      subtitle: session?.subtitle ?? metadata.subtitle ?? '',
+      readinessScore: session?.readinessScore ?? (payload?.readinessScore ?? 0),
+      status: session?.status ?? SessionStatus.DRAFT,
       sessionType: metadata.sessionType ?? 'workshop',
-      category: session.topic
+      category: session?.topic
         ? {
             id: session.topic.id,
             name: session.topic.name,
@@ -595,15 +757,18 @@ export class SessionsService {
         : metadata.category
         ? { name: metadata.category }
         : null,
-      desiredOutcome: metadata.desiredOutcome ?? session.objective ?? '',
+      desiredOutcome: metadata.desiredOutcome ?? session?.objective ?? '',
       currentProblem: metadata.currentProblem ?? '',
       specificTopics: metadata.specificTopics ?? '',
       startTime: sessionStart,
       endTime: sessionEnd,
       timezone: metadata.timezone ?? null,
       locationId: metadata.locationId ?? null,
+      locationName: metadata.location ?? null,
       audienceId: metadata.audienceId ?? null,
+      audienceName: metadata.audienceName ?? null,
       toneId: metadata.toneId ?? null,
+      toneName: metadata.toneName ?? null,
       aiGeneratedContent: outline
         ? {
             outline,
@@ -617,6 +782,29 @@ export class SessionsService {
     };
   }
 
+  async createBuilderDraft(
+    payload: CreateBuilderDraftDto,
+  ): Promise<{ draftId: string; savedAt: string }> {
+    const draftId = randomUUID();
+    const savedAt = new Date();
+
+    const normalizedPayload = this.ensureDraftPayload(payload);
+
+    const draftEntity = this.draftsRepository.create({
+      draftKey: draftId,
+      session: null,
+      payload: normalizedPayload,
+      savedAt,
+    });
+
+    await this.draftsRepository.save(draftEntity);
+
+    return {
+      draftId,
+      savedAt: savedAt.toISOString(),
+    };
+  }
+
   async autosaveBuilderDraft(
     sessionId: string,
     payload: BuilderAutosaveDto,
@@ -625,17 +813,16 @@ export class SessionsService {
     let session: Session | undefined;
 
     if (sessionId !== 'new') {
-      session = await this.sessionsRepository.findOne({ where: { id: sessionId } });
-      if (!session) {
-        throw new NotFoundException(`Session ${sessionId} not found`);
-      }
+      session = await this.sessionsRepository.findOne({ where: { id: sessionId } }) ?? undefined;
     }
+
+    const normalizedPayload = this.ensureDraftPayload(payload);
 
     await this.draftsRepository.upsert(
       {
         draftKey: sessionId,
         session: session ?? null,
-        payload: { ...payload },
+        payload: normalizedPayload,
         savedAt,
       },
       {
@@ -644,6 +831,352 @@ export class SessionsService {
     );
 
     return { savedAt: savedAt.toISOString() };
+  }
+
+  async addOutlineSection(sessionId: string, dto: AddOutlineSectionDto): Promise<SessionOutlinePayload> {
+    const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+
+    const insertPosition = dto.position && dto.position > 0
+      ? Math.min(Math.floor(dto.position), outline.sections.length + 1)
+      : outline.sections.length + 1;
+
+    const newSection = this.createDefaultSection(this.normalizeSectionType(dto.sectionType), insertPosition);
+    const sections = [...outline.sections];
+    sections.splice(insertPosition - 1, 0, newSection);
+
+    const renumbered = this.renumberSections(sections);
+    const updatedOutline: SessionOutlinePayload = {
+      ...outline,
+      sections: renumbered,
+      totalDuration: this.calculateTotalDuration(renumbered),
+      generatedAt: new Date().toISOString(),
+    };
+
+    return this.persistDraftOutline(draft, payload, updatedOutline);
+  }
+
+  async updateOutlineSection(sessionId: string, dto: UpdateOutlineSectionDto): Promise<SessionOutlinePayload> {
+    const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+    let sectionFound = false;
+
+    const nextSections = outline.sections.map((section) => {
+      if (section.id !== dto.sectionId) {
+        return section;
+      }
+
+      sectionFound = true;
+      const updates = { ...dto.updates } as Record<string, unknown>;
+
+      if (updates.duration !== undefined) {
+        const parsed = Number(updates.duration);
+        updates.duration = Number.isFinite(parsed) && parsed >= 0 ? parsed : section.duration;
+      }
+
+      if (updates.type !== undefined) {
+        updates.type = this.normalizeSectionType(updates.type);
+      }
+
+      return {
+        ...section,
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      } as FlexibleSessionSection;
+    });
+
+    if (!sectionFound) {
+      throw new NotFoundException(`Section ${dto.sectionId} not found`);
+    }
+
+    const renumbered = this.renumberSections(nextSections);
+    const updatedOutline: SessionOutlinePayload = {
+      ...outline,
+      sections: renumbered,
+      totalDuration: this.calculateTotalDuration(renumbered),
+      generatedAt: new Date().toISOString(),
+    };
+
+    return this.persistDraftOutline(draft, payload, updatedOutline);
+  }
+
+  async removeOutlineSection(sessionId: string, dto: RemoveOutlineSectionDto): Promise<SessionOutlinePayload> {
+    const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+    const sections = outline.sections.filter((section) => section.id !== dto.sectionId);
+
+    if (sections.length === outline.sections.length) {
+      throw new NotFoundException(`Section ${dto.sectionId} not found`);
+    }
+
+    const renumbered = this.renumberSections(sections);
+    const updatedOutline: SessionOutlinePayload = {
+      ...outline,
+      sections: renumbered,
+      totalDuration: this.calculateTotalDuration(renumbered),
+      generatedAt: new Date().toISOString(),
+    };
+
+    return this.persistDraftOutline(draft, payload, updatedOutline);
+  }
+
+  async reorderOutlineSections(sessionId: string, dto: ReorderOutlineSectionsDto): Promise<SessionOutlinePayload> {
+    const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+
+    const sectionMap = new Map(outline.sections.map((section) => [section.id, section]));
+    const ordered: FlexibleSessionSection[] = [];
+
+    dto.sectionIds.forEach((id) => {
+      const section = sectionMap.get(id);
+      if (section) {
+        ordered.push(section);
+        sectionMap.delete(id);
+      }
+    });
+
+    // Append any sections not included in the payload to preserve data integrity
+    sectionMap.forEach((section) => ordered.push(section));
+
+    const renumbered = this.renumberSections(ordered);
+    const updatedOutline: SessionOutlinePayload = {
+      ...outline,
+      sections: renumbered,
+      totalDuration: this.calculateTotalDuration(renumbered),
+      generatedAt: new Date().toISOString(),
+    };
+
+    return this.persistDraftOutline(draft, payload, updatedOutline);
+  }
+
+  async duplicateOutlineSection(sessionId: string, dto: DuplicateOutlineSectionDto): Promise<SessionOutlinePayload> {
+    const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+    const index = outline.sections.findIndex((section) => section.id === dto.sectionId);
+
+    if (index < 0) {
+      throw new NotFoundException(`Section ${dto.sectionId} not found`);
+    }
+
+    const original = outline.sections[index];
+    const copy: FlexibleSessionSection = {
+      ...original,
+      id: randomUUID(),
+      title: `${original.title} (Copy)`,
+      position: original.position + 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const sections = [...outline.sections];
+    sections.splice(index + 1, 0, copy);
+
+    const renumbered = this.renumberSections(sections);
+    const updatedOutline: SessionOutlinePayload = {
+      ...outline,
+      sections: renumbered,
+      totalDuration: this.calculateTotalDuration(renumbered),
+      generatedAt: new Date().toISOString(),
+    };
+
+    return this.persistDraftOutline(draft, payload, updatedOutline);
+  }
+
+  private async getDraftWithPayload(sessionId: string): Promise<{
+    draft: SessionBuilderDraft;
+    payload: (BuilderAutosaveDto & Record<string, any>);
+    outline: SessionOutlinePayload;
+  }> {
+    const draft = await this.draftsRepository.findOne({ where: { draftKey: sessionId } });
+    if (!draft) {
+      throw new NotFoundException(`Draft ${sessionId} not found`);
+    }
+
+    const payload = this.ensureDraftPayload(draft.payload as unknown as BuilderAutosaveDto | null | undefined);
+    const outline = this.ensureOutline(payload.outline as unknown as SessionOutlinePayload | undefined);
+    payload.outline = outline as any;
+
+    return { draft, payload, outline };
+  }
+
+  private ensureDraftPayload(payload?: Partial<BuilderAutosaveDto> | null): BuilderAutosaveDto & Record<string, any> {
+    const normalizedOutline = this.ensureOutline(payload?.outline as unknown as SessionOutlinePayload | undefined);
+
+    return {
+      ...(payload ?? {}),
+      metadata: (payload?.metadata as Record<string, unknown>) ?? {},
+      outline: normalizedOutline as any,
+      aiPrompt: typeof payload?.aiPrompt === 'string' ? payload.aiPrompt : '',
+      aiVersions: Array.isArray(payload?.aiVersions) ? payload.aiVersions : [],
+      acceptedVersionId: payload?.acceptedVersionId,
+      readinessScore: typeof payload?.readinessScore === 'number' ? payload.readinessScore : 0,
+    };
+  }
+
+  private ensureOutline(rawOutline?: SessionOutlinePayload | null): SessionOutlinePayload {
+    if (!rawOutline) {
+      return this.createEmptyOutline();
+    }
+
+    const rawSections = Array.isArray(rawOutline.sections) ? rawOutline.sections : [];
+    const normalizedSections = rawSections.map((section, index) => this.normalizeSection(section, index));
+    const renumbered = this.renumberSections(normalizedSections);
+
+    return {
+      sections: renumbered,
+      totalDuration: typeof rawOutline.totalDuration === 'number'
+        ? rawOutline.totalDuration
+        : this.calculateTotalDuration(renumbered),
+      suggestedSessionTitle: typeof rawOutline.suggestedSessionTitle === 'string'
+        ? rawOutline.suggestedSessionTitle
+        : 'Draft Session',
+      suggestedDescription: typeof rawOutline.suggestedDescription === 'string'
+        ? rawOutline.suggestedDescription
+        : '',
+      difficulty: typeof rawOutline.difficulty === 'string' ? rawOutline.difficulty : 'Intermediate',
+      recommendedAudienceSize: typeof rawOutline.recommendedAudienceSize === 'string'
+        ? rawOutline.recommendedAudienceSize
+        : '10-25',
+      ragSuggestions: rawOutline.ragSuggestions,
+      fallbackUsed: Boolean(rawOutline.fallbackUsed),
+      generatedAt: typeof rawOutline.generatedAt === 'string' ? rawOutline.generatedAt : new Date().toISOString(),
+      convertedFromLegacy: rawOutline.convertedFromLegacy,
+      convertedAt: rawOutline.convertedAt,
+    };
+  }
+
+  private normalizeSection(input: any, index: number): FlexibleSessionSection {
+    const base: Record<string, unknown> = input && typeof input === 'object' ? { ...input } : {};
+    const position = typeof base.position === 'number' ? (base.position as number) : index + 1;
+    const durationValue = Number(base.duration ?? 0);
+    const duration = Number.isFinite(durationValue) && durationValue >= 0 ? durationValue : 0;
+
+    const normalized: FlexibleSessionSection = {
+      ...(base as Record<string, unknown>),
+      id: typeof base.id === 'string' ? (base.id as string) : randomUUID(),
+      type: this.normalizeSectionType(base.type),
+      position,
+      title:
+        typeof base.title === 'string' && base.title.trim()
+          ? (base.title as string)
+          : `Section ${position}`,
+      duration,
+      description: typeof base.description === 'string' ? (base.description as string) : '',
+      createdAt: typeof base.createdAt === 'string' ? (base.createdAt as string) : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    return normalized;
+  }
+
+  private normalizeSectionType(value: unknown): SectionType {
+    const allowed: SectionType[] = [
+      'opener',
+      'topic',
+      'exercise',
+      'inspiration',
+      'closing',
+      'video',
+      'discussion',
+      'presentation',
+      'break',
+      'assessment',
+      'custom',
+    ];
+
+    if (typeof value === 'string') {
+      const lowered = value.toLowerCase() as SectionType;
+      if (allowed.includes(lowered)) {
+        return lowered;
+      }
+    }
+
+    return 'custom';
+  }
+
+  private renumberSections(sections: FlexibleSessionSection[]): FlexibleSessionSection[] {
+    return sections.map((section, index) => ({
+      ...section,
+      position: index + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+  }
+
+  private calculateTotalDuration(sections: FlexibleSessionSection[]): number {
+    return sections.reduce((sum, section) => sum + (Number.isFinite(section.duration) ? section.duration : 0), 0);
+  }
+
+  private createDefaultSection(type: SectionType, position: number): FlexibleSessionSection {
+    const base: FlexibleSessionSection = {
+      id: randomUUID(),
+      type,
+      position,
+      title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+      duration: 15,
+      description: `Add description for this ${type}`,
+      isCollapsible: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      icon: '📚',
+    };
+
+    switch (type) {
+      case 'opener':
+        return { ...base, icon: '🎯', isRequired: true, isCollapsible: false, duration: 10 };
+      case 'closing':
+        return {
+          ...base,
+          icon: '🏁',
+          isRequired: true,
+          isCollapsible: false,
+          keyTakeaways: [],
+          actionItems: [],
+          nextSteps: [],
+        };
+      case 'exercise':
+        return { ...base, icon: '🎮', isExercise: true, exerciseType: 'activity', duration: 20 };
+      case 'video':
+        return { ...base, icon: '🎥', inspirationType: 'video' };
+      case 'discussion':
+        return { ...base, icon: '💬', engagementType: 'full-group' };
+      default:
+        return base;
+    }
+  }
+
+  private async persistDraftOutline(
+    draft: SessionBuilderDraft,
+    payload: BuilderAutosaveDto & Record<string, any>,
+    outline: SessionOutlinePayload,
+  ): Promise<SessionOutlinePayload> {
+    const normalizedOutline = this.cloneOutline({
+      ...outline,
+      sections: this.renumberSections(outline.sections),
+      totalDuration: this.calculateTotalDuration(outline.sections),
+      generatedAt: outline.generatedAt ?? new Date().toISOString(),
+    });
+
+    payload.outline = normalizedOutline as any;
+    draft.payload = payload;
+    draft.savedAt = new Date();
+    await this.draftsRepository.save(draft);
+
+    return this.cloneOutline(normalizedOutline);
+  }
+
+  private cloneOutline(outline: SessionOutlinePayload): SessionOutlinePayload {
+    return {
+      ...outline,
+      sections: outline.sections.map((section) => ({ ...section })),
+    };
+  }
+
+  private createEmptyOutline(): SessionOutlinePayload {
+    return {
+      sections: [],
+      totalDuration: 0,
+      suggestedSessionTitle: '',
+      suggestedDescription: '',
+      difficulty: 'Intermediate',
+      recommendedAudienceSize: '10-25',
+      fallbackUsed: false,
+      generatedAt: new Date().toISOString(),
+    };
   }
 
   async bulkUpdateStatus(sessionIds: string[], status: SessionStatus): Promise<{ updated: number }> {
@@ -844,11 +1377,659 @@ export class SessionsService {
     };
   }
 
+  private getRolloutSample(payload: SuggestOutlineDto): number {
+    const basis = `${payload.category}|${payload.desiredOutcome}|${payload.audienceId ?? 'none'}|${payload.toneId ?? 'none'}|${payload.sessionType}`;
+    let hash = 0;
+
+    for (let index = 0; index < basis.length; index += 1) {
+      hash = (hash * 31 + basis.charCodeAt(index)) % 100000;
+    }
+
+    return hash % 100;
+  }
+
+  private getVariantRolloutDecision(payload: SuggestOutlineDto): { enabled: boolean; reason: string; rolloutSample: number } {
+    if (!this.enableVariantGenerationV2) {
+      return { enabled: false, reason: 'flag_disabled', rolloutSample: 0 };
+    }
+
+    const rolloutSample = this.getRolloutSample(payload);
+
+    if (this.variantRolloutPercentage >= 100) {
+      return { enabled: true, reason: 'full_rollout', rolloutSample };
+    }
+
+    if (this.variantRolloutPercentage <= 0) {
+      return { enabled: false, reason: 'rollout_zero', rolloutSample };
+    }
+
+    const enabled = rolloutSample < this.variantRolloutPercentage;
+    return {
+      enabled,
+      reason: enabled ? 'rollout_opt_in' : 'rollout_filtered',
+      rolloutSample,
+    };
+  }
+
+  private async buildLegacyVariantResponse(payload: SuggestOutlineDto): Promise<MultiVariantResponse> {
+    const legacyResponse = await this.suggestOutline(payload);
+    const processingTime = legacyResponse.generationMetadata?.processingTime ?? 0;
+    const ragSourcesFound = legacyResponse.generationMetadata?.topicsFound ?? 0;
+
+    return {
+      variants: [
+        {
+          id: 'legacy-variant',
+          outline: legacyResponse.outline,
+          generationSource: legacyResponse.ragAvailable ? 'rag' : 'baseline',
+          ragWeight: legacyResponse.ragAvailable ? 0.5 : 0,
+          ragSourcesUsed: legacyResponse.ragAvailable ? ragSourcesFound : 0,
+          label: 'Standard Outline',
+          description: 'Generated via legacy single-outline workflow',
+        },
+      ],
+      metadata: {
+        processingTime,
+        ragAvailable: legacyResponse.ragAvailable,
+        ragSourcesFound,
+        totalVariants: 1,
+        averageSimilarity: undefined,
+      },
+    };
+  }
+
   private async findTopic(topicId: number): Promise<Topic> {
     const topic = await this.topicsRepository.findOne({ where: { id: topicId } });
     if (!topic) {
       throw new NotFoundException(`Topic ${topicId} not found`);
     }
     return topic;
+  }
+
+  /**
+   * Generate 4 variants with different RAG weights
+   */
+  async suggestMultipleOutlines(payload: SuggestOutlineDto): Promise<MultiVariantResponse> {
+    const startTime = Date.now();
+    const decision = this.getVariantRolloutDecision(payload);
+
+    this.logger.log('Variant generation v2 request received', {
+      category: payload.category,
+      sessionType: payload.sessionType,
+      rolloutPercentage: this.variantRolloutPercentage,
+      rolloutSample: decision.rolloutSample,
+      decisionReason: decision.reason,
+    });
+
+    this.analyticsTelemetry.recordEvent('ai_prompt_submitted', {
+      sessionId: 'session-builder',
+      metadata: {
+        category: payload.category,
+        sessionType: payload.sessionType,
+        rolloutPercentage: this.variantRolloutPercentage,
+        rolloutSample: decision.rolloutSample,
+        decisionReason: decision.reason,
+        variantMode: decision.enabled ? 'multi_variant' : 'legacy',
+      },
+    });
+
+    if (!decision.enabled) {
+      this.logger.warn('Variant generation v2 disabled for request, falling back to legacy workflow', {
+        category: payload.category,
+        sessionType: payload.sessionType,
+        rolloutPercentage: this.variantRolloutPercentage,
+        rolloutSample: decision.rolloutSample,
+        decisionReason: decision.reason,
+      });
+
+      const legacyResponse = await this.buildLegacyVariantResponse(payload);
+
+      this.analyticsTelemetry.recordEvent('ai_content_generated', {
+        sessionId: 'session-builder',
+        metadata: {
+          variantMode: 'legacy',
+          processingTime: legacyResponse.metadata.processingTime,
+          totalVariants: legacyResponse.metadata.totalVariants,
+          ragAvailable: legacyResponse.metadata.ragAvailable,
+          rolloutPercentage: this.variantRolloutPercentage,
+          rolloutSample: decision.rolloutSample,
+        },
+      });
+
+      return legacyResponse;
+    }
+
+    this.logger.log('Starting multi-variant generation', {
+      category: payload.category,
+      audience: payload.audienceName,
+      sessionType: payload.sessionType,
+      timestamp: new Date().toISOString()
+    });
+
+    // Calculate session duration
+    const duration = payload.startTime && payload.endTime
+      ? Math.round((new Date(payload.endTime).getTime() - new Date(payload.startTime).getTime()) / 60000)
+      : 90; // Default 90 minutes
+
+    // Fetch audience and tone profiles for enriched RAG query
+    let audience = null;
+    let tone = null;
+
+    if (payload.audienceId) {
+      try {
+        audience = await this.sessionsRepository.manager.findOne('audiences', {
+          where: { id: payload.audienceId }
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to fetch audience ${payload.audienceId}:`, error.message);
+      }
+    }
+
+    if (payload.toneId) {
+      try {
+        tone = await this.sessionsRepository.manager.findOne('tones', {
+          where: { id: payload.toneId }
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to fetch tone ${payload.toneId}:`, error.message);
+      }
+    }
+
+    // Note: Location data would be fetched from session metadata if available
+    // For now, location enrichment is skipped during outline generation
+    // as it's typically set later in the session builder workflow
+
+    // Step 1: Query RAG once with retry (reuse for all variants)
+    let ragResults: any[] = [];
+    let ragAvailable = false;
+
+    try {
+      ragResults = await this.ragService.queryRAGWithRetry({
+        category: payload.category,
+        audienceName: payload.audienceName,
+        desiredOutcome: payload.desiredOutcome,
+        currentProblem: payload.currentProblem,
+        sessionType: payload.sessionType,
+        specificTopics: payload.specificTopics,
+        duration: duration,
+        audienceSize: payload.audienceSize,
+        // Audience details
+        experienceLevel: audience?.experienceLevel,
+        preferredLearningStyle: audience?.preferredLearningStyle,
+        communicationStyle: audience?.communicationStyle,
+        vocabularyLevel: audience?.vocabularyLevel,
+        exampleTypes: audience?.exampleTypes,
+        technicalDepth: audience?.technicalDepth,
+        audienceDescription: audience?.description,
+        avoidTopics: audience?.avoidTopics,
+        // Tone details
+        toneStyle: tone?.style,
+        energyLevel: tone?.energyLevel,
+        formality: tone?.formality,
+        toneDescription: tone?.description,
+        sentenceStructure: tone?.sentenceStructure,
+        languageCharacteristics: tone?.languageCharacteristics,
+        emotionalResonance: tone?.emotionalResonance
+      });
+      ragAvailable = ragResults.length > 0;
+
+      const avgSimilarity = ragResults.length > 0
+        ? ragResults.reduce((sum, r) => sum + r.similarity, 0) / ragResults.length
+        : 0;
+
+      this.logger.log('RAG query completed', {
+        resultsFound: ragResults.length,
+        ragAvailable,
+        averageSimilarity: avgSimilarity.toFixed(3),
+        queryTime: Date.now() - startTime
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`RAG query failed completely, proceeding with baseline only: ${message}`);
+    }
+
+    // Step 2: Generate 4 variants in parallel with different RAG weights
+    const ragWeights = [0.8, 0.5, 0.2, 0.0]; // Heavy, Balanced, Light, None
+
+    const variantPromises = ragWeights.map((weight, index) =>
+      this.generateSingleVariant(payload, ragResults, weight, index)
+        .then(result => {
+          this.logger.log(`Variant ${index + 1} generated`, {
+            ragWeight: weight,
+            sectionsCount: result.outline.sections.length,
+            totalDuration: result.outline.totalDuration,
+          });
+          return result;
+        })
+        .catch(error => {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.error(`Variant ${index + 1} generation failed: ${message}`);
+          return null;
+        })
+    );
+
+    const variantResults = await Promise.all(variantPromises);
+
+    // Filter out failed variants and add labels/descriptions with RAG sources
+    const variantsWithMetadata = await Promise.all(
+      variantResults.map(async (result, index): Promise<Variant | null> => {
+        if (!result) {
+          return null;
+        }
+
+        const weight = ragWeights[index];
+        const ragSources = weight > 0 && ragResults.length > 0
+          ? this.convertRagResultsToSources(ragResults)
+          : undefined;
+
+        return {
+          id: `variant-${index + 1}`,
+          outline: result.outline,
+          generationSource: weight > 0 ? 'rag' as const : 'baseline' as const,
+          ragWeight: weight,
+          ragSourcesUsed: weight > 0 ? ragResults.length : 0,
+          ragSources,
+          label: await this.getVariantLabel(index),
+          description: await this.getVariantDescription(index, payload.category),
+        };
+      })
+    );
+
+    const variants = variantsWithMetadata.filter((variant): variant is Variant => variant !== null);
+
+    if (variants.length === 0) {
+      this.logger.warn('All variant generation attempts failed, falling back to legacy outline', {
+        category: payload.category,
+        sessionType: payload.sessionType,
+        ragAvailable,
+      });
+
+      const legacyFallback = await this.buildLegacyVariantResponse(payload);
+      const fallbackProcessingTime = Date.now() - startTime;
+
+      this.analyticsTelemetry.recordEvent('ai_content_generated', {
+        sessionId: 'session-builder',
+        metadata: {
+          variantMode: 'legacy_fallback',
+          processingTime: fallbackProcessingTime,
+          totalVariants: legacyFallback.metadata.totalVariants,
+          ragAvailable: legacyFallback.metadata.ragAvailable,
+          rolloutPercentage: this.variantRolloutPercentage,
+          rolloutSample: decision.rolloutSample,
+        },
+      });
+
+      return legacyFallback;
+    }
+
+    const avgSimilarity = ragResults.length > 0
+      ? ragResults.reduce((sum, r) => sum + r.similarity, 0) / ragResults.length
+      : undefined;
+
+    const totalProcessingTime = Date.now() - startTime;
+
+    this.logger.log('Multi-variant generation complete', {
+      totalVariants: variants.length,
+      totalTime: totalProcessingTime,
+      ragAvailable
+    });
+
+    this.analyticsTelemetry.recordEvent('ai_content_generated', {
+      sessionId: 'session-builder',
+      metadata: {
+        variantMode: 'multi_variant',
+        processingTime: totalProcessingTime,
+        totalVariants: variants.length,
+        ragAvailable,
+        ragSourcesFound: ragResults.length,
+        averageSimilarity: avgSimilarity,
+        rolloutPercentage: this.variantRolloutPercentage,
+        rolloutSample: decision.rolloutSample,
+      },
+    });
+
+    return {
+      variants,
+      metadata: {
+        processingTime: totalProcessingTime,
+        ragAvailable,
+        ragSourcesFound: ragResults.length,
+        totalVariants: variants.length,
+        averageSimilarity: avgSimilarity
+      }
+    };
+  }
+
+  /**
+   * Generate a single variant with specific RAG weight
+   */
+  private async generateSingleVariant(
+    payload: SuggestOutlineDto,
+    ragResults: any[],
+    ragWeight: number,
+    variantIndex: number
+  ): Promise<{ outline: any }> {
+    // Calculate session duration from start/end times
+    const duration = payload.startTime && payload.endTime
+      ? Math.round((new Date(payload.endTime).getTime() - new Date(payload.startTime).getTime()) / 60000)
+      : 90; // Default 90 minutes
+
+    // Load audience and tone profiles (same as existing suggestOutline)
+    let audience = null;
+    let tone = null;
+
+    if (payload.audienceId) {
+      try {
+        audience = await this.sessionsRepository.manager.findOne('audiences', {
+          where: { id: payload.audienceId }
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to fetch audience ${payload.audienceId}:`, error.message);
+      }
+    }
+
+    if (payload.toneId) {
+      try {
+        tone = await this.sessionsRepository.manager.findOne('tones', {
+          where: { id: payload.toneId }
+        });
+      } catch (error) {
+        this.logger.warn(`Failed to fetch tone ${payload.toneId}:`, error.message);
+      }
+    }
+
+    const variantLabel = await this.getVariantLabel(variantIndex);
+    const variantInstruction = await this.getVariantInstruction(
+      variantIndex,
+      payload.category,
+      ragResults.length > 0,
+      ragWeight,
+    );
+
+    // Build OpenAI request
+    const openAIRequest: any = {
+      title: payload.title,
+      category: payload.category,
+      sessionType: payload.sessionType,
+      desiredOutcome: payload.desiredOutcome,
+      currentProblem: payload.currentProblem,
+      specificTopics: payload.specificTopics,
+      duration,
+      audienceSize: payload.audienceSize || '8-20',
+    };
+    openAIRequest.ragWeight = ragWeight;
+    openAIRequest.variantIndex = variantIndex;
+    openAIRequest.variantLabel = variantLabel;
+    openAIRequest.variantInstruction = variantInstruction;
+
+    // Add audience profile
+    if (audience) {
+      openAIRequest.audienceName = audience.name;
+      openAIRequest.audienceDescription = audience.description;
+      openAIRequest.audienceExperienceLevel = audience.experienceLevel;
+      openAIRequest.audienceTechnicalDepth = audience.technicalDepth;
+      openAIRequest.audienceCommunicationStyle = audience.communicationStyle;
+      openAIRequest.audienceVocabularyLevel = audience.vocabularyLevel;
+      openAIRequest.audienceLearningStyle = audience.preferredLearningStyle;
+      openAIRequest.audienceExampleTypes = audience.exampleTypes;
+      openAIRequest.audienceAvoidTopics = audience.avoidTopics;
+      openAIRequest.audienceInstructions = audience.promptInstructions;
+    }
+
+    // Add tone profile
+    if (tone) {
+      openAIRequest.toneName = tone.name;
+      openAIRequest.toneDescription = tone.description;
+      openAIRequest.toneStyle = tone.style;
+      openAIRequest.toneFormality = tone.formality;
+      openAIRequest.toneEnergyLevel = tone.energyLevel;
+      openAIRequest.toneSentenceStructure = tone.sentenceStructure;
+      openAIRequest.toneLanguageCharacteristics = tone.languageCharacteristics;
+      openAIRequest.toneEmotionalResonance = tone.emotionalResonance;
+      openAIRequest.toneExamplePhrases = tone.examplePhrases;
+      openAIRequest.toneInstructions = tone.promptInstructions;
+    }
+
+    // Generate with OpenAI (inject RAG context based on weight)
+    const aiOutline = await this.openAIService.generateSessionOutline(
+      openAIRequest,
+      ragResults,
+      ragWeight
+    );
+
+    // Convert to our format
+    const sections = aiOutline.sections.map((section: any, index: number) => ({
+      id: `ai-${Date.now()}-${variantIndex}-${index}`,
+      type: this.mapSectionType(section.title, index),
+      position: index,
+      title: section.title,
+      duration: section.duration,
+      description: section.description,
+      learningObjectives: section.learningObjectives || [],
+      suggestedActivities: section.suggestedActivities || [],
+    }));
+
+    // Balance durations to match target
+    const balancedSections = this.balanceDurations(sections, duration);
+
+    // Find matching topics
+    const matchingTopics = await this.findMatchingTopics(balancedSections);
+    const enhancedSections = await this.associateTopicsWithSections(balancedSections, matchingTopics);
+
+    const totalDuration = enhancedSections.reduce((acc, s) => acc + s.duration, 0);
+
+    return {
+      outline: {
+        sections: enhancedSections,
+        totalDuration,
+        suggestedSessionTitle: aiOutline.suggestedTitle,
+        suggestedDescription: aiOutline.summary,
+        difficulty: aiOutline.difficulty || 'Intermediate',
+        recommendedAudienceSize: aiOutline.recommendedAudienceSize || '8-20',
+        fallbackUsed: false,
+        generatedAt: new Date().toISOString(),
+      }
+    };
+  }
+
+  /**
+   * Balance section durations to match target (within 10% tolerance)
+   */
+  private balanceDurations(sections: any[], targetDuration: number): any[] {
+    const totalDuration = sections.reduce((sum, s) => sum + s.duration, 0);
+
+    // If within 10% tolerance, keep as-is
+    if (Math.abs(totalDuration - targetDuration) <= targetDuration * 0.1) {
+      return sections;
+    }
+
+    // Proportionally adjust all sections
+    const ratio = targetDuration / totalDuration;
+
+    return sections.map(section => ({
+      ...section,
+      duration: Math.round(section.duration * ratio)
+    }));
+  }
+
+  /**
+   * Get variant label from database
+   */
+  private async getVariantLabel(index: number): Promise<string> {
+    try {
+      return await this.variantConfigService.getVariantLabel(index);
+    } catch (error) {
+      // Fallback to hardcoded labels if database lookup fails
+      const labels = [
+        'Knowledge Base-Driven',
+        'Recommended Mix',
+        'Creative Approach',
+        'Alternative Structure'
+      ];
+      return labels[index] || `Variant ${index + 1}`;
+    }
+  }
+
+  /**
+   * Get variant description from database
+   */
+  private async getVariantDescription(index: number, category: string): Promise<string> {
+    try {
+      const description = await this.variantConfigService.getVariantDescription(index);
+      // Replace {{category}} placeholder if present
+      return description.replace(/\{\{category\}\}/g, category);
+    } catch (error) {
+      // Fallback to hardcoded descriptions if database lookup fails
+      const descriptions = [
+        `Proven frameworks and trusted playbook approach for ${category}`,
+        `Balanced mix of teaching and hands-on practice for ${category}`,
+        `High-energy, imaginative approach to ${category}`,
+        `Fast-paced, action-focused ${category} session`
+      ];
+      return descriptions[index] || `Variant ${index + 1} for ${category}`;
+    }
+  }
+
+  /**
+   * Get variant instruction from database
+   */
+  private async getVariantInstruction(
+    index: number,
+    category: string,
+    hasRagResults: boolean,
+    ragWeight: number,
+  ): Promise<string> {
+    try {
+      const instruction = await this.variantConfigService.getVariantInstruction(index);
+      // Replace {{category}} placeholder if present
+      return instruction.replace(/\{\{category\}\}/g, category);
+    } catch (error) {
+      // Fallback to hardcoded instructions if database lookup fails
+      const instructions = [
+        hasRagResults
+          ? `Lean heavily on the supplied knowledge base insights about ${category}. Reference the retrieved materials throughout, reinforcing proven frameworks and terminology. Make this variant feel like the trusted playbook version while still matching the desired outcome.`
+          : `Simulate a knowledge-base heavy outline for ${category}. Reference established internal playbooks, past success stories, and proven frameworks even without direct source excerpts. Keep the structure disciplined, data-backed, and familiar.`,
+        `Blend reliable teaching moments with collaborative practice for ${category}. Include at least one breakout or group-working segment and one guided reflection checkpoint. Balance knowledge transfer with application so this option feels like the well-rounded agenda.`,
+        `Deliver a creative spin on ${category}. Start with an energizing warm-up, weave in storytelling or role-play, and introduce an unexpected activity that stretches participants. Encourage experimentation and emotional engagement so this outline feels imaginative and high-energy.`,
+        `Reframe ${category} into shorter, high-momentum segments leading to concrete commitments. Use rapid cycles of activity, peer coaching, and checkpoint debriefs, finishing with an action-planning close. This option should feel fast-paced and accountability-focused.`,
+      ];
+
+      const baseInstruction = instructions[index] ?? instructions[instructions.length - 1];
+      const differentiationNote = ragWeight > 0
+        ? 'Ensure this outline is measurably different from the other variants by how it applies the knowledge base versus new ideas.'
+        : 'Ensure this outline is measurably different from the other variants through its structure, pacing, and activity choices.';
+
+      return `${baseInstruction} ${differentiationNote}`;
+    }
+  }
+
+  /**
+   * Log variant selection for analytics
+   */
+  async logVariantSelection(
+    sessionId: string,
+    variantDetails: {
+      variantId: string;
+      generationSource: 'rag' | 'baseline';
+      ragWeight: number;
+      ragSourcesUsed: number;
+      category: string;
+    }
+  ): Promise<void> {
+    if (!this.logVariantSelections) {
+      this.logger.log('Variant selection logging disabled via configuration');
+      return;
+    }
+
+    try {
+      this.logger.log('Variant selected', {
+        sessionId,
+        variantId: variantDetails.variantId,
+        generationSource: variantDetails.generationSource,
+        ragWeight: variantDetails.ragWeight,
+        ragSourcesUsed: variantDetails.ragSourcesUsed,
+        category: variantDetails.category,
+      });
+
+      // Find session if not 'new'
+      let session: Session | undefined;
+      if (sessionId !== 'new') {
+        session = await this.sessionsRepository.findOne({ where: { id: sessionId } });
+      }
+
+      // Save to database for analytics
+      await this.aiInteractionsService.create({
+        session: session || undefined,
+        interactionType: AIInteractionType.VARIANT_SELECTION,
+        status: AIInteractionStatus.SUCCESS,
+        renderedPrompt: 'Variant selection tracking',
+        inputVariables: {
+          variantId: variantDetails.variantId,
+          generationSource: variantDetails.generationSource,
+          ragWeight: variantDetails.ragWeight,
+          ragSourcesUsed: variantDetails.ragSourcesUsed,
+          category: variantDetails.category,
+        },
+        metadata: {
+          sessionId,
+          timestamp: new Date().toISOString(),
+          variantLabel: this.getVariantLabelFromId(variantDetails.variantId),
+        },
+        category: variantDetails.category,
+      });
+
+      this.logger.log('Variant selection logged to database successfully');
+
+      this.analyticsTelemetry.recordEvent('ai_content_accepted', {
+        sessionId: sessionId || 'new',
+        metadata: {
+          variantId: variantDetails.variantId,
+          generationSource: variantDetails.generationSource,
+          ragWeight: variantDetails.ragWeight,
+          ragSourcesUsed: variantDetails.ragSourcesUsed,
+          category: variantDetails.category,
+          variantLabel: this.getVariantLabelFromId(variantDetails.variantId),
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to log variant selection: ${message}`);
+
+      this.analyticsTelemetry.recordEvent('ai_content_rejected', {
+        sessionId: sessionId || 'new',
+        metadata: {
+          variantId: variantDetails.variantId,
+          category: variantDetails.category,
+          reason: message,
+          context: 'variant_selection_logging',
+        },
+      });
+    }
+  }
+
+  /**
+   * Helper: Get variant label from ID
+   */
+  private getVariantLabelFromId(variantId: string): string {
+    const labels = {
+      'variant-1': 'Knowledge Base-Driven',
+      'variant-2': 'Recommended Mix',
+      'variant-3': 'Creative Approach',
+      'variant-4': 'Alternative Structure',
+    };
+    return labels[variantId as keyof typeof labels] || variantId;
+  }
+
+  /**
+   * Convert RAG results to RagSource format for frontend
+   */
+  private convertRagResultsToSources(ragResults: any[]): RagSource[] {
+    return ragResults.map(result => ({
+      filename: result.metadata?.filename || 'Unknown Source',
+      category: result.metadata?.category || 'General',
+      similarity: result.similarity || 0,
+      excerpt: result.text?.substring(0, 200) || '', // First 200 chars as excerpt
+      createdAt: result.metadata?.created_at
+    }));
   }
 }

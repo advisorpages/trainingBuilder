@@ -16,6 +16,7 @@ export enum AIInteractionType {
   CONTENT_ENHANCEMENT = 'content_enhancement',
   TRAINING_KIT = 'training_kit',
   MARKETING_KIT = 'marketing_kit',
+  VARIANT_SELECTION = 'variant_selection',
 }
 
 export enum UserFeedback {

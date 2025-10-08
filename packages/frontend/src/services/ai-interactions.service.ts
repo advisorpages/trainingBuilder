@@ -6,6 +6,7 @@ export enum AIInteractionType {
   CONTENT_ENHANCEMENT = 'content_enhancement',
   TRAINING_KIT = 'training_kit',
   MARKETING_KIT = 'marketing_kit',
+  VARIANT_SELECTION = 'variant_selection',
 }
 
 export enum AIInteractionStatus {
@@ -109,6 +110,27 @@ export interface UpdateFeedbackDto {
   editDistance?: number;
 }
 
+export interface VariantSelectionMetrics {
+  totalSelections: number;
+  selectionsByVariant: Record<string, number>;
+  selectionRateByVariant: Record<string, number>;
+  ragVsBaselineRate: {
+    ragSelections: number;
+    baselineSelections: number;
+    ragPercentage: number;
+    baselinePercentage: number;
+  };
+  averageRagWeight: number;
+  categoryBreakdown: Record<string, {
+    total: number;
+    ragCount: number;
+    baselineCount: number;
+    ragPercentage: number;
+  }>;
+  averageRagSourcesUsed: number;
+  selectionsByLabel: Record<string, number>;
+}
+
 class AIInteractionsService {
   private baseUrl = '/ai-interactions';
 
@@ -196,6 +218,26 @@ class AIInteractionsService {
     return response.data;
   }
 
+  async getVariantSelectionMetrics(filters: {
+    startDate?: string;
+    endDate?: string;
+    category?: string;
+  } = {}): Promise<VariantSelectionMetrics> {
+    const params = new URLSearchParams();
+
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    if (filters.category) params.append('category', filters.category);
+
+    const queryString = params.toString();
+    const url = queryString
+      ? `${this.baseUrl}/variant-selection-metrics?${queryString}`
+      : `${this.baseUrl}/variant-selection-metrics`;
+
+    const response = await api.get<VariantSelectionMetrics>(url);
+    return response.data;
+  }
+
   // Helper methods for formatting
   formatCost(cost?: number): string {
     if (!cost) return '$0.00';
@@ -254,6 +296,8 @@ class AIInteractionsService {
         return 'Training Kit';
       case AIInteractionType.MARKETING_KIT:
         return 'Marketing Kit';
+      case AIInteractionType.VARIANT_SELECTION:
+        return 'Variant Selection';
       default:
         return type;
     }

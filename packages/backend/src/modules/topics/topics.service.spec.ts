@@ -37,6 +37,7 @@ describe('TopicsService', () => {
       },
     ];
 
+    topicRepository.find.mockResolvedValueOnce(topics);
     queryBuilder.getMany.mockResolvedValue(topics);
 
     const result = await service.findAll();
@@ -150,6 +151,7 @@ function createTopicRepositoryMock() {
   return {
     __queryBuilder: queryBuilder,
     createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+    find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn(),
     create: jest.fn((input) => input as Topic),
     save: jest.fn(),

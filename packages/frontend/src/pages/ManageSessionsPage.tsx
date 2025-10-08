@@ -372,6 +372,35 @@ export const ManageSessionsPage: React.FC = () => {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedSessions.length === 0) return;
+
+    // Confirm deletion
+    const confirmDelete = window.confirm(
+      `Are you sure you want to permanently delete ${selectedSessions.length} session(s)? This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      console.log('Delete button clicked, calling bulkDelete with:', selectedSessions);
+      const result = await sessionService.bulkDelete(selectedSessions);
+      console.log('Delete result:', result);
+
+      if (result.deleted > 0) {
+        alert(`Successfully deleted ${result.deleted} session(s)`);
+      } else {
+        alert('No sessions were deleted');
+      }
+
+      setSelectedSessions([]);
+      fetchSessions();
+    } catch (error) {
+      console.error('Failed to delete sessions:', error);
+      alert(`Error deleting sessions: ${error.message || 'Unknown error'}`);
+    }
+  };
+
   const handleEditSession = (sessionId: string) => {
     navigate(`/sessions/builder/${sessionId}`);
   };
@@ -473,6 +502,9 @@ export const ManageSessionsPage: React.FC = () => {
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleBulkArchive}>
                   Archive Selected
+                </Button>
+                <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                  Delete Selected
                 </Button>
               </div>
             </div>

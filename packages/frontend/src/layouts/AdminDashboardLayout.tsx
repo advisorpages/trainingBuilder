@@ -7,7 +7,7 @@ interface AdminDashboardLayoutProps {
   children: React.ReactNode;
 }
 
-type AdminTabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights';
+type AdminTabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights' | 'variants' | 'rag-settings';
 
 interface AdminTab {
   id: AdminTabType;
@@ -18,6 +18,8 @@ interface AdminTab {
 
 const adminTabs: AdminTab[] = [
   { id: 'prompts', label: 'AI Prompts', icon: '🤖', description: 'Configure AI generation prompts' },
+  { id: 'variants', label: 'Outline Variants', icon: '🎭', description: 'Configure outline variant options' },
+  { id: 'rag-settings', label: 'RAG Settings', icon: '📚', description: 'Configure knowledge base integration' },
   { id: 'analytics', label: 'Analytics', icon: '📊', description: 'Performance metrics & insights' },
   { id: 'ai-insights', label: 'AI Insights', icon: '🔍', description: 'Track AI interactions & quality' },
   { id: 'categories', label: 'Categories', icon: '📁', description: 'Session categories' },

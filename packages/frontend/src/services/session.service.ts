@@ -156,6 +156,18 @@ class SessionService {
     }
   }
 
+  async bulkDelete(sessionIds: string[]): Promise<{ deleted: number }> {
+    try {
+      console.log('Frontend service - bulkDelete called with:', { sessionIds });
+      const response = await api.post<{ deleted: number }>(`${this.base}/bulk/delete`, { sessionIds });
+      console.log('Frontend service - bulkDelete response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Frontend service - bulkDelete error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to delete sessions');
+    }
+  }
+
   async getSessionReadiness(sessionId: string): Promise<any> {
     try {
       console.log('Frontend service - getSessionReadiness called for:', sessionId);

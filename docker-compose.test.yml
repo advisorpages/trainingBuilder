@@ -30,6 +30,13 @@ services:
       DATABASE_URL: postgresql://test_user:test_password@test-database:5432/training_builder_test
       JWT_SECRET: test-jwt-secret-key-for-testing-only
       API_PORT: 3001
+      ENABLE_VARIANT_GENERATION_V2: ${ENABLE_VARIANT_GENERATION_V2:-false}
+      VARIANT_GENERATION_ROLLOUT_PERCENTAGE: ${VARIANT_GENERATION_ROLLOUT_PERCENTAGE:-0}
+      LOG_VARIANT_SELECTIONS: ${LOG_VARIANT_SELECTIONS:-false}
+      RAG_API_URL: ${RAG_API_URL:-}
+      RAG_TIMEOUT_MS: ${RAG_TIMEOUT_MS:-10000}
+      RAG_RETRY_ATTEMPTS: ${RAG_RETRY_ATTEMPTS:-0}
+      GOOGLE_ANALYTICS_ID: ${GOOGLE_ANALYTICS_ID:-}
     ports:
       - "3001:3001"
     depends_on:

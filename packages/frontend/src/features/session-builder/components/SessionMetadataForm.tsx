@@ -3,6 +3,9 @@ import { Input, Button, Card, CardContent, CardHeader, CardTitle } from '../../.
 import { SessionMetadata } from '../state/types';
 import { cn } from '../../../lib/utils';
 import { CategorySelect } from '../../../components/ui/CategorySelect';
+import { LocationSelect } from '../../../components/ui/LocationSelect';
+import { AudienceSelect } from '../../../components/ui/AudienceSelect';
+import { ToneSelect } from '../../../components/ui/ToneSelect';
 
 interface SessionMetadataFormProps {
   metadata: SessionMetadata;
@@ -10,7 +13,6 @@ interface SessionMetadataFormProps {
   onTriggerAI: () => void;
   onAutosave?: () => void;
   isAutosaving?: boolean;
-  showAdvancedOptions?: boolean;
 }
 
 const sessionTypes: SessionMetadata['sessionType'][] = [
@@ -46,16 +48,23 @@ const timeSegment = (value: string) => {
 
 
 // Field validation helper
-const getFieldValidation = (field: keyof SessionMetadata, value: string | number | undefined) => {
-  const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'categoryId', 'sessionType', 'location'];
+const getFieldValidation = (
+  field: keyof SessionMetadata,
+  value: SessionMetadata[keyof SessionMetadata],
+) => {
+  const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'categoryId', 'sessionType', 'locationId'];
   const isRequired = requiredFields.includes(field);
-  const isEmpty = field === 'categoryId' ? !value : (!value || String(value).trim() === '');
+  const isEmpty =
+    value === undefined ||
+    value === null ||
+    (typeof value === 'string' && value.trim() === '') ||
+    (typeof value === 'number' && Number.isNaN(value));
 
   return {
     isRequired,
     isEmpty,
     isValid: !isRequired || !isEmpty,
-    errorMessage: isRequired && isEmpty ? `${field} is required` : ''
+    errorMessage: isRequired && isEmpty ? `${field} is required` : '',
   };
 };
 
@@ -65,7 +74,6 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   onTriggerAI,
   onAutosave,
   isAutosaving,
-  showAdvancedOptions = false,
 }) => {
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
 
@@ -79,15 +87,6 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
         setFieldErrors(prev => ({ ...prev, [field]: '' }));
       }
     };
-
-  const validateField = (field: keyof SessionMetadata) => {
-    const validation = getFieldValidation(field, metadata[field]);
-    if (!validation.isValid) {
-      setFieldErrors(prev => ({ ...prev, [field]: validation.errorMessage }));
-      return false;
-    }
-    return true;
-  };
 
   const validateForm = () => {
     const requiredFields: (keyof SessionMetadata)[] = ['title', 'desiredOutcome', 'categoryId', 'sessionType', 'location'];
@@ -158,10 +157,21 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 Category <span className="text-red-500">*</span>
               </label>
               <CategorySelect
-                value={metadata.categoryId || ''}
+                value={metadata.categoryId ?? ''}
+                selectedLabel={metadata.category}
                 onChange={(categoryId) => {
-                  onChange({ categoryId: categoryId || undefined });
-                  // Clear error when user selects a category
+                  if (!categoryId) {
+                    onChange({ categoryId: undefined, category: '' });
+                    if (fieldErrors.categoryId) {
+                      setFieldErrors(prev => ({ ...prev, categoryId: '' }));
+                    }
+                  }
+                }}
+                onCategoryChange={(category) => {
+                  onChange({
+                    categoryId: category?.id ?? undefined,
+                    category: category?.name ?? '',
+                  });
                   if (fieldErrors.categoryId) {
                     setFieldErrors(prev => ({ ...prev, categoryId: '' }));
                   }
@@ -372,19 +382,26 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <label className="text-sm font-medium text-slate-700">
                 Session Location <span className="text-red-500">*</span>
               </label>
-              <Input
-                value={metadata.location || ''}
-                placeholder="Conference Room A, Virtual, etc."
-                onChange={handleStringChange('location')}
-                className={cn(
-                  fieldErrors.location && 'border-red-500 focus:border-red-500'
-                )}
+              <LocationSelect
+                value={metadata.locationId ?? ''}
+                selectedLabel={metadata.location}
+                onChange={(location) => {
+                  onChange({
+                    locationId: location?.id ?? undefined,
+                    location: location?.name ?? '',
+                  });
+                  if (fieldErrors.locationId) {
+                    setFieldErrors(prev => ({ ...prev, locationId: '' }));
+                  }
+                }}
+                hasError={Boolean(fieldErrors.locationId)}
+                required
               />
-              {fieldErrors.location && (
-                <p className="text-xs text-red-600">{fieldErrors.location}</p>
+              {fieldErrors.locationId && (
+                <p className="text-xs text-red-600">{fieldErrors.locationId}</p>
               )}
               <p className="text-xs text-slate-500">
-                Where the session will take place
+                Choose an approved venue or delivery space
               </p>
             </div>
 
@@ -392,24 +409,38 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <label className="text-sm font-medium text-slate-700">
                 Target Audience
               </label>
-              <Input
-                type="number"
-                value={metadata.audienceId || ''}
-                placeholder="Audience ID (optional)"
-                onChange={(event) => onChange({ audienceId: event.target.value ? parseInt(event.target.value) : undefined })}
+              <AudienceSelect
+                value={metadata.audienceId ?? ''}
+                selectedLabel={metadata.audienceName}
+                onChange={(audience) => {
+                  onChange({
+                    audienceId: audience?.id ?? undefined,
+                    audienceName: audience?.name ?? undefined,
+                  });
+                }}
               />
+              <p className="text-xs text-slate-500">
+                Optional — tailor prompts for a specific learner group
+              </p>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
                 Session Tone
               </label>
-              <Input
-                type="number"
-                value={metadata.toneId || ''}
-                placeholder="Tone ID (optional)"
-                onChange={(event) => onChange({ toneId: event.target.value ? parseInt(event.target.value) : undefined })}
+              <ToneSelect
+                value={metadata.toneId ?? ''}
+                selectedLabel={metadata.toneName}
+                onChange={(tone) => {
+                  onChange({
+                    toneId: tone?.id ?? undefined,
+                    toneName: tone?.name ?? undefined,
+                  });
+                }}
               />
+              <p className="text-xs text-slate-500">
+                Optional — guide AI copy toward the right voice
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -442,6 +473,11 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               ) : (
                 'Save Now'
               )}
+            </Button>
+          )}
+          {onTriggerAI && (
+            <Button size="sm" onClick={handleGenerateOutline}>
+              Generate Variants
             </Button>
           )}
         </div>

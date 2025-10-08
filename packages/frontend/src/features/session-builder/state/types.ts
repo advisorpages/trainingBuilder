@@ -8,6 +8,7 @@ export type PublishStatus = 'idle' | 'pending' | 'success' | 'error';
 export interface SessionMetadata {
   title: string;
   sessionType: 'event' | 'training' | 'workshop' | 'webinar';
+  category: string; // Category name for display and API calls
   categoryId?: number;
   desiredOutcome: string;
   currentProblem: string;
@@ -19,7 +20,9 @@ export interface SessionMetadata {
   location: string; // Human-readable location name
   locationId?: number;
   audienceId?: number;
+  audienceName?: string;
   toneId?: number;
+  toneName?: string;
 }
 
 export interface AIContentBlock {

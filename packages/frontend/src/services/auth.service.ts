@@ -31,17 +31,22 @@ class AuthService {
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {
+          console.log('⚠️ 401 error, attempting token refresh...', originalRequest.url);
           originalRequest._retry = true;
 
           try {
             const refreshed = await this.refreshToken();
             if (refreshed) {
+              console.log('✅ Token refreshed successfully');
               // Retry the original request with new token
               const token = this.getAccessToken();
               originalRequest.headers.Authorization = `Bearer ${token}`;
               return axios(originalRequest);
+            } else {
+              console.log('❌ Token refresh failed');
             }
           } catch (refreshError) {
+            console.log('❌ Token refresh error:', refreshError);
             // Refresh failed, redirect to login
             await this.logout();
 
@@ -182,12 +187,16 @@ class AuthService {
 
   isAuthenticated(): boolean {
     const token = this.getAccessToken();
-    if (!token) return false;
+    if (!token) {
+      console.log('🔐 isAuthenticated: no token found');
+      return false;
+    }
 
     try {
       // Validate JWT token structure
       const parts = token.split('.');
       if (parts.length !== 3) {
+        console.log('🔐 isAuthenticated: invalid token structure');
         return false;
       }
 
@@ -196,8 +205,16 @@ class AuthService {
       const currentTime = Date.now() / 1000;
       const isExpired = payload.exp <= currentTime;
 
+      console.log('🔐 isAuthenticated check:', {
+        exp: payload.exp,
+        currentTime,
+        isExpired,
+        timeUntilExpiry: payload.exp - currentTime
+      });
+
       return !isExpired;
     } catch (error) {
+      console.log('🔐 isAuthenticated: error parsing token', error);
       return false;
     }
   }

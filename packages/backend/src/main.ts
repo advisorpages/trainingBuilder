@@ -17,12 +17,50 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
 
+  const staticAllowedOrigins = [
+    'http://localhost:3000',      // Local development (hybrid mode)
+    'http://localhost:3002',      // Docker frontend
+    'http://localhost:3005',      // Alternative local dev port
+    'http://localhost:5173',      // Vite dev server default port
+    'http://localhost:5174',      // Alternate Vite dev port
+    'http://127.0.0.1:3000',      // Loopback alias
+    'http://127.0.0.1:3002',      // Loopback alias
+    'http://127.0.0.1:3005',      // Loopback alias
+    'http://127.0.0.1:5173',      // Loopback alias
+    'http://127.0.0.1:5174',      // Loopback alias
+    'http://0.0.0.0:3000',        // Host binding alias
+    'http://0.0.0.0:5173',        // Host binding alias
+    'http://frontend:3000',       // Docker network
+  ];
+
+  const envOrigins = configService.get<string>('CORS_ORIGIN');
+  const configuredOrigins = envOrigins
+    ? envOrigins
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : [];
+  const allowedOrigins = Array.from(new Set([...staticAllowedOrigins, ...configuredOrigins]));
+
+  const corsOrigin = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const isStaticMatch = allowedOrigins.includes(origin);
+    const isLocalhostWildcard =
+      process.env.NODE_ENV !== 'production' &&
+      /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/i.test(origin);
+
+    if (isStaticMatch || isLocalhostWildcard) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS origin not allowed: ${origin}`));
+  };
+
   app.enableCors({
-    origin: [
-      'http://localhost:3000',      // Local development (hybrid mode)
-      'http://localhost:3002',      // Docker frontend
-      'http://frontend:3000',       // Docker network
-    ],
+    origin: corsOrigin,
     credentials: true,
   });
 

@@ -21,7 +21,7 @@ export interface PromptVariables {
 @Injectable()
 export class PromptRegistryService {
   private cache: Map<string, Prompt> = new Map();
-  private cacheExpiry: number = 0;
+  private cacheExpiry = 0;
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   constructor(

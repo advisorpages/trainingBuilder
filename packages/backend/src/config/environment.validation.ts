@@ -84,6 +84,73 @@ export class EnvironmentVariables {
   @IsString()
   @IsOptional()
   EMAIL_PASSWORD: string;
+
+  // RAG Integration Configuration
+  @IsString()
+  @IsOptional()
+  RAG_API_URL: string;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  @Transform(({ value }) => parseFloat(value))
+  @IsOptional()
+  RAG_SIMILARITY_WEIGHT = 0.5;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  @Transform(({ value }) => parseFloat(value))
+  @IsOptional()
+  RAG_RECENCY_WEIGHT = 0.2;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  @Transform(({ value }) => parseFloat(value))
+  @IsOptional()
+  RAG_CATEGORY_WEIGHT = 0.2;
+
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  @Transform(({ value }) => parseFloat(value))
+  @IsOptional()
+  RAG_SIMILARITY_THRESHOLD = 0.65;
+
+  @IsNumber()
+  @Min(1000)
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsOptional()
+  RAG_TIMEOUT_MS = 10000;
+
+  @IsNumber()
+  @Min(0)
+  @Max(5)
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsOptional()
+  RAG_RETRY_ATTEMPTS = 1;
+
+  // Feature Flags for Session Builder v2
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsOptional()
+  ENABLE_VARIANT_GENERATION_V2 = false;
+
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsOptional()
+  LOG_VARIANT_SELECTIONS = true;
+
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Transform(({ value }) => parseInt(value, 10))
+  @IsOptional()
+  VARIANT_GENERATION_ROLLOUT_PERCENTAGE = 0;
+
+  // Analytics configuration
+  @IsString()
+  @IsOptional()
+  GOOGLE_ANALYTICS_ID?: string;
 }
 
 export function validateEnvironment(config: Record<string, unknown>) {

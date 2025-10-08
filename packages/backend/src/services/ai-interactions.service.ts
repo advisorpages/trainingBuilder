@@ -359,4 +359,131 @@ export class AIInteractionsService {
       relations: ['session'],
     });
   }
+
+  /**
+   * Get variant selection analytics metrics
+   */
+  async getVariantSelectionMetrics(filters: AIInteractionFilters = {}): Promise<{
+    totalSelections: number;
+    selectionsByVariant: Record<string, number>;
+    selectionRateByVariant: Record<string, number>;
+    ragVsBaselineRate: {
+      ragSelections: number;
+      baselineSelections: number;
+      ragPercentage: number;
+      baselinePercentage: number;
+    };
+    averageRagWeight: number;
+    categoryBreakdown: Record<string, {
+      total: number;
+      ragCount: number;
+      baselineCount: number;
+      ragPercentage: number;
+    }>;
+    averageRagSourcesUsed: number;
+    selectionsByLabel: Record<string, number>;
+  }> {
+    const { data } = await this.findAll({
+      ...filters,
+      interactionType: AIInteractionType.VARIANT_SELECTION,
+    }, 1, 999999);
+
+    const totalSelections = data.length;
+
+    if (totalSelections === 0) {
+      return {
+        totalSelections: 0,
+        selectionsByVariant: {},
+        selectionRateByVariant: {},
+        ragVsBaselineRate: {
+          ragSelections: 0,
+          baselineSelections: 0,
+          ragPercentage: 0,
+          baselinePercentage: 0,
+        },
+        averageRagWeight: 0,
+        categoryBreakdown: {},
+        averageRagSourcesUsed: 0,
+        selectionsByLabel: {},
+      };
+    }
+
+    // Count selections by variant ID
+    const selectionsByVariant: Record<string, number> = {};
+    const selectionsByLabel: Record<string, number> = {};
+    let ragSelections = 0;
+    let baselineSelections = 0;
+    let totalRagWeight = 0;
+    let totalRagSources = 0;
+    const categoryBreakdown: Record<string, {
+      total: number;
+      ragCount: number;
+      baselineCount: number;
+      ragPercentage: number;
+    }> = {};
+
+    data.forEach(interaction => {
+      const { variantId, generationSource, ragWeight, ragSourcesUsed, category } =
+        interaction.inputVariables as any;
+      const variantLabel = interaction.metadata?.variantLabel || variantId;
+
+      // Count by variant ID
+      selectionsByVariant[variantId] = (selectionsByVariant[variantId] || 0) + 1;
+      selectionsByLabel[variantLabel] = (selectionsByLabel[variantLabel] || 0) + 1;
+
+      // RAG vs baseline
+      if (generationSource === 'rag') {
+        ragSelections++;
+        totalRagWeight += ragWeight || 0;
+        totalRagSources += ragSourcesUsed || 0;
+      } else {
+        baselineSelections++;
+      }
+
+      // Category breakdown
+      if (category) {
+        if (!categoryBreakdown[category]) {
+          categoryBreakdown[category] = {
+            total: 0,
+            ragCount: 0,
+            baselineCount: 0,
+            ragPercentage: 0,
+          };
+        }
+        categoryBreakdown[category].total++;
+        if (generationSource === 'rag') {
+          categoryBreakdown[category].ragCount++;
+        } else {
+          categoryBreakdown[category].baselineCount++;
+        }
+      }
+    });
+
+    // Calculate selection rates by variant
+    const selectionRateByVariant: Record<string, number> = {};
+    Object.entries(selectionsByVariant).forEach(([variantId, count]) => {
+      selectionRateByVariant[variantId] = (count / totalSelections) * 100;
+    });
+
+    // Calculate category percentages
+    Object.values(categoryBreakdown).forEach(cat => {
+      cat.ragPercentage = cat.total > 0 ? (cat.ragCount / cat.total) * 100 : 0;
+    });
+
+    return {
+      totalSelections,
+      selectionsByVariant,
+      selectionRateByVariant,
+      ragVsBaselineRate: {
+        ragSelections,
+        baselineSelections,
+        ragPercentage: (ragSelections / totalSelections) * 100,
+        baselinePercentage: (baselineSelections / totalSelections) * 100,
+      },
+      averageRagWeight: ragSelections > 0 ? totalRagWeight / ragSelections : 0,
+      categoryBreakdown,
+      averageRagSourcesUsed: ragSelections > 0 ? totalRagSources / ragSelections : 0,
+      selectionsByLabel,
+    };
+  }
 }

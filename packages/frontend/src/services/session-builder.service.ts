@@ -3,6 +3,8 @@ import { api } from './api.service';
 export interface SessionBuilderInput {
   title?: string;
   category: string;
+  categoryId?: number;
+  categoryName?: string;
   sessionType: 'event' | 'training' | 'workshop' | 'webinar';
   desiredOutcome: string;
   currentProblem?: string;
@@ -10,9 +12,13 @@ export interface SessionBuilderInput {
   date: string;
   startTime: string;
   endTime: string;
+  timezone?: string;
   locationId?: number;
+  locationName?: string;
   audienceId?: number;
+  audienceName?: string;
   toneId?: number;
+  toneName?: string;
 }
 
 export interface SessionOutlineSection {
@@ -189,6 +195,25 @@ export interface SessionOutlineResponse {
   };
 }
 
+export interface MultiVariantResponse {
+  variants: Array<{
+    id: string;
+    outline: SessionOutline;
+    generationSource: 'rag' | 'baseline';
+    ragWeight: number;
+    ragSourcesUsed: number;
+    label: string;
+    description: string;
+  }>;
+  metadata: {
+    processingTime: number;
+    ragAvailable: boolean;
+    ragSourcesFound: number;
+    totalVariants: number;
+    averageSimilarity?: number;
+  };
+}
+
 export interface CreateSessionFromOutlineRequest {
   outline: SessionOutline;
   input: SessionBuilderInput;
@@ -218,15 +243,26 @@ export interface BuilderAutosavePayload {
   readinessScore: number;
 }
 
-interface StoredBuilderDraft extends BuilderAutosavePayload {
-  savedAt: string;
-}
+const sanitizeSessionBuilderInput = (input: SessionBuilderInput) => {
+  const {
+    date: _date,
+    categoryId: _categoryId,
+    categoryName: _categoryName,
+    timezone: _timezone,
+    locationId: _locationId,
+    locationName: _locationName,
+    toneName: _toneName,
+    ...cleanInput
+  } = input;
+
+  return cleanInput;
+};
 
 class SessionBuilderService {
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
       const params = templateId ? `?template=${templateId}` : '';
-      const { date, ...payload } = input;
+      const payload = sanitizeSessionBuilderInput(input);
       console.log('Sending request to backend:', { url: `/sessions/builder/suggest-outline${params}`, input: payload });
       const response = await api.post(`/sessions/builder/suggest-outline${params}`, payload);
       console.log('Backend response:', response.data);
@@ -245,11 +281,47 @@ class SessionBuilderService {
 
   async generateLegacyOutline(input: SessionBuilderInput): Promise<SessionOutlineResponse> {
     try {
-      const { date, ...payload } = input;
+      const payload = sanitizeSessionBuilderInput(input);
       const response = await api.post('/sessions/builder/suggest-legacy-outline', payload);
       return response.data as SessionOutlineResponse;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to generate legacy session outline');
+    }
+  }
+
+  async generateMultipleOutlines(input: SessionBuilderInput): Promise<MultiVariantResponse> {
+    try {
+      const payload = sanitizeSessionBuilderInput(input);
+      const response = await api.post('/sessions/builder/suggest-outline-v2', payload);
+      return response.data as MultiVariantResponse;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to generate session variants');
+    }
+  }
+
+  async logVariantSelection(
+    sessionId: string,
+    variantDetails: {
+      variantId: string;
+      generationSource: 'rag' | 'baseline';
+      ragWeight: number;
+      ragSourcesUsed: number;
+      category: string;
+    }
+  ): Promise<void> {
+    try {
+      await api.post(`/sessions/builder/${sessionId}/log-variant-selection`, variantDetails);
+    } catch (error: any) {
+      console.error('Failed to log variant selection', error);
+    }
+  }
+
+  async createDraft(payload: Partial<BuilderAutosavePayload> = {}): Promise<{ draftId: string; savedAt: string }> {
+    try {
+      const response = await api.post('/sessions/builder/drafts', payload);
+      return response.data as { draftId: string; savedAt: string };
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to create builder draft');
     }
   }
 
@@ -315,7 +387,7 @@ class SessionBuilderService {
     }
   }
 
-  async getPastTopics(categorySearch?: string, limit: number = 20): Promise<TopicSuggestion[]> {
+  async getPastTopics(categorySearch?: string, limit = 20): Promise<TopicSuggestion[]> {
     try {
       const params = new URLSearchParams();
       // Topics API is under /admin/topics and supports search, page, limit
@@ -347,7 +419,7 @@ class SessionBuilderService {
     }
   }
 
-  async getTrainers(search?: string, limit: number = 50): Promise<{ id: number; name: string }[]> {
+  async getTrainers(search?: string, limit = 50): Promise<{ id: number; name: string }[]> {
     try {
       const params = new URLSearchParams();
       params.append('limit', String(limit));
@@ -360,58 +432,19 @@ class SessionBuilderService {
     }
   }
 
-  async saveOutlineDraft(outlineId: string, payload: BuilderAutosavePayload): Promise<void> {
-    try {
-      const draftData: StoredBuilderDraft = {
-        ...payload,
-        savedAt: new Date().toISOString(),
-      };
-
-      localStorage.setItem(`sessionBuilder_draft_${outlineId}`, JSON.stringify(draftData));
-    } catch (error) {
-      console.warn('Failed to save outline draft:', error);
-    }
-  }
-
-  async loadOutlineDraft(outlineId: string): Promise<(StoredBuilderDraft & { outlineId: string }) | null> {
-    try {
-      const draftData = localStorage.getItem(`sessionBuilder_draft_${outlineId}`);
-      if (draftData) {
-        const parsed = JSON.parse(draftData);
-        return {
-          outlineId,
-          outline: parsed.outline ?? null,
-          metadata: parsed.metadata ?? parsed.input,
-          aiPrompt: parsed.aiPrompt ?? '',
-          aiVersions: parsed.aiVersions ?? [],
-          acceptedVersionId: parsed.acceptedVersionId,
-          readinessScore: parsed.readinessScore ?? 0,
-          savedAt: parsed.savedAt,
-        } as StoredBuilderDraft & { outlineId: string };
-      }
-      return null;
-    } catch (error) {
-      console.warn('Failed to load outline draft:', error);
-      return null;
-    }
-  }
-
   async autosaveDraft(
     sessionId: string,
     payload: BuilderAutosavePayload
-  ): Promise<{ savedAt: string; viaFallback?: boolean }> {
+  ): Promise<{ savedAt: string }> {
     try {
       const response = await api.post(`/sessions/builder/${sessionId}/autosave`, payload);
       const savedAt = (response.data as any)?.savedAt ?? new Date().toISOString();
-      await this.saveOutlineDraft(sessionId, payload);
       return { savedAt };
     } catch (error: any) {
-      await this.saveOutlineDraft(sessionId, payload);
-      const fallbackSavedAt = new Date().toISOString();
       if (error?.response) {
         throw new Error(error.response?.data?.message || 'Failed to autosave draft');
       }
-      return { savedAt: fallbackSavedAt, viaFallback: true };
+      throw error;
     }
   }
 
@@ -430,11 +463,13 @@ class SessionBuilderService {
 
     const objective = (outline.suggestedDescription || input.desiredOutcome || '').trim();
     const audience = (input.category || input.specificTopics || '').trim();
+    const normalizedReadiness = Math.max(0, Math.min(100, readinessScore ?? 0));
+    const shouldPublish = normalizedReadiness >= 90;
 
     const payload: Record<string, unknown> = {
       title,
-      status: readinessScore && readinessScore >= 90 ? 'published' : 'draft',
-      readinessScore: Math.max(0, Math.min(100, readinessScore ?? 100)),
+      status: shouldPublish ? 'published' : 'draft',
+      readinessScore: normalizedReadiness,
       startTime: input.startTime,
       endTime: input.endTime,
     };
@@ -730,10 +765,9 @@ class SessionBuilderService {
   }
 
   // Section Management Methods
-  async addSection(outline: SessionOutline, sectionType: string, position?: number): Promise<SessionOutline> {
+  async addSection(sessionId: string, sectionType: SectionType, position?: number): Promise<SessionOutline> {
     try {
-      const response = await api.put('/sessions/builder/outlines/sections/add', {
-        outline,
+      const response = await api.put(`/sessions/builder/${sessionId}/outlines/sections/add`, {
         sectionType,
         position
       });
@@ -743,10 +777,9 @@ class SessionBuilderService {
     }
   }
 
-  async removeSection(outline: SessionOutline, sectionId: string): Promise<SessionOutline> {
+  async removeSection(sessionId: string, sectionId: string): Promise<SessionOutline> {
     try {
-      const response = await api.put('/sessions/builder/outlines/sections/remove', {
-        outline,
+      const response = await api.put(`/sessions/builder/${sessionId}/outlines/sections/remove`, {
         sectionId
       });
       return response.data as SessionOutline;
@@ -755,10 +788,9 @@ class SessionBuilderService {
     }
   }
 
-  async updateSection(outline: SessionOutline, sectionId: string, updates: Partial<FlexibleSessionSection>): Promise<SessionOutline> {
+  async updateSection(sessionId: string, sectionId: string, updates: Partial<FlexibleSessionSection>): Promise<SessionOutline> {
     try {
-      const response = await api.put('/sessions/builder/outlines/sections/update', {
-        outline,
+      const response = await api.put(`/sessions/builder/${sessionId}/outlines/sections/update`, {
         sectionId,
         updates
       });
@@ -768,10 +800,9 @@ class SessionBuilderService {
     }
   }
 
-  async reorderSections(outline: SessionOutline, sectionIds: string[]): Promise<SessionOutline> {
+  async reorderSections(sessionId: string, sectionIds: string[]): Promise<SessionOutline> {
     try {
-      const response = await api.put('/sessions/builder/outlines/sections/reorder', {
-        outline,
+      const response = await api.put(`/sessions/builder/${sessionId}/outlines/sections/reorder`, {
         sectionIds
       });
       return response.data as SessionOutline;
@@ -780,10 +811,9 @@ class SessionBuilderService {
     }
   }
 
-  async duplicateSection(outline: SessionOutline, sectionId: string): Promise<SessionOutline> {
+  async duplicateSection(sessionId: string, sectionId: string): Promise<SessionOutline> {
     try {
-      const response = await api.put('/sessions/builder/outlines/sections/duplicate', {
-        outline,
+      const response = await api.put(`/sessions/builder/${sessionId}/outlines/sections/duplicate`, {
         sectionId
       });
       return response.data as SessionOutline;

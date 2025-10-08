@@ -10,6 +10,8 @@ import { TrainersTabContent } from '../components/admin/TrainersTabContent';
 import { AudiencesTabContent } from '../components/admin/AudiencesTabContent';
 import { TonesTabContent } from '../components/admin/TonesTabContent';
 import { AIInsightsTabContent } from '../components/admin/AIInsightsTabContent';
+import { VariantsTabContent } from '../components/admin/VariantsTabContent';
+import { RagSettingsTabContent } from '../components/admin/RagSettingsTabContent';
 
 interface PromptSection {
   category: PromptCategory;
@@ -49,7 +51,7 @@ const CORE_PROMPTS = [
   }
 ];
 
-type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights';
+type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights' | 'variants' | 'rag-settings';
 
 // Placeholder descriptions
 const PLACEHOLDER_DESCRIPTIONS: Record<string, string> = {
@@ -585,6 +587,8 @@ export const AdminDashboardPage: React.FC = () => {
       <div className="max-w-7xl mx-auto">
         {/* Tab Content */}
         {activeTab === 'prompts' && renderPromptsTab()}
+        {activeTab === 'variants' && <VariantsTabContent />}
+        {activeTab === 'rag-settings' && <RagSettingsTabContent />}
         {activeTab === 'analytics' && <AnalyticsTabContent />}
         {activeTab === 'ai-insights' && <AIInsightsTabContent />}
         {activeTab === 'categories' && <CategoriesTabContent />}

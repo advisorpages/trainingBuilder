@@ -1,14 +1,8 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-
-// Mock user context - in real app, this would come from auth context
-const mockUser = {
-  id: '1',
-  name: 'John Doe',
-  email: 'john@example.com',
-  role: 'content_developer', // content_developer, trainer, admin
-};
+import { useAuth } from '../contexts/AuthContext';
+import { UserRoleKey } from '../types/auth.types';
 
 interface BuilderLayoutProps {
   title: string;
@@ -17,16 +11,22 @@ interface BuilderLayoutProps {
   children: React.ReactNode;
 }
 
+type BuilderRole = UserRoleKey;
+
 interface NavItem {
   label: string;
   description: string;
   to: string;
-  roles: string[];
+  roles: BuilderRole[];
   icon?: string;
 }
 
-const getDashboardRoute = (userRole: string) => {
-  return userRole === 'trainer' ? '/trainer/dashboard' : '/dashboard';
+const getDashboardRoute = (userRole: BuilderRole) => {
+  if (userRole === 'trainer') {
+    return '/trainer/dashboard';
+  }
+
+  return '/dashboard';
 };
 
 const allNavItems: NavItem[] = [
@@ -34,35 +34,35 @@ const allNavItems: NavItem[] = [
     label: 'Home',
     description: 'Dashboard and overview',
     to: '/dashboard', // Will be dynamically set based on user role
-    roles: ['content_developer', 'trainer', 'admin'],
+    roles: ['content_developer', 'trainer', 'broker'],
     icon: '🏠',
   },
   {
     label: 'Session Builder',
     description: 'Craft AI-assisted training sessions',
     to: '/sessions/builder/new',
-    roles: ['content_developer', 'admin'],
+    roles: ['content_developer', 'broker'],
     icon: '🎯',
   },
   {
     label: 'Sessions',
     description: 'Manage existing sessions and drafts',
     to: '/sessions',
-    roles: ['content_developer', 'admin'],
+    roles: ['content_developer', 'broker'],
     icon: '📋',
   },
   {
     label: 'Topics',
     description: 'Maintain topic catalog and references',
     to: '/topics',
-    roles: ['content_developer', 'admin'],
+    roles: ['content_developer', 'broker'],
     icon: '🏷️',
   },
   {
     label: 'Incentives',
     description: 'Configure attendance incentives',
     to: '/incentives',
-    roles: ['content_developer', 'admin'],
+    roles: ['content_developer', 'broker'],
     icon: '🎁',
   },
   {
@@ -76,7 +76,7 @@ const allNavItems: NavItem[] = [
     label: 'Admin Dashboard',
     description: 'System settings and monitoring',
     to: '/admin/dashboard',
-    roles: ['content_developer', 'admin'],
+    roles: ['content_developer', 'broker'],
     icon: '🛠️',
   },
 ];
@@ -87,23 +87,29 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
   statusSlot,
   children,
 }) => {
+  const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const effectiveRole: BuilderRole = user?.role?.key ?? 'content_developer';
+  const userDisplayName = user?.displayName || user?.email || 'User';
+  const userInitial = userDisplayName.charAt(0).toUpperCase();
+  const userEmail = user?.email;
 
   // Filter nav items based on user role and set correct dashboard route
   const navItems = allNavItems
-    .filter(item => item.roles.includes(mockUser.role))
+    .filter(item => item.roles.includes(effectiveRole))
     .map(item => {
       if (item.label === 'Home') {
-        return { ...item, to: getDashboardRoute(mockUser.role) };
+        return { ...item, to: getDashboardRoute(effectiveRole) };
       }
       return item;
     });
 
-  const getRoleDisplayName = (role: string) => {
+  const getRoleDisplayName = (role: BuilderRole) => {
     switch (role) {
       case 'content_developer': return 'Content Developer';
       case 'trainer': return 'Trainer';
-      case 'admin': return 'Administrator';
+      case 'broker': return 'Broker';
       default: return 'User';
     }
   };
@@ -133,10 +139,10 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
             Training Builder
           </p>
           <h1 className="mt-2 text-2xl font-bold">
-            {mockUser.role === 'trainer' ? 'Trainer Portal' : 'Builder Workspace'}
+            {effectiveRole === 'trainer' ? 'Trainer Portal' : 'Builder Workspace'}
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            {mockUser.role === 'trainer'
+            {effectiveRole === 'trainer'
               ? 'Access your assignments and training materials.'
               : 'Navigate the core tools for launching training experiences.'
             }
@@ -147,11 +153,14 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
-              {mockUser.name.charAt(0)}
+              {userInitial}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900 truncate">{mockUser.name}</p>
-              <p className="text-xs text-slate-500 truncate">{getRoleDisplayName(mockUser.role)}</p>
+              <p className="text-sm font-medium text-slate-900 truncate">{userDisplayName}</p>
+              {userEmail && (
+                <p className="text-xs text-slate-500 truncate">{userEmail}</p>
+              )}
+              <p className="text-xs text-slate-500 truncate">{getRoleDisplayName(effectiveRole)}</p>
             </div>
           </div>
         </div>
@@ -187,7 +196,10 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
 
         {/* Logout Link */}
         <div className="pt-4 border-t border-slate-200">
-          <button className="text-xs text-slate-500 hover:text-slate-700 transition-colors">
+          <button
+            onClick={() => void logout()}
+            className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
+          >
             Sign out
           </button>
         </div>
