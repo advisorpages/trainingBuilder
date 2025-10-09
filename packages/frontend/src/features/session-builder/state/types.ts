@@ -6,6 +6,12 @@ export type AutosaveStatus = 'idle' | 'pending' | 'success' | 'error';
 export type AIRequestStatus = 'idle' | 'pending' | 'error';
 export type PublishStatus = 'idle' | 'pending' | 'success' | 'error';
 
+export interface SessionTopicDraft {
+  title: string;
+  description?: string;
+  durationMinutes: number;
+}
+
 export interface SessionMetadata {
   title: string;
   sessionType: 'event' | 'training' | 'workshop' | 'webinar';
@@ -29,11 +35,7 @@ export interface SessionMetadata {
   audienceName?: string;
   toneId?: number;
   toneName?: string;
-  topics?: Array<{
-    title: string;
-    description?: string;
-    durationMinutes: number;
-  }>;
+  topics?: SessionTopicDraft[];
 }
 
 export interface AIContentBlock {
@@ -108,6 +110,7 @@ export type BuilderAction =
   | { type: 'INIT_START' }
   | { type: 'INIT_SUCCESS'; payload: SessionDraftData }
   | { type: 'INIT_FAILURE'; payload: string }
+  | { type: 'UPDATE_TOPICS'; payload: SessionTopicDraft[] }
   | { type: 'UPDATE_METADATA'; payload: Partial<SessionMetadata> }
   | { type: 'UPDATE_PROMPT'; payload: string }
   | { type: 'UPDATE_OUTLINE'; payload: SessionOutline }

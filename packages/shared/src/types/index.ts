@@ -56,11 +56,6 @@ export interface Session {
   builderGenerated?: boolean;
   sessionOutlineData?: Record<string, any> | null;
   lastAutosaveAt?: Date | string | null;
-  topics?: Array<{
-    title: string;
-    description?: string;
-    durationMinutes: number;
-  }>;
   isActive: boolean;
   createdAt: Date | string;
   updatedAt: Date | string;
@@ -71,7 +66,7 @@ export interface Session {
   audience?: Audience;
   tone?: Tone;
   category?: Category;
-  topics: Topic[];
+  topics?: Topic[];
 }
 
 export enum SessionStatus {
@@ -173,8 +168,8 @@ export interface Topic {
   materialsNeeded?: string;
   deliveryGuidance?: string;
   isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   sessions?: Session[];
 }
 

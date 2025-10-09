@@ -1,0 +1,55 @@
+import { Type } from 'class-transformer';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+
+export class ImportTopicItemDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  id?: number;
+
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  learningOutcomes?: string;
+
+  @IsOptional()
+  @IsString()
+  trainerNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  materialsNeeded?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryGuidance?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+}
+
+export class ImportTopicsDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => ImportTopicItemDto)
+  topics!: ImportTopicItemDto[];
+}

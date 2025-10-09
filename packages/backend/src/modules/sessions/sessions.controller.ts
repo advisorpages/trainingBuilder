@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -15,6 +15,8 @@ import {
   ReorderOutlineSectionsDto,
   DuplicateOutlineSectionDto,
 } from './dto/outline-section.dto';
+import { ImportSessionsDto } from './dto/import-sessions.dto';
+import { Response } from 'express';
 
 @Controller('sessions')
 export class SessionsController {
@@ -132,6 +134,30 @@ export class SessionsController {
   @Get('public/:id')
   async getPublicSession(@Param('id') id: string) {
     return this.sessionsService.findOne(id);
+  }
+
+  @Get('export')
+  async exportAll(
+    @Query('format') format: 'json' | 'csv' = 'json',
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const exportData = await this.sessionsService.exportAllSessionsDetailed();
+
+    if (format === 'csv') {
+      const csv = this.sessionsService.buildSessionsExportCsv(exportData);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="sessions-export-${timestamp}.csv"`);
+      res.setHeader('X-Export-Count', exportData.length.toString());
+      return csv;
+    }
+
+    return exportData;
+  }
+
+  @Post('import')
+  async importAll(@Body() dto: ImportSessionsDto) {
+    return this.sessionsService.importSessions(dto);
   }
 
   @Get(':id')

@@ -7,10 +7,11 @@ interface AdminDashboardLayoutProps {
   children: React.ReactNode;
 }
 
-type AdminTabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights' | 'variants' | 'rag-settings';
+type BaseAdminTabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights' | 'variants' | 'rag-settings';
+type ExtendedAdminTabType = BaseAdminTabType | 'import-export';
 
 interface AdminTab {
-  id: AdminTabType;
+  id: ExtendedAdminTabType;
   label: string;
   icon: string;
   description: string;
@@ -20,6 +21,7 @@ const adminTabs: AdminTab[] = [
   { id: 'prompts', label: 'AI Prompts', icon: '🤖', description: 'Configure AI generation prompts' },
   { id: 'variants', label: 'Outline Variants', icon: '🎭', description: 'Configure outline variant options' },
   { id: 'rag-settings', label: 'RAG Settings', icon: '📚', description: 'Configure knowledge base integration' },
+  { id: 'import-export', label: 'Import / Export', icon: '🔁', description: 'Bulk manage sessions and topics' },
   { id: 'analytics', label: 'Analytics', icon: '📊', description: 'Performance metrics & insights' },
   { id: 'ai-insights', label: 'AI Insights', icon: '🔍', description: 'Track AI interactions & quality' },
   { id: 'categories', label: 'Categories', icon: '📁', description: 'Session categories' },
@@ -35,9 +37,9 @@ const adminTabs: AdminTab[] = [
 export const AdminDashboardLayout: React.FC<AdminDashboardLayoutProps> = ({ children }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState(false);
-  const activeTab = (searchParams.get('tab') as AdminTabType) || 'prompts';
+  const activeTab = (searchParams.get('tab') as ExtendedAdminTabType) || 'prompts';
 
-  const handleTabChange = (tabId: AdminTabType) => {
+  const handleTabChange = (tabId: ExtendedAdminTabType) => {
     setSearchParams({ tab: tabId });
     // Close mobile sidebar after selection
     if (window.innerWidth < 1024) {

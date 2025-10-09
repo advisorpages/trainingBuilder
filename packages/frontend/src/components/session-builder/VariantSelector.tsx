@@ -110,7 +110,8 @@ const calculateContributionMix = (variant: Variant) => {
         { key: 'ai', value: aiPercent },
         { key: 'rag', value: ragPercent },
         { key: 'user', value: userPercent },
-      ].sort((a, b) => b.value - a.value);
+      ];
+      adjustmentTargets.sort((a, b) => b.value - a.value);
 
       for (const target of adjustmentTargets) {
         if (target.value === 0) continue;

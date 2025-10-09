@@ -1,7 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { TopicsService } from './topics.service';
 import { CreateTopicDto } from './dto/create-topic.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { ImportTopicsDto } from './dto/import-topics.dto';
+import { Response } from 'express';
 
 @Controller('topics')
 export class TopicsController {
@@ -11,6 +13,25 @@ export class TopicsController {
   @Get()
   async list() {
     return this.topicsService.findAll();
+  }
+
+  @Get('export')
+  async exportAll(
+    @Query('format') format: 'json' | 'csv' = 'json',
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const exportData = await this.topicsService.exportAllDetailed();
+
+    if (format === 'csv') {
+      const csv = this.topicsService.buildTopicsExportCsv(exportData);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="topics-export-${timestamp}.csv"`);
+      res.setHeader('X-Export-Count', exportData.length.toString());
+      return csv;
+    }
+
+    return exportData;
   }
 
   @Get(':id')
@@ -26,6 +47,11 @@ export class TopicsController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() dto: Partial<CreateTopicDto>) {
     return this.topicsService.update(id, dto);
+  }
+
+  @Post('import')
+  async import(@Body() dto: ImportTopicsDto) {
+    return this.topicsService.importTopics(dto);
   }
 
   @Delete(':id')

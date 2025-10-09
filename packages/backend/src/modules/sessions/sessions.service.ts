@@ -16,6 +16,7 @@ import {
   Tone,
   LocationType,
   MeetingPlatform,
+  ContentStatus,
 } from '../../entities';
 import { ReadinessScore, ReadinessScoringService } from './services/readiness-scoring.service';
 import { CreateSessionDto } from './dto/create-session.dto';
@@ -53,6 +54,8 @@ import {
   PromptSandboxSettings,
   PromptVariantPersona,
 } from '../../services/ai-prompt-settings.service';
+import { ImportSessionsDto, ImportSessionItemDto } from './dto/import-sessions.dto';
+import { recordsToCsv, CsvColumn } from '../../utils/csv.util';
 
 export interface RagSource {
   filename: string;
@@ -134,6 +137,41 @@ interface FlexibleSessionSection {
   [key: string]: unknown;
 }
 
+interface SessionContentVersionExport {
+  id: string;
+  kind: SessionContentVersion['kind'];
+  status: ContentStatus;
+  source: SessionContentVersion['source'];
+  generatedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  content: Record<string, unknown>;
+}
+
+export interface SessionExportRecord {
+  id: string;
+  title: string;
+  status: SessionStatus;
+  readinessScore: number;
+  scheduledAt: string | null;
+  endTime: string | null;
+  durationMinutes: number | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  locationId: number | null;
+  locationName: string | null;
+  audienceId: number | null;
+  audienceName: string | null;
+  toneId: number | null;
+  toneName: string | null;
+  objective?: string | null;
+  publishedAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  latestContentVersion: Omit<SessionContentVersionExport, 'createdAt' | 'updatedAt'> | null;
+  contentVersions: SessionContentVersionExport[];
+}
+
 interface OutlineSectionContent {
   type: 'opener' | 'topic' | 'closing';
   title: string;
@@ -210,6 +248,24 @@ export class SessionsService {
     this.enableVariantGenerationV2 = this.configService.get<boolean>('ENABLE_VARIANT_GENERATION_V2', false);
     this.variantRolloutPercentage = this.configService.get<number>('VARIANT_GENERATION_ROLLOUT_PERCENTAGE', 0);
     this.logVariantSelections = this.configService.get<boolean>('LOG_VARIANT_SELECTIONS', true);
+  }
+
+  private toDate(value: Date | string | null | undefined): Date | null {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private toIsoString(value: Date | string | null | undefined): string | null {
+    const date = this.toDate(value);
+    return date ? date.toISOString() : null;
   }
 
   private applyPublishTimestamp(session: Session, previousStatus: SessionStatus) {
@@ -1581,6 +1637,236 @@ export class SessionsService {
       fallbackUsed: false,
       generatedAt: new Date().toISOString(),
     };
+  }
+
+  async exportAllSessionsDetailed(): Promise<SessionExportRecord[]> {
+    const sessions = await this.sessionsRepository.find({
+      relations: ['contentVersions', 'category', 'location', 'audience', 'tone'],
+      order: { updatedAt: 'DESC' },
+    });
+
+    return sessions.map((session) => {
+      const scheduledAtDate = this.toDate(session.scheduledAt);
+      const startIso = scheduledAtDate ? scheduledAtDate.toISOString() : null;
+      const endIso =
+        scheduledAtDate && typeof session.durationMinutes === 'number'
+          ? new Date(scheduledAtDate.getTime() + session.durationMinutes * 60_000).toISOString()
+          : null;
+
+      const orderedContent = (session.contentVersions ?? []).sort((a, b) => {
+        const aTime = a.createdAt?.getTime?.() ?? 0;
+        const bTime = b.createdAt?.getTime?.() ?? 0;
+        return bTime - aTime;
+      });
+
+      const latestAccepted =
+        orderedContent.find((version) => version.status === ContentStatus.ACCEPTED) ?? orderedContent[0] ?? null;
+
+      return {
+        id: session.id,
+        title: session.title,
+        status: session.status,
+        readinessScore: session.readinessScore,
+        scheduledAt: startIso,
+        endTime: endIso,
+        durationMinutes: session.durationMinutes ?? null,
+        categoryId: session.categoryId ?? null,
+        categoryName: session.category?.name ?? null,
+        locationId: session.locationId ?? null,
+        locationName: session.location?.name ?? null,
+        audienceId: session.audienceId ?? null,
+        audienceName: session.audience?.name ?? null,
+        toneId: session.toneId ?? null,
+        toneName: session.tone?.name ?? null,
+        objective: session.objective ?? null,
+        publishedAt: this.toIsoString(session.publishedAt),
+        createdAt: this.toIsoString(session.createdAt),
+        updatedAt: this.toIsoString(session.updatedAt),
+        latestContentVersion: latestAccepted
+          ? {
+              id: latestAccepted.id,
+              kind: latestAccepted.kind,
+              status: latestAccepted.status,
+              source: latestAccepted.source,
+              generatedAt: this.toIsoString(latestAccepted.generatedAt),
+              content: latestAccepted.content,
+            }
+          : null,
+        contentVersions: orderedContent.map((version) => ({
+          id: version.id,
+          kind: version.kind,
+          status: version.status,
+          source: version.source,
+          generatedAt: this.toIsoString(version.generatedAt),
+          createdAt: this.toIsoString(version.createdAt),
+          updatedAt: this.toIsoString(version.updatedAt),
+          content: version.content,
+        })),
+      };
+    });
+  }
+
+  buildSessionsExportCsv(records: SessionExportRecord[]): string {
+    const columns: CsvColumn[] = [
+      { key: 'id' },
+      { key: 'title' },
+      { key: 'status' },
+      { key: 'readinessScore' },
+      { key: 'scheduledAt' },
+      { key: 'endTime' },
+      { key: 'durationMinutes' },
+      { key: 'categoryId' },
+      { key: 'categoryName' },
+      { key: 'locationId' },
+      { key: 'locationName' },
+      { key: 'audienceId' },
+      { key: 'audienceName' },
+      { key: 'toneId' },
+      { key: 'toneName' },
+      { key: 'objective' },
+      { key: 'publishedAt' },
+      { key: 'createdAt' },
+      { key: 'updatedAt' },
+      { key: 'latestContentVersion.id', header: 'latestContentVersionId' },
+      { key: 'latestContentVersion.kind', header: 'latestContentVersionKind' },
+      { key: 'latestContentVersion.status', header: 'latestContentVersionStatus' },
+      { key: 'latestContentVersion.source', header: 'latestContentVersionSource' },
+      { key: 'latestContentVersion.generatedAt', header: 'latestContentVersionGeneratedAt' },
+      {
+        key: 'latestContentVersion.content',
+        header: 'latestContentVersionContent',
+        transform: (value) => (value ? JSON.stringify(value) : ''),
+      },
+      {
+        key: 'contentVersions',
+        header: 'contentVersions',
+        transform: (value) => {
+          if (!Array.isArray(value)) {
+            return '';
+          }
+          if (value.length === 0) {
+            return '[]';
+          }
+          return JSON.stringify(value);
+        },
+      },
+    ];
+
+    return recordsToCsv(
+      records.map((record) => record as unknown as Record<string, unknown>),
+      columns,
+    );
+  }
+
+  async importSessions(payload: ImportSessionsDto) {
+    const summary = {
+      total: payload.sessions.length,
+      created: 0,
+      updated: 0,
+      errors: [] as string[],
+    };
+
+    for (const sessionDto of payload.sessions) {
+      try {
+        const result = await this.upsertSessionFromImport(sessionDto);
+        if (result === 'created') {
+          summary.created += 1;
+        } else {
+          summary.updated += 1;
+        }
+      } catch (error: any) {
+        const message = error?.message ?? 'Unknown error';
+        summary.errors.push(`${sessionDto.title}: ${message}`);
+        this.logger.error(`Failed to import session "${sessionDto.title}": ${message}`);
+      }
+    }
+
+    return summary;
+  }
+
+  private async upsertSessionFromImport(sessionDto: ImportSessionItemDto): Promise<'created' | 'updated'> {
+    let session: Session | null = null;
+
+    if (sessionDto.id) {
+      session = await this.sessionsRepository.findOne({
+        where: { id: sessionDto.id },
+      });
+    }
+
+    if (!session) {
+      session = await this.sessionsRepository.findOne({
+        where: { title: sessionDto.title },
+      });
+    }
+
+    const isNew = !session;
+
+    if (!session) {
+      session = this.sessionsRepository.create();
+      session.readinessScore = 0;
+    }
+
+    session.title = sessionDto.title;
+
+    if (sessionDto.status) {
+      session.status = sessionDto.status;
+    }
+
+    if (typeof sessionDto.readinessScore === 'number' && !Number.isNaN(sessionDto.readinessScore)) {
+      const bounded = Math.max(0, Math.min(100, Math.round(sessionDto.readinessScore)));
+      session.readinessScore = bounded;
+    }
+
+    if (sessionDto.objective !== undefined) {
+      session.objective = sessionDto.objective || null;
+    }
+
+    if (sessionDto.startTime) {
+      const parsed = new Date(sessionDto.startTime);
+      if (!Number.isNaN(parsed.getTime())) {
+        session.scheduledAt = parsed;
+      }
+    }
+
+    if (sessionDto.durationMinutes !== undefined && sessionDto.durationMinutes !== null) {
+      session.durationMinutes = sessionDto.durationMinutes;
+    } else if (sessionDto.endTime && session.scheduledAt) {
+      const endTimestamp = new Date(sessionDto.endTime).getTime();
+      if (!Number.isNaN(endTimestamp)) {
+        const startTimestamp = session.scheduledAt.getTime();
+        if (endTimestamp > startTimestamp) {
+          session.durationMinutes = Math.floor((endTimestamp - startTimestamp) / 60000);
+        }
+      }
+    }
+
+    if (sessionDto.categoryId !== undefined) {
+      session.categoryId = sessionDto.categoryId ?? null;
+    }
+
+    if (sessionDto.locationId !== undefined) {
+      session.locationId = sessionDto.locationId ?? null;
+    }
+
+    if (sessionDto.audienceId !== undefined) {
+      session.audienceId = sessionDto.audienceId ?? null;
+    }
+
+    if (sessionDto.toneId !== undefined) {
+      session.toneId = sessionDto.toneId ?? null;
+    }
+
+    if (sessionDto.publishedAt) {
+      const publishedDate = new Date(sessionDto.publishedAt);
+      if (!Number.isNaN(publishedDate.getTime())) {
+        session.publishedAt = publishedDate;
+      }
+    } else if (session.status === SessionStatus.PUBLISHED && !session.publishedAt) {
+      session.publishedAt = new Date();
+    }
+
+    await this.sessionsRepository.save(session);
+    return isNew ? 'created' : 'updated';
   }
 
   async bulkUpdateStatus(sessionIds: string[], status: SessionStatus): Promise<{ updated: number }> {

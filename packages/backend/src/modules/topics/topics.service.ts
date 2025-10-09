@@ -1,8 +1,25 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 import { Topic, Session } from '../../entities';
 import { CreateTopicDto } from './dto/create-topic.dto';
+import { ImportTopicsDto, ImportTopicItemDto } from './dto/import-topics.dto';
+import { recordsToCsv, CsvColumn } from '../../utils/csv.util';
+
+export interface TopicExportRecord {
+  id: number;
+  name: string;
+  description?: string | null;
+  learningOutcomes?: string | null;
+  trainerNotes?: string | null;
+  materialsNeeded?: string | null;
+  deliveryGuidance?: string | null;
+  isActive: boolean;
+  aiGeneratedContent?: unknown;
+  createdAt: string | null;
+  updatedAt: string | null;
+  sessionIds: string[];
+}
 
 @Injectable()
 export class TopicsService {
@@ -112,5 +129,146 @@ export class TopicsService {
 
     await this.topicRepository.remove(topic);
     return { deleted: true };
+  }
+
+  private toIsoString(value: Date | string | null | undefined): string | null {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+
+  async exportAllDetailed(): Promise<TopicExportRecord[]> {
+    const topics = await this.topicRepository.find({
+      relations: ['sessions'],
+      order: { name: 'ASC' },
+    });
+
+    return topics.map((topic) => ({
+      id: topic.id,
+      name: topic.name,
+      description: topic.description,
+      learningOutcomes: topic.learningOutcomes,
+      trainerNotes: topic.trainerNotes,
+      materialsNeeded: topic.materialsNeeded,
+      deliveryGuidance: topic.deliveryGuidance,
+      isActive: topic.isActive,
+      aiGeneratedContent: topic.aiGeneratedContent,
+      createdAt: this.toIsoString(topic.createdAt),
+      updatedAt: this.toIsoString(topic.updatedAt),
+      sessionIds: Array.isArray(topic.sessions) ? topic.sessions.map((session) => session.id) : [],
+    }));
+  }
+
+  buildTopicsExportCsv(records: TopicExportRecord[]): string {
+    const columns: CsvColumn[] = [
+      { key: 'id' },
+      { key: 'name' },
+      { key: 'description' },
+      { key: 'learningOutcomes' },
+      { key: 'trainerNotes' },
+      { key: 'materialsNeeded' },
+      { key: 'deliveryGuidance' },
+      { key: 'isActive' },
+      {
+        key: 'aiGeneratedContent',
+        header: 'aiGeneratedContent',
+        transform: (value) => (value ? JSON.stringify(value) : ''),
+      },
+      { key: 'createdAt' },
+      { key: 'updatedAt' },
+      {
+        key: 'sessionIds',
+        header: 'sessionIds',
+        transform: (value) => {
+          if (!Array.isArray(value)) {
+            return '';
+          }
+          if (value.length === 0) {
+            return '';
+          }
+          return value.join(';');
+        },
+      },
+    ];
+
+    return recordsToCsv(
+      records.map((record) => record as unknown as Record<string, unknown>),
+      columns,
+    );
+  }
+
+  async importTopics(payload: ImportTopicsDto) {
+    const summary = {
+      total: payload.topics.length,
+      created: 0,
+      updated: 0,
+      errors: [] as string[],
+    };
+
+    for (const topicDto of payload.topics) {
+      try {
+        const result = await this.upsertTopic(topicDto);
+        if (result === 'created') {
+          summary.created += 1;
+        } else {
+          summary.updated += 1;
+        }
+      } catch (error: any) {
+        const message = error?.message ?? 'Unknown error';
+        summary.errors.push(`${topicDto.name}: ${message}`);
+        this.logger.error(`Failed to import topic "${topicDto.name}": ${message}`);
+      }
+    }
+
+    return summary;
+  }
+
+  private async upsertTopic(topicDto: ImportTopicItemDto): Promise<'created' | 'updated'> {
+    let existing: Topic | null = null;
+
+    if (topicDto.id) {
+      existing = await this.topicRepository.findOne({ where: { id: topicDto.id } });
+    }
+
+    if (!existing) {
+      existing = await this.topicRepository.findOne({
+        where: { name: ILike(topicDto.name) },
+      });
+    }
+
+    if (existing) {
+      existing.name = topicDto.name;
+      existing.description = topicDto.description ?? existing.description ?? null;
+      existing.learningOutcomes = topicDto.learningOutcomes ?? existing.learningOutcomes ?? null;
+      existing.trainerNotes = topicDto.trainerNotes ?? existing.trainerNotes ?? null;
+      existing.materialsNeeded = topicDto.materialsNeeded ?? existing.materialsNeeded ?? null;
+      existing.deliveryGuidance = topicDto.deliveryGuidance ?? existing.deliveryGuidance ?? null;
+      if (typeof topicDto.isActive === 'boolean') {
+        existing.isActive = topicDto.isActive;
+      }
+
+      await this.topicRepository.save(existing);
+      return 'updated';
+    }
+
+    const topic = this.topicRepository.create({
+      name: topicDto.name,
+      description: topicDto.description,
+      learningOutcomes: topicDto.learningOutcomes,
+      trainerNotes: topicDto.trainerNotes,
+      materialsNeeded: topicDto.materialsNeeded,
+      deliveryGuidance: topicDto.deliveryGuidance,
+      isActive: typeof topicDto.isActive === 'boolean' ? topicDto.isActive : true,
+    });
+
+    await this.topicRepository.save(topic);
+    return 'created';
   }
 }

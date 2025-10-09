@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, AxiosRequestConfig } from 'axios';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
 
@@ -38,24 +38,24 @@ class ApiService {
     );
   }
 
-  async get<T>(url: string): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.get<T>(url);
+  async get<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+    return this.axiosInstance.get<T>(url, config);
   }
 
-  async post<T>(url: string, data?: any): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.post<T>(url, data);
+  async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+    return this.axiosInstance.post<T>(url, data, config);
   }
 
-  async patch<T>(url: string, data?: any): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.patch<T>(url, data);
+  async patch<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+    return this.axiosInstance.patch<T>(url, data, config);
   }
 
-  async put<T>(url: string, data?: any): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.put<T>(url, data);
+  async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+    return this.axiosInstance.put<T>(url, data, config);
   }
 
-  async delete<T>(url: string): Promise<AxiosResponse<T>> {
-    return this.axiosInstance.delete<T>(url);
+  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> {
+    return this.axiosInstance.delete<T>(url, config);
   }
 }
 
