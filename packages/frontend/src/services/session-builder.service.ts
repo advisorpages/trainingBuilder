@@ -1,5 +1,6 @@
 import { api } from './api.service';
-import type { LocationType, MeetingPlatform } from '@leadership-training/shared';
+import { SessionStatus } from '@leadership-training/shared';
+import type { LocationType, MeetingPlatform, Session } from '@leadership-training/shared';
 
 export interface SessionBuilderInput {
   title?: string;
@@ -376,15 +377,16 @@ export class SessionBuilderService {
       );
 
       console.log('Session data being sent to backend:', sessionData);
-      const response = await api.post('/sessions', sessionData);
+      const response = await api.post<Session>('/sessions', sessionData);
+      const createdSession = response.data;
 
       try {
-        await this.ensureTopicsFromOutline(request.outline, response.data?.status ?? sessionData.status);
+        await this.ensureTopicsFromOutline(request.outline, createdSession?.status);
       } catch (topicError) {
         console.warn('Failed to ensure outline topics exist', topicError);
       }
 
-      return response.data;
+      return createdSession;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to create session from outline');
     }
@@ -558,13 +560,12 @@ export class SessionBuilderService {
     return lookup.get(normalized);
   }
 
-  private async ensureTopicsFromOutline(outline: SessionOutline, status?: unknown): Promise<void> {
+  private async ensureTopicsFromOutline(outline: SessionOutline, status?: SessionStatus): Promise<void> {
     if (!outline?.sections?.length) {
       return;
     }
 
-    const statusValue = typeof status === 'string' ? status.toLowerCase() : '';
-    if (statusValue !== 'published') {
+    if (status !== SessionStatus.PUBLISHED) {
       return;
     }
 
@@ -615,7 +616,7 @@ export class SessionBuilderService {
 
       try {
         const response = await api.post('/topics', payload);
-        const topic = response.data;
+        const topic = response.data as { id?: number | string } | undefined;
         if (topic?.id) {
           lookup.set(key, String(topic.id));
           newlyCreated.push(name);

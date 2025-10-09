@@ -39,10 +39,10 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Helper function to get time ago string
-  const getTimeAgo = (dateString: string): string => {
-    if (!dateString) return 'Unknown time';
+  const getTimeAgo = (input: Date | string | undefined | null): string => {
+    if (!input) return 'Unknown time';
 
-    const date = new Date(dateString);
+    const date = new Date(input);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMinutes = Math.floor(diffMs / 60000);
@@ -71,14 +71,14 @@ const DashboardPage: React.FC = () => {
         const draftSessions = sessions.filter(s => s.status === 'draft').length;
         const activeSessions = sessions.filter(s => {
           // Consider active if scheduled for today or ongoing
-          const sessionDate = new Date(s.scheduledAt || '');
+          const sessionDate = new Date(s.startTime || s.createdAt);
           const today = new Date();
           return sessionDate.toDateString() === today.toDateString();
         }).length;
 
         // Calculate upcoming sessions (future scheduled sessions)
         const upcomingSessions = sessions.filter(s => {
-          const sessionDate = new Date(s.scheduledAt || '');
+          const sessionDate = new Date(s.startTime || s.createdAt);
           const today = new Date();
           return sessionDate > today;
         }).length;
@@ -104,7 +104,7 @@ const DashboardPage: React.FC = () => {
           title: session.status === 'published' ? 'Session Published' :
                  session.status === 'draft' ? 'New Session Created' : 'Session Updated',
           description: `${session.title} is ${session.status}`,
-          timestamp: getTimeAgo(session.updatedAt || ''),
+          timestamp: getTimeAgo(session.updatedAt || session.createdAt),
           user: 'System', // Would need user info from API
         }));
 

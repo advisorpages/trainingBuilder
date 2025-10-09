@@ -20,8 +20,8 @@ import ManageAudiencesPage from './pages/ManageAudiencesPage'
 import ManageTonesPage from './pages/ManageTonesPage'
 import ManageCategoriesPage from './pages/ManageCategoriesPage'
 import IncentiveWorksheetPage from './pages/IncentiveWorksheetPage'
-import { AISettingsPage } from './pages/AISettingsPage'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
+import SessionAITunerPage from './pages/SessionAITunerPage'
 import HomePage from './pages/HomePage'
 import './App.css'
 
@@ -118,7 +118,15 @@ function App() {
           <Route path="/admin/tones" element={<Navigate to="/admin/dashboard?tab=tones" replace />} />
           <Route path="/admin/categories" element={<Navigate to="/admin/dashboard?tab=categories" replace />} />
           <Route path="/analytics" element={<Navigate to="/admin/dashboard?tab=analytics" replace />} />
-          <Route path="/settings/ai" element={<Navigate to="/admin/dashboard?tab=prompts" replace />} />
+          <Route path="/settings/ai" element={<Navigate to="/admin/ai-tuner" replace />} />
+          <Route
+            path="/admin/ai-tuner"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <SessionAITunerPage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/admin/dashboard"

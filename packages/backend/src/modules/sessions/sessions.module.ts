@@ -6,6 +6,7 @@ import { ReadinessScoringService } from './services/readiness-scoring.service';
 import { OpenAIService } from '../../services/openai.service';
 import { RagIntegrationService } from '../../services/rag-integration.service';
 import { PromptsModule } from '../prompts/prompts.module';
+import { AiPromptsModule } from '../ai-prompts/ai-prompts.module';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { VariantConfigsModule } from '../variant-configs/variant-configs.module';
@@ -37,6 +38,7 @@ import {
       AIInteraction,
     ]),
     PromptsModule,
+    AiPromptsModule,
     AnalyticsModule,
     VariantConfigsModule,
   ],

@@ -45,6 +45,13 @@ const allNavItems: NavItem[] = [
     icon: '🎯',
   },
   {
+    label: 'Session AI Tuner',
+    description: 'Audit generations and fine-tune AI prompts',
+    to: '/admin/ai-tuner',
+    roles: ['content_developer', 'broker'],
+    icon: '🧪',
+  },
+  {
     label: 'Sessions',
     description: 'Manage existing sessions and drafts',
     to: '/sessions',

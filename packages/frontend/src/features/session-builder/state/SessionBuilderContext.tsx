@@ -753,7 +753,7 @@ export const SessionBuilderProvider: React.FC<{
       setVariantsStatus('error');
       setVariantsError(message);
       publish({
-        variant: 'warning',
+        
         title: 'More details needed',
         description: message,
       });

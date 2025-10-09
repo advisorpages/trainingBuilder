@@ -148,8 +148,12 @@ const SessionContent = ({ session }: SessionContentProps) => {
             <div className="trainer-info">
               <div className="trainer-header">
                 <h3>{session.trainer.name}</h3>
-                {session.trainer.expertise && (
-                  <p className="trainer-expertise">{session.trainer.expertise}</p>
+                {session.trainer.expertiseTags?.length ? (
+                  <p className="trainer-expertise">
+                    {session.trainer.expertiseTags.join(', ')}
+                  </p>
+                ) : (
+                  <p className="trainer-expertise">Multi-disciplinary facilitator</p>
                 )}
               </div>
               {session.trainer.bio && (

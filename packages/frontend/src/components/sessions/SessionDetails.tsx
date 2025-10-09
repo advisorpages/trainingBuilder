@@ -73,7 +73,7 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
   const getTrainerName = (trainerId?: number) => {
     if (!trainerId) return 'Not assigned';
     const trainer = trainers.find(t => t.id === trainerId);
-    return trainer ? `${trainer.name} - ${trainer.specialization}` : 'Not found';
+    return trainer ? `${trainer.name}${trainer.expertiseTags?.length ? ' - ' + trainer.expertiseTags.join(', ') : ''}` : 'Not found';
   };
 
   const getLocationName = (locationId?: number) => {

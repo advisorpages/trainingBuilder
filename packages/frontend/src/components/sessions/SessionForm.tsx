@@ -935,7 +935,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                   <option value="">Select a trainer...</option>
                   {trainers.map((trainer) => (
                     <option key={trainer.id} value={trainer.id}>
-                      {trainer.name} - {trainer.specialization}
+                      {trainer.name}{trainer.expertiseTags?.length ? " - " + trainer.expertiseTags.join(", ") : ""}
                     </option>
                   ))}
                 </select>

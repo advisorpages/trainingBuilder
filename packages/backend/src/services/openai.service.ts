@@ -50,6 +50,7 @@ export interface OpenAISessionOutlineRequest {
   variantLabel?: string;
   variantInstruction?: string;
   variantDescription?: string;
+  overrideDirectives?: string[];
 }
 
 export interface OpenAISessionSection {
@@ -68,6 +69,24 @@ export interface OpenAISessionOutline {
   totalDuration: number;
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   recommendedAudienceSize: string;
+}
+
+export interface OutlineGenerationContext {
+  configSnapshot?: Record<string, any>;
+  overridesSnapshot?: Record<string, any>;
+  sandboxSettings?: {
+    globalTone?: {
+      toneGuidelines?: string;
+      systemGuidelines?: string;
+    };
+    durationFlow?: {
+      pacingGuidelines?: string;
+      structuralNotes?: string;
+    };
+    quickTweaks?: Record<string, boolean>;
+    version?: string;
+  };
+  quickDirectives?: string[];
 }
 
 @Injectable()
@@ -109,14 +128,15 @@ export class OpenAIService {
   async generateSessionOutline(
     request: OpenAISessionOutlineRequest,
     ragResults?: any[],
-    ragWeight?: number
+    ragWeight?: number,
+    context?: OutlineGenerationContext
   ): Promise<OpenAISessionOutline> {
     if (!this.apiKey) {
       throw new Error('OpenAI API key not configured');
     }
 
     // Build base prompt
-    let prompt = this.buildPrompt(request);
+    let prompt = this.buildPrompt(request, context);
 
     // Inject RAG context if provided
     if (ragResults && ragWeight > 0) {
@@ -124,7 +144,7 @@ export class OpenAIService {
     }
 
     // Build system prompt for variant personality adaptation
-    const systemPrompt = this.buildSystemPrompt();
+    const systemPrompt = this.buildSystemPrompt(context);
 
     const startTime = Date.now();
 
@@ -253,6 +273,13 @@ export class OpenAIService {
 
             // Log successful interaction
             const processingTime = Date.now() - startTime;
+            const metadata = this.buildInteractionMetadata({
+              request,
+              outline,
+              context,
+              ragResults,
+              ragWeight,
+            });
             await this.logInteraction({
               interactionType: AIInteractionType.OUTLINE_GENERATION,
               status: AIInteractionStatus.SUCCESS,
@@ -269,6 +296,7 @@ export class OpenAIService {
               toneId: request.toneId,
               allVariablesPresent,
               missingVariables: missingVariables.length > 0 ? missingVariables : undefined,
+              metadata,
             });
 
             return outline;
@@ -280,6 +308,12 @@ export class OpenAIService {
 
             // Log parsing failure
             const processingTime = Date.now() - startTime;
+            const failureMetadata = this.buildInteractionMetadata({
+              request,
+              context,
+              ragResults,
+              ragWeight,
+            });
             await this.logInteraction({
               interactionType: AIInteractionType.OUTLINE_GENERATION,
               status: AIInteractionStatus.FAILURE,
@@ -294,6 +328,7 @@ export class OpenAIService {
               sessionType: request.sessionType,
               allVariablesPresent,
               missingVariables: missingVariables.length > 0 ? missingVariables : undefined,
+              metadata: failureMetadata,
             });
 
             throw new Error('Invalid JSON response from OpenAI');
@@ -319,6 +354,12 @@ export class OpenAIService {
 
       // Log the failure
       const processingTime = Date.now() - startTime;
+      const failureMetadata = this.buildInteractionMetadata({
+        request,
+        context,
+        ragResults,
+        ragWeight,
+      });
       await this.logInteraction({
         interactionType: AIInteractionType.OUTLINE_GENERATION,
         status: AIInteractionStatus.FAILURE,
@@ -334,6 +375,7 @@ export class OpenAIService {
         toneId: request.toneId,
         allVariablesPresent,
         missingVariables: missingVariables.length > 0 ? missingVariables : undefined,
+        metadata: failureMetadata,
       });
 
       throw error;
@@ -358,6 +400,7 @@ export class OpenAIService {
     toneId?: number;
     allVariablesPresent?: boolean;
     missingVariables?: string[];
+    metadata?: Record<string, any>;
   }): Promise<void> {
     try {
       // Calculate estimated cost (rough estimate based on gpt-4o-mini pricing)
@@ -371,6 +414,7 @@ export class OpenAIService {
       await this.aiInteractionsService.create({
         ...data,
         estimatedCost,
+        metadata: data.metadata,
       });
     } catch (error) {
       // Don't let logging errors break the main flow
@@ -378,7 +422,99 @@ export class OpenAIService {
     }
   }
 
-  private buildPrompt(request: OpenAISessionOutlineRequest): string {
+  private buildInteractionMetadata(params: {
+    request: OpenAISessionOutlineRequest;
+    outline?: OpenAISessionOutline;
+    context?: OutlineGenerationContext;
+    ragResults?: any[];
+    ragWeight?: number;
+  }): Record<string, any> {
+    const { request, outline, context, ragResults, ragWeight } = params;
+    const configSnapshot: Record<string, any> = {
+      ...(context?.configSnapshot ?? {}),
+    };
+
+    if (configSnapshot.durationTarget === undefined) {
+      configSnapshot.durationTarget = request.duration;
+    }
+    if (configSnapshot.variantLabel === undefined && request.variantLabel) {
+      configSnapshot.variantLabel = request.variantLabel;
+    }
+    if (configSnapshot.variantDescription === undefined && request.variantDescription) {
+      configSnapshot.variantDescription = request.variantDescription;
+    }
+    if (configSnapshot.variantIndex === undefined && request.variantIndex !== undefined) {
+      configSnapshot.variantIndex = request.variantIndex;
+    }
+    if (configSnapshot.variantInstruction === undefined && request.variantInstruction) {
+      configSnapshot.variantInstruction = request.variantInstruction;
+    }
+    if (request.overrideDirectives && request.overrideDirectives.length > 0) {
+      configSnapshot.overrideDirectives = request.overrideDirectives;
+    }
+
+    const sandboxVersion = context?.sandboxSettings?.version;
+    if (sandboxVersion && configSnapshot.sandboxVersion === undefined) {
+      configSnapshot.sandboxVersion = sandboxVersion;
+    }
+
+    const overridesSnapshot = context?.overridesSnapshot
+      ? { ...context.overridesSnapshot }
+      : configSnapshot.overrides
+      ? { ...configSnapshot.overrides }
+      : undefined;
+
+    if (!overridesSnapshot && context?.sandboxSettings?.quickTweaks) {
+      configSnapshot.overrides = {
+        quickTweaks: { ...context.sandboxSettings.quickTweaks },
+        sandboxVersion,
+      };
+    } else if (overridesSnapshot) {
+      configSnapshot.overrides = overridesSnapshot;
+    }
+
+    const effectiveRagWeight = ragWeight ?? configSnapshot.ragWeight ?? 0;
+    const ragSources = ragResults?.length ?? configSnapshot.ragSources ?? 0;
+
+    configSnapshot.ragWeight = effectiveRagWeight;
+    configSnapshot.ragSources = ragSources;
+    if (!configSnapshot.ragMode) {
+      configSnapshot.ragMode = effectiveRagWeight > 0 && ragSources > 0 ? 'rag' : 'baseline';
+    }
+
+    const metadata: Record<string, any> = {
+      configSnapshot,
+    };
+
+    if (context?.sandboxSettings) {
+      metadata.sandboxSettings = {
+        ...context.sandboxSettings,
+      };
+    }
+
+    if (context?.quickDirectives && context.quickDirectives.length > 0) {
+      metadata.quickDirectives = context.quickDirectives;
+    }
+
+    if (outline) {
+      metadata.metrics = {
+        durationActual: outline.totalDuration,
+        sectionCount: Array.isArray(outline.sections) ? outline.sections.length : 0,
+      };
+    }
+
+    if (effectiveRagWeight > 0) {
+      metadata.ragSummary = {
+        ragWeight: effectiveRagWeight,
+        ragSources,
+        ragMode: configSnapshot.ragMode,
+      };
+    }
+
+    return metadata;
+  }
+
+  private buildPrompt(request: OpenAISessionOutlineRequest, context?: OutlineGenerationContext): string {
     const formatLabel = (value?: string | null) => {
       if (!value) return undefined;
       return value
@@ -529,6 +665,30 @@ export class OpenAIService {
       sections.push(toneLines.join('\n'));
     }
 
+    const sandboxTone = context?.sandboxSettings?.globalTone;
+    if (sandboxTone && (sandboxTone.toneGuidelines || sandboxTone.systemGuidelines)) {
+      const sandboxToneLines = ['# Sandbox Tone Guidance'];
+      if (sandboxTone.toneGuidelines) {
+        sandboxToneLines.push(sandboxTone.toneGuidelines);
+      }
+      if (sandboxTone.systemGuidelines) {
+        sandboxToneLines.push('', `System Directives: ${sandboxTone.systemGuidelines}`);
+      }
+      sections.push(sandboxToneLines.join('\n'));
+    }
+
+    const durationFlow = context?.sandboxSettings?.durationFlow;
+    if (durationFlow && (durationFlow.pacingGuidelines || durationFlow.structuralNotes)) {
+      const flowLines = ['# Duration & Flow Constraints'];
+      if (durationFlow.pacingGuidelines) {
+        flowLines.push(`- ${durationFlow.pacingGuidelines}`);
+      }
+      if (durationFlow.structuralNotes) {
+        flowLines.push(`- ${durationFlow.structuralNotes}`);
+      }
+      sections.push(flowLines.join('\n'));
+    }
+
     // 5. OUTPUT REQUIREMENTS - Minimal, non-prescriptive
     const requirements = [`# Output Requirements`];
     requirements.push(`- Return valid JSON with the specified structure`);
@@ -544,14 +704,27 @@ export class OpenAIService {
 
     sections.push(requirements.join('\n'));
 
+    const quickDirectives = Array.from(
+      new Set([
+        ...(request.overrideDirectives ?? []),
+        ...(context?.quickDirectives ?? []),
+      ]),
+    ).filter(Boolean);
+
+    if (quickDirectives.length > 0) {
+      const directiveLines = ['# Override Directives'];
+      quickDirectives.forEach(directive => directiveLines.push(`- ${directive}`));
+      sections.push(directiveLines.join('\n'));
+    }
+
     return sections.join('\n\n');
   }
 
   /**
    * Build system prompt that emphasizes variant personality adaptation
    */
-  private buildSystemPrompt(): string {
-    return `You are an expert training content designer specializing in creating engaging, outcome-focused training sessions for financial professionals.
+  private buildSystemPrompt(context?: OutlineGenerationContext): string {
+    let prompt = `You are an expert training content designer specializing in creating engaging, outcome-focused training sessions for financial professionals.
 
 You excel at adapting your content design to match different learning and delivery styles based on the VARIANT PERSONALITY provided in each request. Each variant represents a distinct approach to training design - you must follow the personality instructions precisely to create measurably different outputs.
 
@@ -578,6 +751,13 @@ Respond ONLY with valid JSON matching this exact structure:
 When knowledge base materials are provided, use them as inspiration and reference points while maintaining the variant personality. Adapt proven frameworks to match the variant's unique style.
 
 Make sessions practical, engaging, and outcome-focused. Adapt your section titles, descriptions, activities, and flow to embody the variant personality.`;
+
+    const additionalGuidance = context?.sandboxSettings?.globalTone?.systemGuidelines;
+    if (additionalGuidance) {
+      prompt = `${prompt}\n\nAdditional System Guidance:\n${additionalGuidance}`;
+    }
+
+    return prompt;
   }
 
   /**

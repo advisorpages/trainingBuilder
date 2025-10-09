@@ -179,8 +179,8 @@ export const EnhancedTopicCard: React.FC<EnhancedTopicCardProps> = ({
               <option value="">Select trainer...</option>
               {trainers.map((trainer) => (
                 <option key={trainer.id} value={trainer.id}>
-                  {trainer.firstName} {trainer.lastName}
-                  {trainer.expertise && ` - ${trainer.expertise}`}
+                  {trainer.name}
+                  {trainer.expertiseTags?.length ? ` - ${trainer.expertiseTags.join(', ')}` : ''}
                 </option>
               ))}
             </select>

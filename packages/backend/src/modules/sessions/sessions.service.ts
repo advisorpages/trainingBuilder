@@ -36,13 +36,18 @@ import {
   ReorderOutlineSectionsDto,
   DuplicateOutlineSectionDto,
 } from './dto/outline-section.dto';
-import { OpenAIService, OpenAISessionOutlineRequest } from '../../services/openai.service';
+import { OpenAIService, OpenAISessionOutlineRequest, OutlineGenerationContext } from '../../services/openai.service';
 import { PromptRegistryService } from '../../services/prompt-registry.service';
 import { RagIntegrationService } from '../../services/rag-integration.service';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
 import { AIInteractionType, AIInteractionStatus } from '../../entities/ai-interaction.entity';
 import { AnalyticsTelemetryService } from '../../services/analytics-telemetry.service';
 import { VariantConfigService } from '../../services/variant-config.service';
+import {
+  AiPromptSettingsService,
+  PromptSandboxSettings,
+  PromptVariantPersona,
+} from '../../services/ai-prompt-settings.service';
 
 export interface RagSource {
   filename: string;
@@ -173,6 +178,7 @@ export class SessionsService {
     private readonly aiInteractionsService: AIInteractionsService,
     private readonly configService: ConfigService,
     private readonly analyticsTelemetry: AnalyticsTelemetryService,
+    private readonly promptSettingsService: AiPromptSettingsService,
     private readonly variantConfigService: VariantConfigService,
   ) {
     this.enableVariantGenerationV2 = this.configService.get<boolean>('ENABLE_VARIANT_GENERATION_V2', false);
@@ -554,6 +560,28 @@ export class SessionsService {
       }
     }
 
+    const promptSettings = await this.promptSettingsService.getCurrentSettings();
+    const sandboxSettings = promptSettings.settings;
+    const baselinePersona = sandboxSettings.variantPersonas?.[0] ?? null;
+    const quickTweaks = sandboxSettings.quickTweaks;
+    const quickDirectives = this.buildQuickTweakDirectives(quickTweaks);
+    const baselineContext = this.buildOutlineGenerationContext({
+      sandboxSettings,
+      duration,
+      variant: baselinePersona
+        ? {
+            index: 0,
+            label: baselinePersona.label,
+            description: baselinePersona.summary,
+            instruction: baselinePersona.prompt,
+            persona: baselinePersona,
+          }
+        : undefined,
+      ragWeight: 0,
+      ragSources: 0,
+      quickDirectives,
+    });
+
     let useOpenAI = false;
     let aiOutline: any = null;
     let fallbackUsed = false;
@@ -581,6 +609,11 @@ export class SessionsService {
           locationCapacity: location?.capacity ?? payload.locationCapacity,
           locationTimezone: location?.timezone ?? payload.locationTimezone,
           locationNotes: (location?.notes ?? location?.accessInstructions) ?? payload.locationNotes,
+          variantIndex: baselinePersona ? 0 : undefined,
+          variantLabel: baselinePersona?.label,
+          variantInstruction: baselinePersona?.prompt ?? undefined,
+          variantDescription: baselinePersona?.summary ?? undefined,
+          overrideDirectives: quickDirectives.length ? quickDirectives : undefined,
         };
 
         // Add rich audience profile if available
@@ -611,7 +644,7 @@ export class SessionsService {
           openAIRequest.toneInstructions = tone.promptInstructions;
         }
 
-        aiOutline = await this.openAIService.generateSessionOutline(openAIRequest);
+        aiOutline = await this.openAIService.generateSessionOutline(openAIRequest, undefined, undefined, baselineContext);
         useOpenAI = true;
         this.logger.log('Successfully generated outline using OpenAI');
       } catch (error) {
@@ -728,7 +761,7 @@ export class SessionsService {
     };
   }
 
-  private mapSectionType(title: string, index: number): string {
+  private mapSectionType(title: string, index: number): SectionType {
     const titleLower = title.toLowerCase();
 
     if (titleLower.includes('welcome') || titleLower.includes('intro') || titleLower.includes('opening') || index === 0) {
@@ -1606,6 +1639,11 @@ export class SessionsService {
           }
         : undefined;
 
+    const promptSettings = await this.promptSettingsService.getCurrentSettings();
+    const sandboxSettings = promptSettings.settings;
+    const quickTweaks = sandboxSettings.quickTweaks;
+    const quickDirectives = this.buildQuickTweakDirectives(quickTweaks);
+
     // Step 1: Query RAG once with retry (reuse for all variants)
     let ragResults: any[] = [];
     let ragAvailable = false;
@@ -1660,7 +1698,11 @@ export class SessionsService {
       this.logger.warn(`RAG query failed completely, proceeding with baseline only: ${message}`);
     }
 
-    const ragWeight = ragResults.length > 0 ? 0.5 : 0.0;
+    const ragWeight = ragResults.length > 0
+      ? quickTweaks?.raiseRagPriority
+        ? 0.7
+        : 0.35
+      : 0.0;
 
     const variantMeta = await Promise.all(
       [0, 1, 2, 3].map(async index => ({
@@ -1672,8 +1714,9 @@ export class SessionsService {
     );
 
     // Step 2: Generate 4 variants in parallel with shared RAG weight
-    const variantPromises = variantMeta.map(meta =>
-      this.generateSingleVariant(
+    const variantPromises = variantMeta.map(meta => {
+      const persona = sandboxSettings.variantPersonas?.[meta.index] ?? null;
+      return this.generateSingleVariant(
         payload,
         duration,
         audience,
@@ -1681,7 +1724,10 @@ export class SessionsService {
         locationContext,
         ragResults,
         ragWeight,
-        meta
+        meta,
+        sandboxSettings,
+        quickDirectives,
+        persona
       )
         .then(result => {
           this.logger.log(`Variant ${meta.index + 1} generated`, {
@@ -1697,7 +1743,7 @@ export class SessionsService {
           this.logger.error(`Variant ${meta.index + 1} generation failed: ${message}`);
           return null;
         })
-    );
+    });
 
     const variantResults = await Promise.all(variantPromises);
 
@@ -1797,8 +1843,16 @@ export class SessionsService {
     location: LocationPromptContext | undefined,
     ragResults: any[],
     ragWeight: number,
-    meta: { index: number; label: string; instruction: string; description: string }
+    meta: { index: number; label: string; instruction: string; description: string },
+    sandboxSettings: PromptSandboxSettings,
+    quickDirectives: string[],
+    persona: PromptVariantPersona | null
   ): Promise<{ outline: any; meta: { index: number; label: string; description: string; ragWeight: number } }> {
+    const combinedInstruction = persona?.prompt
+      ? `${meta.instruction.trim()}\n\nSandbox Persona Amplifier:\n${persona.prompt.trim()}`
+      : meta.instruction;
+    const variantDescription = persona?.summary ?? meta.description;
+
     const openAIRequest: OpenAISessionOutlineRequest = {
       title: payload.title,
       category: payload.category,
@@ -1820,8 +1874,9 @@ export class SessionsService {
       ragWeight,
       variantIndex: meta.index,
       variantLabel: meta.label,
-      variantInstruction: meta.instruction,
-      variantDescription: meta.description,
+      variantInstruction: combinedInstruction,
+      variantDescription,
+      overrideDirectives: quickDirectives.length ? quickDirectives : undefined,
     };
 
     if (audience) {
@@ -1850,33 +1905,66 @@ export class SessionsService {
       openAIRequest.toneInstructions = tone.promptInstructions;
     }
 
+    const outlineContext = this.buildOutlineGenerationContext({
+      sandboxSettings,
+      duration,
+      variant: {
+        index: meta.index,
+        label: meta.label,
+        description: variantDescription,
+        instruction: combinedInstruction,
+        persona,
+      },
+      ragWeight,
+      ragSources: ragResults?.length ?? 0,
+      quickDirectives,
+    });
+
     const aiOutline = await this.openAIService.generateSessionOutline(
       openAIRequest,
       ragResults,
-      ragWeight
+      ragWeight,
+      outlineContext
     );
 
-    const sections = aiOutline.sections.map((section: any, index: number) => ({
-      id: `ai-${Date.now()}-${meta.index}-${index}`,
-      type: this.mapSectionType(section.title, index),
-      position: index,
-      title: section.title,
-      duration: section.duration,
-      description: section.description,
-      learningObjectives: section.learningObjectives || [],
-      suggestedActivities: section.suggestedActivities || [],
-    }));
+    let sections: FlexibleSessionSection[] = aiOutline.sections.map(
+      (section: any, index: number): FlexibleSessionSection => ({
+        id: `ai-${Date.now()}-${meta.index}-${index}`,
+        type: this.mapSectionType(section.title, index),
+        position: index,
+        title: typeof section.title === 'string' ? section.title : `Section ${index + 1}`,
+        duration: typeof section.duration === 'number' && Number.isFinite(section.duration)
+          ? Math.max(1, Math.round(section.duration))
+          : Math.max(5, Math.round(duration / Math.max(1, aiOutline.sections.length))),
+        description: typeof section.description === 'string' ? section.description : '',
+        learningObjectives: Array.isArray(section.learningObjectives) ? section.learningObjectives : [],
+        suggestedActivities: Array.isArray(section.suggestedActivities) ? section.suggestedActivities : [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
 
-    const balancedSections = this.balanceDurations(sections, duration);
+    sections = this.ensureRequiredSectionCoverage(sections, duration);
+    sections = this.applyStructuredDurationDefaults(sections, duration);
+    sections = this.applyVariantPersonaAdjustments(sections, meta.label);
+
+    let balancedSections = this.balanceDurations(sections, duration);
 
     const matchingTopics = await this.findMatchingTopics(balancedSections);
-    const enhancedSections = await this.associateTopicsWithSections(balancedSections, matchingTopics);
+    let enhancedSections = await this.associateTopicsWithSections(balancedSections, matchingTopics);
 
-    const totalDuration = enhancedSections.reduce((acc, s) => acc + s.duration, 0);
+    // Final pass to guarantee duration alignment and sequential positions
+    balancedSections = this.balanceDurations(enhancedSections, duration);
+    const finalSections = balancedSections.map((section, index) => ({
+      ...section,
+      position: index,
+    }));
+
+    const totalDuration = finalSections.reduce((acc, s) => acc + s.duration, 0);
 
     return {
       outline: {
-        sections: enhancedSections,
+        sections: finalSections,
         totalDuration,
         suggestedSessionTitle: aiOutline.suggestedTitle,
         suggestedDescription: aiOutline.summary,
@@ -1888,7 +1976,7 @@ export class SessionsService {
       meta: {
         index: meta.index,
         label: meta.label,
-        description: meta.description,
+        description: variantDescription,
         ragWeight,
       },
     };
@@ -1897,6 +1985,95 @@ export class SessionsService {
   /**
    * Balance section durations to match target (within 10% tolerance)
    */
+  private buildQuickTweakDirectives(quickTweaks?: PromptSandboxSettings['quickTweaks']): string[] {
+    if (!quickTweaks) {
+      return [];
+    }
+
+    const directives: string[] = [];
+
+    if (quickTweaks.increaseDataEmphasis) {
+      directives.push('Spotlight data-backed insights and call out relevant metrics or KPIs when they reinforce the narrative.');
+    }
+
+    if (quickTweaks.speedUpPace) {
+      directives.push('Keep pacing brisk by tightening explanations and limiting transitions to rapid, action-focused handoffs.');
+    }
+
+    if (quickTweaks.raiseRagPriority) {
+      directives.push('Prioritize knowledge-base (RAG) insights whenever available and weave them into sections with concise citations.');
+    }
+
+    return directives;
+  }
+
+  private buildOutlineGenerationContext(options: {
+    sandboxSettings: PromptSandboxSettings;
+    duration: number;
+    variant?: {
+      index?: number;
+      label?: string;
+      description?: string;
+      instruction?: string;
+      persona?: PromptVariantPersona | null;
+    };
+    ragWeight?: number;
+    ragSources?: number;
+    quickDirectives?: string[];
+  }): OutlineGenerationContext {
+    const { sandboxSettings, duration, variant, ragWeight = 0, ragSources = 0, quickDirectives } = options;
+
+    const configSnapshot: Record<string, any> = {
+      durationTarget: duration,
+      ragWeight,
+      ragSources,
+      sandboxVersion: sandboxSettings.version,
+    };
+
+    if (variant?.label) {
+      configSnapshot.variantLabel = variant.label;
+    }
+    if (variant?.description) {
+      configSnapshot.variantDescription = variant.description;
+    }
+    if (variant?.index !== undefined) {
+      configSnapshot.variantIndex = variant.index;
+    }
+    if (variant?.instruction) {
+      configSnapshot.variantInstruction = variant.instruction;
+    }
+
+    const overridesSnapshot: Record<string, any> = {
+      quickTweaks: { ...(sandboxSettings.quickTweaks ?? {}) },
+      sandboxVersion: sandboxSettings.version,
+    };
+
+    if (variant?.persona) {
+      overridesSnapshot.persona = {
+        id: variant.persona.id,
+        label: variant.persona.label,
+        summary: variant.persona.summary,
+      };
+      configSnapshot.variantPersona = overridesSnapshot.persona;
+    }
+
+    configSnapshot.ragMode = ragWeight > 0 && ragSources > 0 ? 'rag' : 'baseline';
+
+    const context: OutlineGenerationContext = {
+      configSnapshot,
+      overridesSnapshot,
+      sandboxSettings: {
+        globalTone: sandboxSettings.globalTone,
+        durationFlow: sandboxSettings.durationFlow,
+        quickTweaks: sandboxSettings.quickTweaks,
+        version: sandboxSettings.version,
+      },
+      quickDirectives,
+    };
+
+    return context;
+  }
+
   private balanceDurations(sections: any[], targetDuration: number): any[] {
     const totalDuration = sections.reduce((sum, s) => sum + s.duration, 0);
 
@@ -1923,6 +2100,279 @@ export class SessionsService {
     }
 
     return adjustedSections;
+  }
+
+  private ensureRequiredSectionCoverage(
+    sections: FlexibleSessionSection[],
+    targetDuration: number,
+  ): FlexibleSessionSection[] {
+    const now = new Date().toISOString();
+    const requiredSequence: Array<{
+      type: SectionType;
+      title: string;
+      description: string;
+    }> = [
+      {
+        type: 'opener',
+        title: 'Opening & Welcome',
+        description: 'Set expectations, establish rapport, and preview the flow for participants.',
+      },
+      {
+        type: 'topic',
+        title: 'Theory Deep Dive',
+        description: 'Deliver the core frameworks and concepts that underpin this session.',
+      },
+      {
+        type: 'exercise',
+        title: 'Application Lab',
+        description: 'Guide participants through structured practice that translates theory into action.',
+      },
+      {
+        type: 'video',
+        title: 'Case Study Video',
+        description: 'Review a curated video that illustrates the concepts in real-world context.',
+      },
+      {
+        type: 'closing',
+        title: 'Commitments & Next Steps',
+        description: 'Surface insights, capture commitments, and define post-session follow-up.',
+      },
+    ];
+
+    const updatedSections: FlexibleSessionSection[] = sections.map(section => ({
+      ...section,
+      type: this.normalizeSectionType(section.type),
+    }));
+
+    const insertAt = (list: FlexibleSessionSection[], index: number, item: FlexibleSessionSection) => {
+      const safeIndex = Math.max(0, Math.min(index, list.length));
+      list.splice(safeIndex, 0, item);
+    };
+
+    const findInsertIndex = (type: SectionType): number => {
+      switch (type) {
+        case 'opener':
+          return 0;
+        case 'topic': {
+          const firstExercise = updatedSections.findIndex(
+            section => section.type === 'exercise' || section.type === 'video' || section.type === 'closing',
+          );
+          return firstExercise === -1 ? updatedSections.length : firstExercise;
+        }
+        case 'exercise': {
+          const firstVideoOrClosing = updatedSections.findIndex(
+            section => section.type === 'video' || section.type === 'closing',
+          );
+          return firstVideoOrClosing === -1 ? updatedSections.length : firstVideoOrClosing;
+        }
+        case 'video': {
+          const closingIndex = updatedSections.findIndex(section => section.type === 'closing');
+          return closingIndex === -1 ? updatedSections.length : closingIndex;
+        }
+        case 'closing':
+        default:
+          return updatedSections.length;
+      }
+    };
+
+    for (const required of requiredSequence) {
+      const exists = updatedSections.some(section => section.type === required.type);
+      if (exists) {
+        continue;
+      }
+
+      const placeholder: FlexibleSessionSection = {
+        id: `auto-${required.type}-${randomUUID()}`,
+        type: required.type,
+        position: 0,
+        title: required.title,
+        duration: Math.max(5, Math.round(targetDuration * 0.15)),
+        description: required.description,
+        learningObjectives: [],
+        suggestedActivities: [],
+        createdAt: now,
+        updatedAt: now,
+        isCollapsible: true,
+      };
+
+      const insertIndex = findInsertIndex(required.type);
+      insertAt(updatedSections, insertIndex, placeholder);
+    }
+
+    return updatedSections.map((section, index) => ({
+      ...section,
+      position: index,
+      updatedAt: now,
+    }));
+  }
+
+  private applyStructuredDurationDefaults(
+    sections: FlexibleSessionSection[],
+    targetDuration: number,
+  ): FlexibleSessionSection[] {
+    if (!Array.isArray(sections) || sections.length === 0) {
+      return sections;
+    }
+
+    if (!Number.isFinite(targetDuration) || targetDuration <= 0) {
+      return sections;
+    }
+
+    const ratios: Record<SectionType, number> = {
+      opener: 10,
+      topic: 25,
+      exercise: 25,
+      video: 10,
+      closing: 20,
+      inspiration: 0,
+      discussion: 0,
+      presentation: 0,
+      break: 0,
+      assessment: 0,
+      custom: 0,
+    };
+    const ratioSum = Object.values(ratios).reduce((sum, value) => sum + value, 0);
+
+    const updated = sections.map(section => ({ ...section }));
+    const grouped = new Map<SectionType, number[]>();
+
+    updated.forEach((section, index) => {
+      const type = section.type ?? 'custom';
+      if (!grouped.has(type)) {
+        grouped.set(type, []);
+      }
+      grouped.get(type)!.push(index);
+    });
+
+    for (const [type, weight] of Object.entries(ratios) as Array<[SectionType, number]>) {
+      if (weight <= 0) {
+        continue;
+      }
+      const indices = grouped.get(type);
+      if (!indices || indices.length === 0) {
+        continue;
+      }
+
+      const typeTarget = Math.max(indices.length, Math.round((targetDuration * weight) / ratioSum));
+      let remaining = typeTarget;
+
+      indices.forEach((sectionIndex, idx) => {
+        const isLast = idx === indices.length - 1;
+        let allocation = Math.floor(typeTarget / indices.length);
+        if (allocation < 1) {
+          allocation = 1;
+        }
+
+        if (isLast) {
+          allocation = Math.max(1, remaining);
+        }
+
+        updated[sectionIndex] = {
+          ...updated[sectionIndex],
+          duration: allocation,
+        };
+
+        remaining -= allocation;
+      });
+
+      if (remaining !== 0 && indices.length > 0) {
+        const lastIndex = indices[indices.length - 1];
+        updated[lastIndex] = {
+          ...updated[lastIndex],
+          duration: Math.max(1, updated[lastIndex].duration + remaining),
+        };
+      }
+    }
+
+    return updated;
+  }
+
+  private applyVariantPersonaAdjustments(
+    sections: FlexibleSessionSection[],
+    variantLabel?: string,
+  ): FlexibleSessionSection[] {
+    if (!variantLabel) {
+      return sections;
+    }
+
+    const normalizedLabel = variantLabel.toLowerCase();
+    const now = new Date().toISOString();
+
+    const ensureList = (value?: string[]): string[] => {
+      if (Array.isArray(value)) {
+        return [...value];
+      }
+      return [];
+    };
+
+    const addUnique = (list: string[], entry: string): string[] => {
+      if (!list.some(item => item.toLowerCase() === entry.toLowerCase())) {
+        return [...list, entry];
+      }
+      return list;
+    };
+
+    return sections.map(section => {
+      let description = section.description ?? '';
+      let objectives = ensureList(section.learningObjectives);
+      let activities = ensureList(section.suggestedActivities);
+
+      const appendSentence = (base: string, sentence: string): string => {
+        if (!sentence) {
+          return base;
+        }
+        const normalizedSentence = sentence.trim();
+        if (!normalizedSentence) {
+          return base;
+        }
+        if (base.toLowerCase().includes(normalizedSentence.toLowerCase())) {
+          return base;
+        }
+        return `${base}${base ? ' ' : ''}${normalizedSentence}`.trim();
+      };
+
+      if (normalizedLabel.includes('precision')) {
+        description = appendSentence(
+          description,
+          'Utilize the facilitator checklist to confirm each micro-step before advancing.',
+        );
+        objectives = addUnique(objectives, 'Maintain a step-by-step cadence that follows the agenda without deviation.');
+        activities = addUnique(activities, 'Review the facilitator checklist aloud to confirm each deliverable before moving on.');
+        activities = addUnique(activities, 'Time-box each micro-step and capture status on the session scorecard.');
+      } else if (normalizedLabel.includes('insight')) {
+        description = appendSentence(
+          description,
+          'Anchor recommendations in relevant metrics, case studies, or benchmark data.',
+        );
+        objectives = addUnique(objectives, 'Reference at least one evidence-backed insight or metric to support decisions.');
+        activities = addUnique(activities, 'Review supporting data or a benchmark report that validates the recommended approach.');
+        activities = addUnique(activities, 'Debrief in pairs to extract measurable outcomes and capture them as proof points.');
+      } else if (normalizedLabel.includes('connect')) {
+        description = appendSentence(
+          description,
+          'Facilitate peer storytelling and reflection to build shared understanding.',
+        );
+        objectives = addUnique(objectives, 'Deepen peer connections through shared storytelling and collaborative reflection.');
+        activities = addUnique(activities, 'Run paired storytelling rounds that surface personal change experiences.');
+        activities = addUnique(activities, 'Host small-group discussions focused on shared commitments and support tactics.');
+      } else if (normalizedLabel.includes('ignite')) {
+        description = appendSentence(
+          description,
+          'Keep momentum high with countdown timers, rapid prompts, and immediate action commitments.',
+        );
+        objectives = addUnique(objectives, 'Convert insights into rapid, time-boxed action steps.');
+        activities = addUnique(activities, 'Set a visible countdown timer to drive urgency during the activity.');
+        activities = addUnique(activities, 'Finish with a rapid-fire share-out of next actions and who will start them within 24 hours.');
+      }
+
+      return {
+        ...section,
+        description: description.trim(),
+        learningObjectives: objectives,
+        suggestedActivities: activities,
+        updatedAt: now,
+      };
+    });
   }
 
   /**

@@ -124,7 +124,7 @@ export const DraggableSessionFlow: React.FC<DraggableSessionFlowProps> = ({
                               <>
                                 <span className="text-gray-400">•</span>
                                 <span className="text-gray-600 truncate">
-                                  {trainer.firstName} {trainer.lastName}
+                                  {trainer.name}
                                 </span>
                               </>
                             )}

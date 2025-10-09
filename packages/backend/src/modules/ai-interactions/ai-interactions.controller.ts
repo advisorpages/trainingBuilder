@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, Query, UseGuards, Patch } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -9,16 +9,27 @@ import {
   AIInteractionFilters,
   UpdateFeedbackDto,
 } from '../../services/ai-interactions.service';
+import { AiPromptSettingsService } from '../../services/ai-prompt-settings.service';
 import {
   AIInteractionType,
   AIInteractionStatus,
   UserFeedback,
 } from '../../entities/ai-interaction.entity';
+import { IsObject, IsOptional } from 'class-validator';
+
+class UpdateInteractionMetadataDto {
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
+}
 
 @Controller('ai-interactions')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AIInteractionsController {
-  constructor(private readonly aiInteractionsService: AIInteractionsService) {}
+  constructor(
+    private readonly aiInteractionsService: AIInteractionsService,
+    private readonly promptSettingsService: AiPromptSettingsService,
+  ) {}
 
   @Get()
   @Roles(UserRole.CONTENT_DEVELOPER, UserRole.BROKER)
@@ -94,6 +105,46 @@ export class AIInteractionsController {
     );
   }
 
+  @Get('comparisons')
+  @Roles(UserRole.CONTENT_DEVELOPER, UserRole.BROKER)
+  async getComparisonRuns(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('search') search?: string,
+    @Query('variantLabel') variantLabel?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.aiInteractionsService.getComparisonSnapshots({
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+      search: search || undefined,
+      variantLabel: variantLabel || undefined,
+      status: status ? (status as AIInteractionStatus) : undefined,
+    });
+  }
+
+  @Get('tuner/overview')
+  @Roles(UserRole.CONTENT_DEVELOPER, UserRole.BROKER)
+  async getSessionTunerOverview() {
+    const [overview, currentSettings] = await Promise.all([
+      this.aiInteractionsService.getSessionTunerOverview(),
+      this.promptSettingsService.getCurrentSettings(),
+    ]);
+
+    return {
+      metrics: overview,
+      activeSettings: {
+        id: currentSettings.setting.id,
+        label: currentSettings.setting.label,
+        updatedAt: currentSettings.setting.updatedAt,
+        quickTweaks: currentSettings.settings.quickTweaks,
+        variantCount: currentSettings.settings.variantPersonas?.length ?? 0,
+        version: currentSettings.settings.version,
+      },
+      promptSettings: currentSettings,
+    };
+  }
+
   @Get('export')
   @Roles(UserRole.CONTENT_DEVELOPER, UserRole.BROKER)
   async exportInteractions(
@@ -147,5 +198,17 @@ export class AIInteractionsController {
     @Body() feedbackData: UpdateFeedbackDto
   ) {
     return this.aiInteractionsService.updateFeedback(id, feedbackData);
+  }
+
+  @Patch(':id/metadata')
+  @Roles(UserRole.CONTENT_DEVELOPER, UserRole.BROKER)
+  async updateMetadata(
+    @Param('id') id: string,
+    @Body() payload: UpdateInteractionMetadataDto
+  ) {
+    if (!payload.metadata) {
+      return this.aiInteractionsService.findOne(id);
+    }
+    return this.aiInteractionsService.updateMetadata(id, payload.metadata);
   }
 }

@@ -18,7 +18,8 @@ const PublicHomepage = () => {
   // Helper function to get the appropriate dashboard route
   const getDashboardRoute = () => {
     if (!user) return '/dashboard'
-    return user.role === 'trainer' ? '/trainer/dashboard' : '/dashboard'
+    const roleKey = user.role?.key ?? ''
+    return roleKey === 'trainer' ? '/trainer/dashboard' : '/dashboard'
   }
 
   useEffect(() => {

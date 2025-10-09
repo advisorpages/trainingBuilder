@@ -75,6 +75,43 @@ export interface UpdateFeedbackDto {
   editDistance?: number;
 }
 
+export interface AIInteractionComparison {
+  id: string;
+  createdAt: Date;
+  status: AIInteractionStatus;
+  interactionType: AIInteractionType;
+  variantLabel?: string;
+  variantDescription?: string;
+  ragMode: string;
+  ragWeight: number;
+  durationTarget: number;
+  durationActual: number;
+  durationDelta: number;
+  quickTweaks: Record<string, boolean>;
+  configSnapshot: Record<string, any>;
+  overridesSnapshot?: Record<string, any>;
+  metadata: Record<string, any>;
+  structuredOutput?: Record<string, any>;
+  renderedPrompt?: string;
+  userNotes?: Record<string, any>;
+  isPinned?: boolean;
+}
+
+export interface SessionTunerOverview {
+  totalRuns: number;
+  successRate: number;
+  ragHitRate: number;
+  averageDurationDelta: number;
+  averageDurationDeltaAbs: number;
+  recentIssues: Array<{
+    id: string;
+    status: AIInteractionStatus;
+    createdAt: Date;
+    variantLabel?: string;
+    errorMessage?: string | null;
+  }>;
+}
+
 @Injectable()
 export class AIInteractionsService {
   constructor(
@@ -485,5 +522,234 @@ export class AIInteractionsService {
       averageRagSourcesUsed: ragSelections > 0 ? totalRagSources / ragSelections : 0,
       selectionsByLabel,
     };
+  }
+
+  async updateMetadata(id: string, metadataPatch: Record<string, any>): Promise<AIInteraction> {
+    const interaction = await this.findOne(id);
+    if (!interaction) {
+      throw new Error(`AI Interaction ${id} not found`);
+    }
+
+    const currentMetadata = (interaction.metadata || {}) as Record<string, any>;
+    interaction.metadata = this.deepMerge(currentMetadata, metadataPatch);
+    return this.interactionsRepository.save(interaction);
+  }
+
+  async getComparisonSnapshots(params: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    variantLabel?: string;
+    status?: AIInteractionStatus;
+  } = {}): Promise<{ runs: AIInteractionComparison[]; total: number }> {
+    const limit = Math.min(Math.max(params.limit ?? 20, 1), 100);
+    const offset = Math.max(params.offset ?? 0, 0);
+
+    const queryBuilder = this.interactionsRepository
+      .createQueryBuilder('interaction')
+      .where('interaction.interactionType = :type', {
+        type: AIInteractionType.OUTLINE_GENERATION,
+      })
+      .orderBy('interaction.createdAt', 'DESC')
+      .skip(offset)
+      .take(limit);
+
+    if (params.status) {
+      queryBuilder.andWhere('interaction.status = :status', { status: params.status });
+    }
+
+    if (params.variantLabel) {
+      queryBuilder.andWhere(
+        "(interaction.metadata -> 'configSnapshot' ->> 'variantLabel') ILIKE :variantLabel",
+        { variantLabel: `%${params.variantLabel}%` },
+      );
+    }
+
+    if (params.search) {
+      queryBuilder.andWhere(
+        "((interaction.metadata -> 'configSnapshot' ->> 'variantLabel') ILIKE :search " +
+          'OR interaction.renderedPrompt ILIKE :search)',
+        { search: `%${params.search}%` },
+      );
+    }
+
+    const [records, total] = await queryBuilder.getManyAndCount();
+    const runs = records.map((interaction) => this.toComparisonSnapshot(interaction));
+
+    return { runs, total };
+  }
+
+  async getSessionTunerOverview(limit = 200): Promise<SessionTunerOverview> {
+    const cappedLimit = Math.min(Math.max(limit, 50), 500);
+    const interactions = await this.interactionsRepository
+      .createQueryBuilder('interaction')
+      .where('interaction.interactionType = :type', {
+        type: AIInteractionType.OUTLINE_GENERATION,
+      })
+      .orderBy('interaction.createdAt', 'DESC')
+      .take(cappedLimit)
+      .getMany();
+
+    if (interactions.length === 0) {
+      return {
+        totalRuns: 0,
+        successRate: 0,
+        ragHitRate: 0,
+        averageDurationDelta: 0,
+        averageDurationDeltaAbs: 0,
+        recentIssues: [],
+      };
+    }
+
+    const snapshots = interactions.map((interaction) => this.toComparisonSnapshot(interaction));
+    const successCount = snapshots.filter((snapshot) => snapshot.status === AIInteractionStatus.SUCCESS).length;
+    const ragRuns = snapshots.filter((snapshot) => snapshot.ragMode !== 'baseline' || snapshot.ragWeight > 0);
+
+    const durationDeltaSum = snapshots.reduce((sum, snapshot) => sum + snapshot.durationDelta, 0);
+    const durationDeltaAbsSum = snapshots.reduce((sum, snapshot) => sum + Math.abs(snapshot.durationDelta), 0);
+
+    const errorLookup = new Map(interactions.map((interaction) => [interaction.id, interaction.errorMessage || null]));
+
+    const recentIssues = snapshots
+      .filter((snapshot) => snapshot.status !== AIInteractionStatus.SUCCESS)
+      .slice(0, 3)
+      .map((snapshot) => ({
+        id: snapshot.id,
+        status: snapshot.status,
+        createdAt: snapshot.createdAt,
+        variantLabel: snapshot.variantLabel,
+        errorMessage: errorLookup.get(snapshot.id),
+      }));
+
+    return {
+      totalRuns: snapshots.length,
+      successRate: (successCount / snapshots.length) * 100,
+      ragHitRate: snapshots.length > 0 ? (ragRuns.length / snapshots.length) * 100 : 0,
+      averageDurationDelta: snapshots.length > 0 ? durationDeltaSum / snapshots.length : 0,
+      averageDurationDeltaAbs: snapshots.length > 0 ? durationDeltaAbsSum / snapshots.length : 0,
+      recentIssues,
+    };
+  }
+
+  private toComparisonSnapshot(interaction: AIInteraction): AIInteractionComparison {
+    const metadata = (interaction.metadata || {}) as Record<string, any>;
+    const configSnapshot = this.extractConfigSnapshot(metadata);
+    const overridesSnapshot = (configSnapshot.overrides || {}) as Record<string, any>;
+    const quickTweaks = (overridesSnapshot.quickTweaks || {}) as Record<string, boolean>;
+    const ragWeight = this.safeNumber(
+      configSnapshot.ragWeight ?? metadata.ragWeight ?? interaction.inputVariables?.ragWeight,
+      0,
+    );
+    const durationTarget = this.safeNumber(
+      configSnapshot.durationTarget ?? interaction.inputVariables?.duration,
+      0,
+    );
+    const durationActual = this.safeNumber(
+      metadata?.metrics?.durationActual ??
+        interaction.structuredOutput?.totalDuration ??
+        configSnapshot.durationActual,
+      durationTarget,
+    );
+    const variantLabel = this.getVariantLabel(metadata, interaction);
+    const variantDescription = configSnapshot.variantDescription ?? metadata.variantDescription;
+
+    const comparisonTags = Array.isArray(metadata.comparisonTags) ? metadata.comparisonTags : [];
+    const isPinned = comparisonTags.includes('benchmark') || metadata.isPinned === true;
+
+    return {
+      id: interaction.id,
+      createdAt: interaction.createdAt,
+      status: interaction.status,
+      interactionType: interaction.interactionType,
+      variantLabel: variantLabel ?? undefined,
+      variantDescription: variantDescription ?? undefined,
+      ragMode: this.computeRagMode(configSnapshot, ragWeight, metadata),
+      ragWeight,
+      durationTarget,
+      durationActual,
+      durationDelta: durationActual - durationTarget,
+      quickTweaks,
+      configSnapshot,
+      overridesSnapshot,
+      metadata,
+      structuredOutput: interaction.structuredOutput ?? undefined,
+      renderedPrompt: interaction.renderedPrompt,
+      userNotes: metadata.userNotes ?? undefined,
+      isPinned,
+    };
+  }
+
+  private extractConfigSnapshot(metadata: Record<string, any>): Record<string, any> {
+    const snapshot = (metadata?.configSnapshot ?? {}) as Record<string, any>;
+    return { ...snapshot };
+  }
+
+  private computeRagMode(
+    configSnapshot: Record<string, any>,
+    ragWeight: number,
+    metadata: Record<string, any>,
+  ): string {
+    if (configSnapshot?.ragMode) {
+      return configSnapshot.ragMode;
+    }
+    if (metadata?.ragSummary?.mode) {
+      return metadata.ragSummary.mode;
+    }
+    return ragWeight > 0 ? 'rag' : 'baseline';
+  }
+
+  private getVariantLabel(metadata: Record<string, any>, interaction: AIInteraction): string | undefined {
+    const snapshotLabel = metadata?.configSnapshot?.variantLabel ?? metadata?.variantLabel;
+    if (snapshotLabel) {
+      return snapshotLabel;
+    }
+    const input = (interaction.inputVariables || {}) as Record<string, any>;
+    if (input?.variantLabel) {
+      return input.variantLabel;
+    }
+    return undefined;
+  }
+
+  private safeNumber(value: unknown, fallback: number): number {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  private deepMerge(target: Record<string, any>, source: Record<string, any>): Record<string, any> {
+    if (!this.isObject(target)) {
+      return { ...source };
+    }
+
+    const result: Record<string, any> = { ...target };
+
+    Object.keys(source).forEach((key) => {
+      const value = source[key];
+      if (Array.isArray(value)) {
+        result[key] = value.slice();
+      } else if (this.isObject(value)) {
+        result[key] = this.deepMerge(
+          this.isObject(result[key]) ? (result[key] as Record<string, any>) : {},
+          value as Record<string, any>,
+        );
+      } else if (value === undefined) {
+        // Skip undefined to prevent erasing existing values unintentionally
+      } else {
+        result[key] = value;
+      }
+    });
+
+    return result;
+  }
+
+  private isObject(value: unknown): value is Record<string, any> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 }
