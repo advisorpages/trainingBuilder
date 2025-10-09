@@ -7,3 +7,6 @@ export * from './StepIndicator';
 export * from './VersionComparison';
 export * from './ReadinessIndicator';
 export * from './DebugPanel';
+export * from './TopicInput';
+export * from './TopicInputRepeater';
+export * from './TopicLibraryModal';

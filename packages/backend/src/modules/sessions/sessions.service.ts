@@ -2039,13 +2039,32 @@ export class SessionsService {
         : 0.35
       : 0.0;
 
+    const ragSourceCount = ragResults.length;
     const variantMeta = await Promise.all(
-      [0, 1, 2, 3].map(async index => ({
-        index,
-        label: await this.getVariantLabel(index),
-        instruction: await this.getVariantInstruction(index, payload.category, duration),
-        description: await this.getVariantDescription(index, payload.category),
-      }))
+      [0, 1, 2, 3].map(async index => {
+        const label = await this.getVariantLabel(index);
+        const description = await this.getVariantDescription(index, payload.category);
+        const instruction = await this.getVariantInstruction(
+          index,
+          payload,
+          duration,
+          {
+            label,
+            description,
+            audience,
+            tone,
+            location: locationContext,
+            ragSourceCount,
+          },
+        );
+
+        return {
+          index,
+          label,
+          instruction,
+          description,
+        };
+      })
     );
 
     // Step 2: Generate 4 variants in parallel with shared RAG weight
@@ -2764,26 +2783,161 @@ export class SessionsService {
    */
   private async getVariantInstruction(
     index: number,
-    category: string,
+    payload: SuggestOutlineDto,
     duration: number,
+    context: {
+      label?: string;
+      description?: string;
+      audience?: Audience | null;
+      tone?: Tone | null;
+      location?: LocationPromptContext | undefined;
+      ragSourceCount?: number;
+    },
   ): Promise<string> {
-    try {
-      const instruction = await this.variantConfigService.getVariantInstruction(index);
-      // Replace {{category}} placeholder if present
-      return instruction
-        .replace(/\{\{category\}\}/g, category)
-        .replace(/\{\{duration\}\}/g, String(duration));
-    } catch (error) {
-      // Fallback to hardcoded instructions if database lookup fails
-      const instructions = [
-        `Craft a precision-focused outline for ${category}. Use clearly labeled segments, sequential steps, and detailed trainer guidance so the flow feels predictable and easy to follow across ${duration} minutes.`,
-        `Design an insight-driven experience for ${category}. Highlight research, data points, and analysis activities that help participants draw evidence-backed conclusions within the ${duration}-minute agenda.`,
-        `Build an ignite-style session for ${category}. Keep the pacing energetic with rapid application sprints, collaborative challenges, and momentum-building checkpoints over ${duration} minutes.`,
-        `Shape a connect-oriented agenda for ${category}. Emphasize storytelling, peer interaction, and reflection moments that deepen relationships and shared learning throughout the ${duration}-minute session.`,
-      ];
+    const category = payload.category;
+    let instruction: string;
 
-      return `${instructions[index] ?? instructions[instructions.length - 1]} Make it feel distinctly different from the other variants through tone, pacing, and activity choices while still meeting the desired outcome.`;
+    try {
+      instruction = await this.variantConfigService.getVariantInstruction(index);
+    } catch (error) {
+      instruction = this.buildFallbackVariantInstruction(index, category, duration);
     }
+
+    const replacements = this.buildInstructionReplacements(payload, duration, context);
+    return this.applyInstructionTokens(instruction, replacements);
+  }
+
+  private buildFallbackVariantInstruction(index: number, category: string, duration: number): string {
+    const instructions = [
+      `Craft a precision-focused outline for ${category}. Use clearly labeled segments, sequential steps, and detailed trainer guidance so the flow feels predictable and easy to follow across ${duration} minutes.`,
+      `Design an insight-driven experience for ${category}. Highlight research, data points, and analysis activities that help participants draw evidence-backed conclusions within the ${duration}-minute agenda.`,
+      `Build an ignite-style session for ${category}. Keep the pacing energetic with rapid application sprints, collaborative challenges, and momentum-building checkpoints over ${duration} minutes.`,
+      `Shape a connect-oriented agenda for ${category}. Emphasize storytelling, peer interaction, and reflection moments that deepen relationships and shared learning throughout the ${duration}-minute session.`,
+    ];
+
+    const base = instructions[index] ?? instructions[instructions.length - 1];
+    return `${base} Make it feel distinctly different from the other variants through tone, pacing, and activity choices while still meeting the desired outcome.`;
+  }
+
+  private buildInstructionReplacements(
+    payload: SuggestOutlineDto,
+    duration: number,
+    context: {
+      label?: string;
+      description?: string;
+      audience?: Audience | null;
+      tone?: Tone | null;
+      location?: LocationPromptContext | undefined;
+      ragSourceCount?: number;
+    },
+  ): Record<string, string> {
+    const safeString = (value: unknown): string => {
+      if (value === null || value === undefined) return '';
+      if (Array.isArray(value)) {
+        return value.filter(Boolean).join(', ');
+      }
+      return String(value);
+    };
+
+    const topics = Array.isArray(payload.topics) ? payload.topics.filter(topic => !!topic).map(topic => ({
+      title: topic.title?.trim() ?? '',
+      description: topic.description?.trim() ?? '',
+      duration: Number.isFinite(topic.durationMinutes) ? topic.durationMinutes : undefined,
+    })) : [];
+
+    const topicBulletList = topics.length
+      ? topics
+          .map(topic => {
+            const parts = [topic.title].filter(Boolean);
+            if (topic.description) {
+              parts.push(topic.description);
+            }
+            return `• ${parts.join(' — ')}`;
+          })
+          .join('\n')
+      : '';
+
+    const topicTitlesArray = topics.map(topic => topic.title).filter(Boolean);
+    const topicTitles = topicTitlesArray.join('; ');
+    const topicTitlesInline = topicTitlesArray.join(', ');
+
+    const specificTopicItems = payload.specificTopics
+      ? payload.specificTopics
+          .split(',')
+          .map(item => item.trim())
+          .filter(Boolean)
+      : [];
+
+    const specificTopicsBullets = specificTopicItems.length
+      ? `• ${specificTopicItems.join('\n• ')}`
+      : '';
+
+    const specificTopicsInline = specificTopicItems.join(', ');
+
+    const replacements: Record<string, string> = {
+      category: safeString(payload.category),
+      session_type: safeString(payload.sessionType),
+      desired_outcome: safeString(payload.desiredOutcome),
+      current_problem: safeString(payload.currentProblem),
+      specific_topics: safeString(payload.specificTopics),
+      specific_topics_bullets: specificTopicsBullets,
+      specific_topics_list: specificTopicsInline,
+      audience_name: safeString(payload.audienceName || context.audience?.name),
+      audience_size: safeString(payload.audienceSize),
+      audience_description: safeString(context.audience?.description),
+      audience_experience_level: safeString(context.audience?.experienceLevel),
+      audience_learning_style: safeString(context.audience?.preferredLearningStyle),
+      audience_communication_style: safeString(context.audience?.communicationStyle),
+      audience_technical_depth: safeString(context.audience?.technicalDepth),
+      tone_name: safeString(context.tone?.name),
+      tone_style: safeString(context.tone?.style),
+      tone_description: safeString(context.tone?.description),
+      tone_energy_level: safeString(context.tone?.energyLevel),
+      tone_formality: safeString(context.tone?.formality),
+      tone_sentence_structure: safeString(context.tone?.sentenceStructure),
+      duration_minutes: safeString(duration),
+      duration: safeString(duration),
+      start_time: safeString(payload.startTime),
+      end_time: safeString(payload.endTime),
+      timezone: safeString(payload.timezone),
+      location_name: safeString(context.location?.name || payload.locationName),
+      location_type: safeString(context.location?.locationType || payload.locationType),
+      meeting_platform: safeString(context.location?.meetingPlatform || payload.meetingPlatform),
+      location_capacity: safeString(context.location?.capacity || payload.locationCapacity),
+      location_notes: safeString(context.location?.notes || payload.locationNotes),
+      location_timezone: safeString(context.location?.timezone || payload.locationTimezone),
+      rag_sources_count: safeString(context.ragSourceCount),
+      variant_label: safeString(context.label),
+      variant_description: safeString(context.description),
+      session_title: safeString(payload.title),
+      topics: topicBulletList,
+      topic_titles: topicTitles,
+      topic_titles_inline: topicTitlesInline,
+      topics_inline: topicTitlesInline,
+      topics_count: safeString(topics.length),
+      first_topic_title: topics[0]?.title ?? '',
+      first_topic_description: topics[0]?.description ?? '',
+      first_topic_duration: safeString(topics[0]?.duration),
+      second_topic_title: topics[1]?.title ?? '',
+      second_topic_description: topics[1]?.description ?? '',
+      second_topic_duration: safeString(topics[1]?.duration),
+    };
+
+    return replacements;
+  }
+
+  private applyInstructionTokens(instruction: string, replacements: Record<string, string>): string {
+    if (!instruction) {
+      return '';
+    }
+
+    return instruction.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (match, token) => {
+      const key = token.toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(replacements, key)) {
+        return replacements[key] ?? '';
+      }
+      return '';
+    });
   }
 
   /**

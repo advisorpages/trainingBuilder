@@ -11,7 +11,7 @@ import {
   Location,
 } from '../../entities';
 import { ReadinessScoringService } from './services/readiness-scoring.service';
-import { OpenAIService } from '../../services/openai.service';
+import { OpenAIService, OpenAISessionOutlineRequest } from '../../services/openai.service';
 import { PromptRegistryService } from '../../services/prompt-registry.service';
 import { RagIntegrationService } from '../../services/rag-integration.service';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
@@ -274,6 +274,38 @@ describe('SessionsService – multi-variant generation', () => {
         }),
       }),
     );
+  });
+
+  it('replaces instruction tokens with session context values', async () => {
+    const { service, mocks } = createService({
+      ENABLE_VARIANT_GENERATION_V2: true,
+      VARIANT_GENERATION_ROLLOUT_PERCENTAGE: 100,
+    });
+
+    mocks.variantConfigService.getVariantInstruction.mockResolvedValue(
+      'Guide {{audience_name}} through {{topics_count}} topics in {{duration_minutes}} minutes. Focus on {{specific_topics_list}}.',
+    );
+
+    const payload: SuggestOutlineDto = {
+      ...basePayload,
+      audienceName: 'Emerging Leaders',
+      specificTopics: 'feedback, mentoring, delegation',
+      topics: [
+        { title: 'Feedback Frameworks', description: 'Role-play practice', durationMinutes: 30 },
+        { title: 'Delegation Coaching', description: 'Case study', durationMinutes: 45 },
+      ],
+    };
+
+    await service.suggestMultipleOutlines(payload);
+
+    const firstCall =
+      mocks.openAIService.generateSessionOutline.mock.calls[0][0] as OpenAISessionOutlineRequest;
+
+    expect(firstCall.variantInstruction).toContain('Emerging Leaders');
+    expect(firstCall.variantInstruction).toContain('2 topics');
+    expect(firstCall.variantInstruction).toContain('90 minutes');
+    expect(firstCall.variantInstruction).toContain('feedback, mentoring, delegation');
+    expect(firstCall.variantInstruction).not.toMatch(/\{\{.*\}\}/);
   });
 
   it('falls back to legacy when variant generation fails for all variants', async () => {

@@ -244,6 +244,11 @@ export interface TopicSuggestion {
   category: string;
   isUsed: boolean;
   lastUsedDate?: string;
+  learningOutcomes?: string;
+  trainerNotes?: string;
+  materialsNeeded?: string;
+  deliveryGuidance?: string;
+  defaultDurationMinutes?: number;
 }
 
 export interface BuilderAutosavePayload {
@@ -386,7 +391,11 @@ export class SessionBuilderService {
       const createdSession = response.data;
 
       try {
-        await this.ensureTopicsFromOutline(request.outline, createdSession?.status);
+        await this.ensureTopicsFromOutline(
+          request.outline,
+          createdSession?.status,
+          request.input.categoryName ?? request.input.category,
+        );
       } catch (topicError) {
         console.warn('Failed to ensure outline topics exist', topicError);
       }
@@ -399,22 +408,34 @@ export class SessionBuilderService {
 
   async getPastTopics(categorySearch?: string, limit = 20): Promise<TopicSuggestion[]> {
     try {
-      const params = new URLSearchParams();
-      // Topics API is under /admin/topics and supports search, page, limit
-      params.append('limit', String(limit));
-      if (categorySearch) params.append('search', categorySearch);
+      const response = await api.get<Array<any>>('/topics');
+      const topics = Array.isArray(response.data) ? response.data : [];
 
-      const response = await api.get(`/admin/topics?${params.toString()}`);
+      const filtered = topics.filter((topic: any) => {
+        if (!categorySearch) return true;
+        const haystack = `${topic.name} ${topic.description ?? ''} ${topic.category?.name ?? ''} ${topic.aiGeneratedContent?.categoryName ?? ''}`.toLowerCase();
+        return haystack.includes(categorySearch.toLowerCase());
+      });
 
-      const responseData = response.data as { topics: any[] };
-      return (responseData.topics || []).map((topic: any) => ({
-        id: topic.id,
-        name: topic.name,
-        description: topic.description || '',
-        category: topic.category?.name || 'Unknown',
-        isUsed: Array.isArray(topic.sessions) && topic.sessions.length > 0,
-        lastUsedDate: topic.sessions?.[0]?.createdAt
-      }));
+      return filtered
+        .slice(0, limit)
+        .map((topic: any) => {
+          const aiMeta = topic.aiGeneratedContent ?? {};
+          const categoryName = topic.category?.name ?? aiMeta.categoryName ?? 'Unknown';
+          return {
+            id: topic.id,
+            name: topic.name,
+            description: topic.description || '',
+            category: categoryName,
+            isUsed: Array.isArray(topic.sessions) && topic.sessions.length > 0,
+            lastUsedDate: topic.sessions?.[0]?.createdAt,
+            learningOutcomes: topic.learningOutcomes || aiMeta.learningOutcomes || '',
+            trainerNotes: topic.trainerNotes || aiMeta.trainerNotes || '',
+            materialsNeeded: topic.materialsNeeded || aiMeta.materialsNeeded || '',
+            deliveryGuidance: topic.deliveryGuidance || aiMeta.deliveryGuidance || '',
+            defaultDurationMinutes: aiMeta.defaultDurationMinutes,
+          };
+        });
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to load past topics');
     }
@@ -565,12 +586,12 @@ export class SessionBuilderService {
     return lookup.get(normalized);
   }
 
-  private async ensureTopicsFromOutline(outline: SessionOutline, status?: SessionStatus): Promise<void> {
+  private async ensureTopicsFromOutline(
+    outline: SessionOutline,
+    _status?: SessionStatus,
+    categoryName?: string,
+  ): Promise<void> {
     if (!outline?.sections?.length) {
-      return;
-    }
-
-    if (status !== SessionStatus.PUBLISHED) {
       return;
     }
 
@@ -618,6 +639,17 @@ export class SessionBuilderService {
       if (section.deliveryGuidance?.trim?.()) {
         payload.deliveryGuidance = section.deliveryGuidance.trim();
       }
+
+      payload.aiGeneratedContent = {
+        ...(typeof section.duration === 'number' ? { defaultDurationMinutes: section.duration } : {}),
+        source: 'session-builder',
+        capturedAt: new Date().toISOString(),
+        categoryName: categoryName ?? '',
+        learningOutcomes: section.learningObjectives?.join('\n') ?? undefined,
+        trainerNotes: section.trainerNotes ?? undefined,
+        materialsNeeded: Array.isArray(section.materialsNeeded) ? section.materialsNeeded.join('\n') : undefined,
+        deliveryGuidance: section.deliveryGuidance ?? undefined,
+      };
 
       try {
         const response = await api.post('/topics', payload);

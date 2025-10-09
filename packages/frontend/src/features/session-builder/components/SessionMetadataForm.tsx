@@ -372,6 +372,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <TopicInputRepeater
                 topics={metadata.topics || []}
                 onChange={(topics) => onChange({ topics })}
+                category={metadata.category}
               />
               <p className="text-xs text-slate-500">
                 Add individual topics with durations (rounded to 5-minute increments)

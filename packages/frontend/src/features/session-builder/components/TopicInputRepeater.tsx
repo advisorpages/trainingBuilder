@@ -1,5 +1,9 @@
+import * as React from 'react';
 import { Button } from '@/components/ui/Button';
 import { TopicInput } from './TopicInput';
+import { TopicLibraryModal } from './TopicLibraryModal';
+import { TopicSuggestion } from '../../../services/session-builder.service';
+
 interface Topic {
   title: string;
   description?: string;
@@ -9,9 +13,12 @@ interface Topic {
 interface TopicInputRepeaterProps {
   topics: Topic[];
   onChange: (topics: Topic[]) => void;
+  category?: string;
 }
 
-export const TopicInputRepeater = ({ topics, onChange }: TopicInputRepeaterProps) => {
+export const TopicInputRepeater = ({ topics, onChange, category }: TopicInputRepeaterProps) => {
+  const [isLibraryOpen, setIsLibraryOpen] = React.useState(false);
+
   const addTopic = () => {
     onChange([...topics, {
       title: '',
@@ -29,6 +36,36 @@ export const TopicInputRepeater = ({ topics, onChange }: TopicInputRepeaterProps
   const removeTopic = (index: number) => {
     const newTopics = topics.filter((_, i) => i !== index);
     onChange(newTopics);
+  };
+
+  const upsertFromLibrary = (libraryTopic: TopicSuggestion) => {
+    const normalizedName = libraryTopic.name.trim().toLowerCase();
+    const existingIndex = topics.findIndex(
+      topic => topic.title.trim().toLowerCase() === normalizedName,
+    );
+
+    const descriptionParts = [
+      libraryTopic.description,
+      libraryTopic.learningOutcomes,
+      libraryTopic.trainerNotes,
+    ].filter(Boolean);
+
+    const combinedDescription = descriptionParts.join('\n\n');
+    const duration = Math.max(5, Math.round((libraryTopic.defaultDurationMinutes ?? 30) / 5) * 5);
+
+    const topicData: Topic = {
+      title: libraryTopic.name,
+      description: combinedDescription || undefined,
+      durationMinutes: duration,
+    };
+
+    if (existingIndex >= 0) {
+      const updated = [...topics];
+      updated[existingIndex] = topicData;
+      onChange(updated);
+    } else {
+      onChange([...topics, topicData]);
+    }
   };
 
   return (
@@ -50,15 +87,30 @@ export const TopicInputRepeater = ({ topics, onChange }: TopicInputRepeaterProps
           </button>
         </div>
       ))}
-      <Button
-        type="button"
-        onClick={addTopic}
-        variant="outline"
-        size="sm"
-        className="mt-2"
-      >
-        Add Topic
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          onClick={addTopic}
+          variant="outline"
+          size="sm"
+        >
+          Add Topic
+        </Button>
+        <Button
+          type="button"
+          onClick={() => setIsLibraryOpen(true)}
+          variant="ghost"
+          size="sm"
+        >
+          Add from Library
+        </Button>
+      </div>
+      <TopicLibraryModal
+        open={isLibraryOpen}
+        onClose={() => setIsLibraryOpen(false)}
+        onSelect={upsertFromLibrary}
+        category={category}
+      />
     </div>
   );
 };
