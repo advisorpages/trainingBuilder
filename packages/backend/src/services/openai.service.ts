@@ -4,6 +4,12 @@ import { AIInteractionsService } from './ai-interactions.service';
 import { AIInteractionType, AIInteractionStatus } from '../entities/ai-interaction.entity';
 import { LocationType, MeetingPlatform } from '../entities/location.entity';
 
+export class TopicDto {
+  title: string;
+  description?: string;
+  durationMinutes: number;
+}
+
 export interface OpenAISessionOutlineRequest {
   title?: string;
   category: string;
@@ -11,6 +17,7 @@ export interface OpenAISessionOutlineRequest {
   desiredOutcome: string;
   currentProblem?: string;
   specificTopics?: string;
+  topics?: TopicDto[];
   duration: number; // in minutes
   audienceSize?: string;
   // Rich audience profile fields
@@ -551,6 +558,22 @@ export class OpenAIService {
     if (request.specificTopics) {
       sessionLines.push(`- Must Cover: ${request.specificTopics}`);
     }
+
+    // Include structured topics if available
+    if (request.topics && request.topics.length > 0) {
+      const topicDetails = request.topics.map(t =>
+        `- ${t.title} (${t.durationMinutes}min)${t.description ? ': ' + t.description : ''}`
+      ).join('\n');
+      sessionLines.push(`- Structured Topics:`);
+      sessionLines.push(`${topicDetails}`);
+      sessionLines.push(
+        '- Use only these structured topics as the core agenda. Do not add or reorder additional topic/exercise sections beyond the opener and closing.'
+      );
+      sessionLines.push(
+        '- Refine the titles and descriptions for each structured topic to match the requested tone while preserving the provided durations.'
+      );
+    }
+
     if (request.audienceSize) {
       sessionLines.push(`- Audience Size: ${request.audienceSize}`);
     }

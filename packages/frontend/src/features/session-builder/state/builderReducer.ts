@@ -37,6 +37,20 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         error: action.payload,
         publishStatus: 'idle',
       };
+    case 'UPDATE_TOPICS':
+      if (!state.draft) return state;
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          metadata: {
+            ...state.draft.metadata,
+            topics: action.payload,
+          },
+          isDirty: true,
+        }
+      };
+
     case 'UPDATE_METADATA':
       if (!state.draft) return state;
       return {

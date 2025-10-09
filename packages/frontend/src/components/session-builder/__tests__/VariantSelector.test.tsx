@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { act } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { VariantSelector } from '../VariantSelector';
 
 const buildVariant = (overrides: Partial<any> = {}) => ({
@@ -102,12 +102,13 @@ describe('VariantSelector', () => {
     const onSelect = vi.fn();
     const onSave = vi.fn();
     const variants = [
-      buildVariant({ id: 'variant-1', label: 'Knowledge Base-Driven' }),
+      buildVariant({ id: 'variant-1', label: 'Knowledge Base-Driven', ragWeight: 0.8 }),
       buildVariant({
         id: 'variant-2',
         label: 'Creative Approach',
         generationSource: 'baseline',
         description: 'Fresh perspective',
+        ragWeight: 0,
       }),
     ];
 
@@ -122,8 +123,16 @@ describe('VariantSelector', () => {
     expect(screen.getByText('Knowledge Base-Driven')).toBeInTheDocument();
     expect(screen.getByText('Creative Approach')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Select & Edit' })).toHaveLength(2);
-    expect(screen.getAllByText('RAG')).toHaveLength(1);
-    expect(screen.getAllByText('AI')).toHaveLength(1);
+
+    const mixOne = screen.getByTestId('variant-variant-1-mix');
+    expect(within(mixOne).getByText('AI 20%')).toBeInTheDocument();
+    expect(within(mixOne).getByText('RAG 80%')).toBeInTheDocument();
+    expect(within(mixOne).getByText('End User 0%')).toBeInTheDocument();
+
+    const mixTwo = screen.getByTestId('variant-variant-2-mix');
+    expect(within(mixTwo).getByText('AI 100%')).toBeInTheDocument();
+    expect(within(mixTwo).getByText('RAG 0%')).toBeInTheDocument();
+    expect(within(mixTwo).getByText('End User 0%')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Select & Edit' })[0]);
     expect(onSelect).toHaveBeenCalledWith('variant-1');

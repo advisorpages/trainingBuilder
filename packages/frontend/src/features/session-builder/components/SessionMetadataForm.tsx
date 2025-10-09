@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Input, Card, CardContent, CardHeader, CardTitle, Button } from '../../../ui';
 import { SessionMetadata } from '../state/types';
+import { TopicInputRepeater } from './TopicInputRepeater';
 import { cn } from '../../../lib/utils';
 import { CategorySelect } from '@/components/ui/CategorySelect';
 import { LocationSelect } from '@/components/ui/LocationSelect';
@@ -72,6 +73,45 @@ const generateTestData = (): SessionMetadata => {
   };
 };
 
+const generateTestDataWithTopics = (): SessionMetadata => {
+  const base = generateTestData();
+  const today = new Date();
+  const startTime = new Date(today);
+  startTime.setHours(10, 0, 0, 0); // 10:00 AM
+  const endTime = new Date(startTime.getTime() + 90 * 60 * 1000); // 90 minutes later
+
+  return {
+    ...base,
+    title: 'Mutual Fund Fundamentals for Client Advisors',
+    sessionType: 'training',
+    category: 'Financial Services',
+    desiredOutcome: 'Client advisors can confidently explain mutual fund options, align them with client goals, and close more investment opportunities.',
+    currentProblem: 'Team members know basic investment terminology but lack a structured approach to positioning mutual funds for existing clients.',
+    specificTopics: 'Core mutual fund structures, aligning products to investor profiles, framing value and addressing objections.',
+    audienceName: 'Client Advisory Team',
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
+    location: 'Onsite - Training Room B',
+    topics: [
+      {
+        title: 'Investment Basics Refresher',
+        description: 'Review core investment concepts, mutual fund structures, fee types, and how funds fit into diversified portfolios.',
+        durationMinutes: 30,
+      },
+      {
+        title: 'Applying Mutual Funds to Client Scenarios',
+        description: 'Map investor profiles to mutual fund categories, practice suitability conversations, and surface compliance guardrails.',
+        durationMinutes: 30,
+      },
+      {
+        title: 'Pitching and Closing Playbook',
+        description: 'Build confidence handling objections, reinforce next-step commitments, and workshop closing language that drives conversions.',
+        durationMinutes: 30,
+      },
+    ],
+  };
+};
+
 
 // Field validation helper
 const getFieldValidation = (
@@ -117,11 +157,16 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
     onChange(testData);
   };
 
+  const handleFillTopicTestData = () => {
+    const testDataWithTopics = generateTestDataWithTopics();
+    onChange(testDataWithTopics);
+  };
+
   return (
     <div className="space-y-6">
       {/* Development Test Data Button */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
           <Button
             type="button"
             onClick={handleFillTestData}
@@ -133,6 +178,29 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
             Fill Test Data
+          </Button>
+          <Button
+            type="button"
+            onClick={handleFillTopicTestData}
+            variant="outline"
+            size="sm"
+            className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100 hover:border-blue-400"
+          >
+            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8c1.105 0 2-.672 2-1.5S13.105 5 12 5s-2 .672-2 1.5S10.895 8 12 8zm0 4c1.105 0 2-.672 2-1.5S13.105 9 12 9s-2 .672-2 1.5S10.895 12 12 12zm0 4c1.105 0 2-.672 2-1.5s-.895-1.5-2-1.5-2 .672-2 1.5.895 1.5 2 1.5z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 7h.01M18 7h.01M6 11h.01M18 11h.01M6 15h.01M18 15h.01"
+              />
+            </svg>
+            Fill Test Data (3 Topics)
           </Button>
         </div>
       )}
@@ -293,6 +361,20 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               />
               <p className="text-xs text-slate-500">
                 Comma-separated list of topics, frameworks, or specific areas to focus on
+              </p>
+            </div>
+
+            {/* Structured Topics */}
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Structured Topics
+              </label>
+              <TopicInputRepeater
+                topics={metadata.topics || []}
+                onChange={(topics) => onChange({ topics })}
+              />
+              <p className="text-xs text-slate-500">
+                Add individual topics with durations (rounded to 5-minute increments)
               </p>
             </div>
 

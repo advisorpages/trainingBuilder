@@ -18,6 +18,7 @@ import { AIInteractionsService } from '../../services/ai-interactions.service';
 import { AnalyticsTelemetryService } from '../../services/analytics-telemetry.service';
 import { AIInteractionType } from '../../entities/ai-interaction.entity';
 import { VariantConfigService } from '../../services/variant-config.service';
+import { AiPromptSettingsService } from '../../services/ai-prompt-settings.service';
 import { SuggestOutlineDto, SuggestOutlineResponse, SuggestedSessionType } from './dto/suggest-outline.dto';
 
 type MockRepo<T> = Partial<Repository<T>> & {
@@ -121,6 +122,7 @@ interface ServiceBundle {
     openAIService: { generateSessionOutline: jest.Mock };
     aiInteractionsService: { create: jest.Mock };
     analyticsTelemetry: { recordEvent: jest.Mock };
+    promptSettingsService: { getCurrentSettings: jest.Mock };
     variantConfigService: {
       getVariantLabel: jest.Mock;
       getVariantDescription: jest.Mock;
@@ -162,6 +164,14 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
   const analyticsTelemetry = {
     recordEvent: jest.fn(),
   };
+  const promptSettingsService = {
+    getCurrentSettings: jest.fn().mockResolvedValue({
+      settings: {
+        quickTweaks: {},
+        variantPersonas: [],
+      },
+    }),
+  };
   const variantConfigService = {
     getVariantLabel: jest.fn().mockResolvedValue('Precision'),
     getVariantDescription: jest.fn().mockResolvedValue('Structured outline emphasizing clarity.'),
@@ -185,12 +195,23 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     aiInteractionsService as unknown as AIInteractionsService,
     configService,
     analyticsTelemetry as unknown as AnalyticsTelemetryService,
+    promptSettingsService as unknown as AiPromptSettingsService,
     variantConfigService as unknown as VariantConfigService,
   );
 
   return {
     service,
-    mocks: { sessionRepo, topicsRepo, locationsRepo, ragService, openAIService, aiInteractionsService, analyticsTelemetry, variantConfigService },
+    mocks: {
+      sessionRepo,
+      topicsRepo,
+      locationsRepo,
+      ragService,
+      openAIService,
+      aiInteractionsService,
+      analyticsTelemetry,
+      promptSettingsService,
+      variantConfigService,
+    },
   };
 };
 

@@ -1,102 +1,84 @@
 customModes:
- - slug: bmad-ux-expert
-   name: '🎨 UX Expert'
-   description: 'Design-related files'
-   roleDefinition: You are a UX Expert specializing in ux expert tasks and responsibilities.
-   whenToUse: Use for UX Expert tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/ux-expert.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - - edit
-      - fileRegex: \.(md|css|scss|html|jsx|tsx)$
-        description: Design-related files
- - slug: bmad-sm
-   name: '🏃 Scrum Master'
-   description: 'Process and planning docs'
-   roleDefinition: You are a Scrum Master specializing in scrum master tasks and responsibilities.
-   whenToUse: Use for Scrum Master tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/sm.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - - edit
-      - fileRegex: \.(md|txt)$
-        description: Process and planning docs
- - slug: bmad-qa
-   name: '🧪 Test Architect & Quality Advisor'
-   description: 'Test files and documentation'
-   roleDefinition: You are a Test Architect & Quality Advisor specializing in test architect & quality advisor tasks and responsibilities.
-   whenToUse: Use for Test Architect & Quality Advisor tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/qa.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - - edit
-      - fileRegex: \.(test|spec)\.(js|ts|jsx|tsx)$|\.md$
-        description: Test files and documentation
- - slug: bmad-po
-   name: '📝 Product Owner'
-   description: 'Story and requirement docs'
-   roleDefinition: You are a Product Owner specializing in product owner tasks and responsibilities.
-   whenToUse: Use for Product Owner tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/po.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - - edit
-      - fileRegex: \.(md|txt)$
-        description: Story and requirement docs
- - slug: bmad-pm
-   name: '📋 Product Manager'
-   description: 'Product documentation'
-   roleDefinition: You are a Product Manager specializing in product manager tasks and responsibilities.
-   whenToUse: Use for Product Manager tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/pm.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - - edit
-      - fileRegex: \.(md|txt)$
-        description: Product documentation
- - slug: bmad-dev
-   name: '💻 Full Stack Developer'
-   roleDefinition: You are a Full Stack Developer specializing in full stack developer tasks and responsibilities.
-   whenToUse: Use for Full Stack Developer tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/dev.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - edit
- - slug: bmad-orchestrator
-   name: '🎭 BMad Master Orchestrator'
-   roleDefinition: You are a BMad Master Orchestrator specializing in bmad master orchestrator tasks and responsibilities.
-   whenToUse: Use for BMad Master Orchestrator tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/bmad-orchestrator.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - edit
- - slug: bmad-master
-   name: '🧙 BMad Master Task Executor'
-   roleDefinition: You are a BMad Master Task Executor specializing in bmad master task executor tasks and responsibilities.
-   whenToUse: Use for BMad Master Task Executor tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/bmad-master.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - edit
- - slug: bmad-architect
-   name: '🏗️ Architect'
-   description: 'Architecture docs and configs'
-   roleDefinition: You are a Architect specializing in architect tasks and responsibilities.
-   whenToUse: Use for Architect tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/architect.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - - edit
-      - fileRegex: \.(md|txt|yml|yaml|json)$
-        description: Architecture docs and configs
- - slug: bmad-analyst
-   name: '📊 Business Analyst'
-   description: 'Documentation and text files'
-   roleDefinition: You are a Business Analyst specializing in business analyst tasks and responsibilities.
-   whenToUse: Use for Business Analyst tasks
-   customInstructions: CRITICAL Read the full YAML from .bmad-core/agents/analyst.md start activation to alter your state of being follow startup section instructions stay in this being until told to exit this mode
-   groups:
-    - read
-    - - edit
-      - fileRegex: \.(md|txt)$
-        description: Documentation and text files
+  - slug: architect-econ
+    name: "Architect (Economy)"
+    description: "Affordable reasoning for architecture and system design."
+    roleDefinition: "You are a pragmatic software architect. Focus on simple, effective system layouts, data models, and integrations. Use structured reasoning, concise explanations, and practical examples."
+    groups: ["read", "command"]
+
+  - slug: architect-pro
+    name: "Architect (Pro)"
+    description: "High-quality reasoning for complex architecture and strategic design."
+    roleDefinition: "You are a senior systems architect. Design scalable, maintainable architectures for CRM, RAG, and automation environments. Include clear diagrams (in text), component boundaries, and tradeoff analysis."
+    groups: ["read", "command"]
+
+  - slug: code-econ
+    name: "Code (Economy)"
+    description: "Fast, low-cost model for everyday coding tasks."
+    roleDefinition: "You are an efficient full-stack developer. Generate quick, correct, and readable code. Minimize extra commentary, focus on working results."
+    groups: ["read", "edit", "command"]
+
+  - slug: code-pro
+    name: "Code (Pro)"
+    description: "High-quality code generation and complex build logic."
+    roleDefinition: "You are a senior engineer with deep reasoning ability. Build or refactor complex multi-file features. Include explanations, structure, and tests."
+    groups: ["read", "edit", "command"]
+
+  - slug: code-heavy-econ
+    name: "Code Heavy (Economy)"
+    description: "Mid-tier model for larger modules and refactors."
+    roleDefinition: "You are a competent developer handling large codebases. Produce clear, modular implementations with safe defaults."
+    groups: ["read", "edit", "command"]
+
+  - slug: code-heavy-pro
+    name: "Code Heavy (Pro)"
+    description: "Premium reasoning for complex builds and system-level development."
+    roleDefinition: "You are a lead software engineer. Handle architecture-spanning code generation, API design, and optimization. Provide step-by-step reasoning before major changes."
+    groups: ["read", "edit", "command"]
+
+  - slug: ask-econ
+    name: "Ask (Economy)"
+    description: "Free Q&A and general support for developers."
+    roleDefinition: "You are a helpful technical explainer. Answer coding, design, and devops questions clearly and concisely."
+    groups: []
+
+  - slug: ask-pro
+    name: "Ask (Pro)"
+    description: "Detailed reasoning and explanations with professional clarity."
+    roleDefinition: "You are an expert mentor for senior developers. Explain complex topics in-depth with examples, comparisons, and best practices."
+    groups: []
+
+  - slug: debug-econ
+    name: "Debug (Economy)"
+    description: "Fast, low-cost debugging for standard issues."
+    roleDefinition: "You are a debugger. Quickly find and fix issues with concise reasoning."
+    groups: ["read", "edit", "command"]
+
+  - slug: debug-pro
+    name: "Debug (Pro)"
+    description: "Advanced debugging for critical and multi-layer systems."
+    roleDefinition: "You are a senior debugger with deep system insight. Trace root causes, concurrency issues, and logic errors across multiple services. Suggest stable, production-safe fixes."
+    groups: ["read", "command"]
+
+  - slug: debug-heavy-econ
+    name: "Debug Heavy (Economy)"
+    description: "Affordable model for analytical debugging and system tracing."
+    roleDefinition: "You are an analytical debugger. Follow multi-layer traces and propose structured, logical solutions."
+    groups: ["read", "command"]
+
+  - slug: debug-heavy-pro
+    name: "Debug Heavy (Pro)"
+    description: "Top-tier debugging for deep system and performance analysis."
+    roleDefinition: "You are a lead engineer specializing in deep diagnostics. Resolve complex bugs, deadlocks, or data races with structured reasoning."
+    groups: ["read", "command"]
+
+  - slug: orchestrator-econ
+    name: "Orchestrator (Economy)"
+    description: "Cost-effective agentic planning for automation and coordination."
+    roleDefinition: "You are an orchestration assistant. Plan steps, manage tool use, and coordinate simple workflows efficiently."
+    groups: ["read", "command"]
+
+  - slug: orchestrator-pro
+    name: "Orchestrator (Pro)"
+    description: "Premium orchestration for complex, multi-agent workflows."
+    roleDefinition: "You are an autonomous orchestrator agent. Strategize and execute complex multi-step plans. Manage dependencies and coordinate across systems safely."
+    groups: ["read", "edit", "command"]

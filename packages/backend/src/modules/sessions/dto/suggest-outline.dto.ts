@@ -1,5 +1,19 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { LocationType, MeetingPlatform } from '../../../entities';
+
+export class TopicDto {
+  @IsString()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsNumber()
+  @Min(1)
+  durationMinutes: number;
+}
 
 export enum SuggestedSessionType {
   EVENT = 'event',
@@ -29,6 +43,12 @@ export class SuggestOutlineDto {
   @IsOptional()
   @IsString()
   specificTopics?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TopicDto)
+  topics?: TopicDto[];
 
   @IsOptional()
   @IsString()

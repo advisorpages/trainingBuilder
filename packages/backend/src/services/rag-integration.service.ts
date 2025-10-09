@@ -207,53 +207,59 @@ export class RagIntegrationService {
   }
 
   /**
-   * Build enriched natural language query for RAG
-   */
-  private buildQueryPrompt(metadata: any): string {
-    const parts: string[] = [];
+    * Build enriched natural language query for RAG
+    */
+   private buildQueryPrompt(metadata: any): string {
+     const parts: string[] = [];
 
-    // Main session description
-    parts.push(`Find training materials for a ${metadata.sessionType || 'training'} session on ${metadata.category}`);
+     // Main session description
+     parts.push(`Find training materials for a ${metadata.sessionType || 'training'} session on ${metadata.category}`);
 
-    if (metadata.specificTopics) {
-      parts.push(` for specific topics: ${metadata.specificTopics}`);
-    }
+     if (metadata.specificTopics) {
+       parts.push(` for specific topics: ${metadata.specificTopics}`);
+     }
 
-    parts.push('.');
+     // Include structured topics if available
+     if (metadata.topics && metadata.topics.length > 0) {
+       const topicTitles = metadata.topics.map((t: any) => t.title).join(', ');
+       parts.push(` covering these specific topics: ${topicTitles}`);
+     }
 
-    // Target audience
-    if (metadata.audienceName) {
-      const audienceDetails: string[] = [metadata.audienceName];
+     parts.push('.');
 
-      if (metadata.experienceLevel) {
-        audienceDetails.push(`${metadata.experienceLevel} level`);
-      }
+     // Target audience
+     if (metadata.audienceName) {
+       const audienceDetails: string[] = [metadata.audienceName];
 
-      if (metadata.preferredLearningStyle) {
-        audienceDetails.push(`${metadata.preferredLearningStyle} learners`);
-      }
+       if (metadata.experienceLevel) {
+         audienceDetails.push(`${metadata.experienceLevel} level`);
+       }
 
-      if (metadata.communicationStyle) {
-        audienceDetails.push(`prefers ${metadata.communicationStyle} communication`);
-      }
+       if (metadata.preferredLearningStyle) {
+         audienceDetails.push(`${metadata.preferredLearningStyle} learners`);
+       }
 
-      parts.push(`\n\nTarget Audience: ${audienceDetails.join(', ')}`);
+       if (metadata.communicationStyle) {
+         audienceDetails.push(`prefers ${metadata.communicationStyle} communication`);
+       }
 
-      if (metadata.audienceDescription) {
-        parts.push(`\nAudience Profile: ${metadata.audienceDescription}`);
-      }
+       parts.push(`\n\nTarget Audience: ${audienceDetails.join(', ')}`);
 
-      if (metadata.avoidTopics && metadata.avoidTopics.length > 0) {
-        parts.push(`\nTopics to Avoid: ${metadata.avoidTopics.join(', ')}`);
-      }
-    }
+       if (metadata.audienceDescription) {
+         parts.push(`\nAudience Profile: ${metadata.audienceDescription}`);
+       }
 
-    // Goals and challenges
-    parts.push(`\n\nSession Goal: ${metadata.desiredOutcome}`);
+       if (metadata.avoidTopics && metadata.avoidTopics.length > 0) {
+         parts.push(`\nTopics to Avoid: ${metadata.avoidTopics.join(', ')}`);
+       }
+     }
 
-    if (metadata.currentProblem) {
-      parts.push(`\nCurrent Challenge: ${metadata.currentProblem}`);
-    }
+     // Goals and challenges
+     parts.push(`\n\nSession Goal: ${metadata.desiredOutcome}`);
+
+     if (metadata.currentProblem) {
+       parts.push(`\nCurrent Challenge: ${metadata.currentProblem}`);
+     }
 
     // Session details
     const sessionDetails: string[] = [];

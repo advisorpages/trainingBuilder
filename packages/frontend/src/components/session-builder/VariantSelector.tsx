@@ -44,6 +44,91 @@ const loadingStages = [
   { progress: 100, message: "🎉 Done! Your four session ideas are ready to explore!", icon: "✅" }
 ];
 
+const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+
+const toNumber = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
+
+const isUserDrivenSection = (section: any) => {
+  if (!section) return false;
+  if (section.userDefined === true || section.isUserDefined === true) return true;
+  if (typeof section.source === 'string' && section.source.toLowerCase() === 'user') return true;
+  if (section.origin === 'user') return true;
+  const id = typeof section.id === 'string' ? section.id : '';
+  return id.startsWith('topic-');
+};
+
+const calculateContributionMix = (variant: Variant) => {
+  const sections = Array.isArray(variant.outline.sections) ? variant.outline.sections : [];
+  const totalDurationFromSections = sections.reduce((sum, section) => {
+    return sum + Math.max(0, toNumber(section?.duration));
+  }, 0);
+  const fallbackTotal = Math.max(toNumber(variant.outline.totalDuration), 0);
+  const totalDuration = totalDurationFromSections > 0 ? totalDurationFromSections : fallbackTotal;
+  const safeTotal = totalDuration > 0 ? totalDuration : Math.max(sections.length * 10, 1);
+
+  const userDuration = sections.reduce((sum, section) => {
+    if (!isUserDrivenSection(section)) {
+      return sum;
+    }
+    return sum + Math.max(0, toNumber(section?.duration));
+  }, 0);
+
+  const userShare = Math.min(userDuration / safeTotal, 1);
+  const remainingShare = Math.max(0, 1 - userShare);
+  const normalizedRagWeight = clamp(
+    Number.isFinite(variant.ragWeight) ? variant.ragWeight : toNumber(variant.ragWeight)
+  );
+  const ragShare = remainingShare * normalizedRagWeight;
+  const aiShare = Math.max(0, remainingShare - ragShare);
+
+  let ragPercent = Math.round(ragShare * 100);
+  let aiPercent = Math.round(aiShare * 100);
+  let userPercent = Math.round(userShare * 100);
+
+  const totalPercent = ragPercent + aiPercent + userPercent;
+  if (totalPercent !== 100) {
+    const diff = 100 - totalPercent;
+    if (diff > 0) {
+      if (aiPercent >= ragPercent && aiPercent >= userPercent) {
+        aiPercent += diff;
+      } else if (ragPercent >= userPercent) {
+        ragPercent += diff;
+      } else {
+        userPercent += diff;
+      }
+    } else {
+      const adjustmentTargets: Array<{ key: 'ai' | 'rag' | 'user'; value: number }> = [
+        { key: 'ai', value: aiPercent },
+        { key: 'rag', value: ragPercent },
+        { key: 'user', value: userPercent },
+      ].sort((a, b) => b.value - a.value);
+
+      for (const target of adjustmentTargets) {
+        if (target.value === 0) continue;
+        if (target.key === 'ai') {
+          aiPercent = Math.max(0, aiPercent + diff);
+        } else if (target.key === 'rag') {
+          ragPercent = Math.max(0, ragPercent + diff);
+        } else {
+          userPercent = Math.max(0, userPercent + diff);
+        }
+        break;
+      }
+    }
+  }
+
+  return { aiPercent, ragPercent, userPercent };
+};
+
 export const VariantSelector: React.FC<VariantSelectorProps> = ({
   variants,
   onSelect,
@@ -153,6 +238,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {variants.map((variant) => {
           const [showSources, setShowSources] = React.useState(false);
+          const contribution = calculateContributionMix(variant);
 
           return (
             <div
@@ -165,15 +251,28 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                   <h3 className="font-semibold text-base sm:text-lg text-gray-900">{variant.label}</h3>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">{variant.description}</p>
                 </div>
-                <span
-                  className={`flex-shrink-0 ml-2 px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-                    variant.generationSource === 'rag'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}
+                <div
+                  className="flex flex-col items-end text-[11px] text-gray-600"
+                  data-testid={`variant-${variant.id}-mix`}
                 >
-                  {variant.generationSource === 'rag' ? 'RAG' : 'AI'}
-                </span>
+                  <span className="uppercase text-[10px] font-semibold tracking-wide text-gray-500">
+                    Contribution mix
+                  </span>
+                  <div className="mt-1 space-y-0.5 text-right">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true" />
+                      <span>AI {contribution.aiPercent}%</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-purple-500" aria-hidden="true" />
+                      <span>RAG {contribution.ragPercent}%</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                      <span>End User {contribution.userPercent}%</span>
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* RAG Sources Badge */}

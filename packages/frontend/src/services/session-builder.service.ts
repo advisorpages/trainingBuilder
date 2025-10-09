@@ -11,6 +11,11 @@ export interface SessionBuilderInput {
   desiredOutcome: string;
   currentProblem?: string;
   specificTopics?: string;
+  topics?: Array<{
+    title: string;
+    description?: string;
+    durationMinutes: number;
+  }>;
   date: string;
   startTime: string;
   endTime: string;

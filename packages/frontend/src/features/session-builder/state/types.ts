@@ -29,6 +29,11 @@ export interface SessionMetadata {
   audienceName?: string;
   toneId?: number;
   toneName?: string;
+  topics?: Array<{
+    title: string;
+    description?: string;
+    durationMinutes: number;
+  }>;
 }
 
 export interface AIContentBlock {

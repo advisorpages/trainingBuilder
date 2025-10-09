@@ -56,6 +56,11 @@ export interface Session {
   builderGenerated?: boolean;
   sessionOutlineData?: Record<string, any> | null;
   lastAutosaveAt?: Date | string | null;
+  topics?: Array<{
+    title: string;
+    description?: string;
+    durationMinutes: number;
+  }>;
   isActive: boolean;
   createdAt: Date | string;
   updatedAt: Date | string;

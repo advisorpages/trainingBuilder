@@ -36,7 +36,12 @@ import {
   ReorderOutlineSectionsDto,
   DuplicateOutlineSectionDto,
 } from './dto/outline-section.dto';
-import { OpenAIService, OpenAISessionOutlineRequest, OutlineGenerationContext } from '../../services/openai.service';
+import {
+  OpenAIService,
+  OpenAISessionOutlineRequest,
+  OpenAISessionSection,
+  OutlineGenerationContext,
+} from '../../services/openai.service';
 import { PromptRegistryService } from '../../services/prompt-registry.service';
 import { RagIntegrationService } from '../../services/rag-integration.service';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
@@ -127,6 +132,27 @@ interface FlexibleSessionSection {
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;
+}
+
+interface OutlineSectionContent {
+  type: 'opener' | 'topic' | 'closing';
+  title: string;
+  description: string;
+  duration: number;
+  learningObjectives?: string[];
+  suggestedActivities?: string[];
+  materialsNeeded?: string[];
+}
+
+interface TopicAwareSection {
+  type: string;
+  title: string;
+  description?: string;
+  learningObjectives?: string[];
+  suggestedActivities?: string[];
+  isTopicSuggestion?: boolean;
+  associatedTopic?: TopicReference;
+  [key: string]: any;
 }
 
 export interface SessionOutlinePayload {
@@ -410,7 +436,7 @@ export class SessionsService {
   private readonly variantRolloutPercentage: number;
   private readonly logVariantSelections: boolean;
 
-  private async findMatchingTopics(sections: SuggestedSessionSection[]): Promise<TopicReference[]> {
+  private async findMatchingTopics(sections: TopicAwareSection[]): Promise<TopicReference[]> {
     try {
       // Get all active topics from the database
       const allTopics = await this.topicsRepository.find({
@@ -474,8 +500,11 @@ export class SessionsService {
     return union.size > 0 ? intersection.size / union.size : 0;
   }
 
-  private async associateTopicsWithSections(sections: SuggestedSessionSection[], matchingTopics: TopicReference[]): Promise<SuggestedSessionSection[]> {
-    const enhancedSections = [...sections];
+  private async associateTopicsWithSections<T extends TopicAwareSection>(
+    sections: T[],
+    matchingTopics: TopicReference[],
+  ): Promise<T[]> {
+    const enhancedSections = sections.map(section => ({ ...section })) as T[];
 
     for (let i = 0; i < enhancedSections.length; i++) {
       const section = enhancedSections[i];
@@ -499,14 +528,14 @@ export class SessionsService {
 
         if (bestMatch) {
           enhancedSections[i] = {
-            ...section,
+            ...(section as T),
             associatedTopic: bestMatch,
             isTopicSuggestion: false,
           };
-        } else {
+        } else if (!section.isTopicSuggestion) {
           // Mark as a topic suggestion if no good match found
           enhancedSections[i] = {
-            ...section,
+            ...(section as T),
             isTopicSuggestion: true,
           };
         }
@@ -598,6 +627,7 @@ export class SessionsService {
           desiredOutcome: payload.desiredOutcome,
           currentProblem: payload.currentProblem,
           specificTopics: payload.specificTopics,
+          topics: payload.topics,
           duration,
           audienceSize: payload.audienceSize || '8-20',
           audienceId: payload.audienceId,
@@ -656,13 +686,37 @@ export class SessionsService {
       fallbackUsed = true;
     }
 
+    const hasUserTopics = Array.isArray(payload.topics) && payload.topics.length > 0;
+
     let sections: SuggestedSessionSection[];
     let sessionTitle: string;
     let description: string;
     let difficulty: string;
     let recommendedAudienceSize: string;
 
-    if (useOpenAI && aiOutline) {
+    if (hasUserTopics) {
+      sections = this.buildLegacySectionsFromUserTopics(
+        payload,
+        useOpenAI && aiOutline ? aiOutline.sections : undefined,
+        duration,
+      );
+
+      if (useOpenAI && aiOutline) {
+        sessionTitle = aiOutline.suggestedTitle;
+        description = aiOutline.summary;
+        difficulty = aiOutline.difficulty || 'Intermediate';
+        recommendedAudienceSize = aiOutline.recommendedAudienceSize || '8-20';
+      } else {
+        sessionTitle = payload.title
+          ? payload.title
+          : `${payload.category} ${payload.sessionType === 'workshop' ? 'Workshop' : 'Session'}`;
+        description = payload.currentProblem
+          ? `Equip participants to address ${payload.currentProblem.toLowerCase()} while progressing toward ${payload.desiredOutcome}.`
+          : `Guide participants toward ${payload.desiredOutcome} with practical tools they can deploy immediately.`;
+        difficulty = 'Intermediate';
+        recommendedAudienceSize = payload.audienceSize || '8-20';
+      }
+    } else if (useOpenAI && aiOutline) {
       // Convert OpenAI response to our format
       sections = aiOutline.sections.map((section: any, index: number) => ({
         id: `ai-${now.getTime()}-${index}`,
@@ -759,6 +813,286 @@ export class SessionsService {
         topicsFound: matchingTopics.length,
       },
     };
+  }
+
+  private buildFlexibleSectionsFromUserTopics(
+    payload: SuggestOutlineDto,
+    aiSections: OpenAISessionSection[] | undefined,
+    duration: number,
+  ): FlexibleSessionSection[] {
+    const timestamp = new Date().toISOString();
+    const { opener, topics, closing } = this.buildUserTopicSectionContent(payload, aiSections, duration);
+
+    const sections: FlexibleSessionSection[] = [
+      {
+        id: `opener-${randomUUID()}`,
+        type: opener.type,
+        position: 0,
+        title: opener.title,
+        duration: opener.duration,
+        description: opener.description,
+        learningObjectives: opener.learningObjectives,
+        suggestedActivities: opener.suggestedActivities,
+        materialsNeeded: opener.materialsNeeded,
+        isCollapsible: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+      ...topics.map((topic, index) => ({
+        id: `topic-${index}-${randomUUID()}`,
+        type: topic.type,
+        position: index + 1,
+        title: topic.title,
+        duration: topic.duration,
+        description: topic.description,
+        learningObjectives: topic.learningObjectives,
+        suggestedActivities: topic.suggestedActivities,
+        materialsNeeded: topic.materialsNeeded,
+        isCollapsible: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })),
+      {
+        id: `closing-${randomUUID()}`,
+        type: closing.type,
+        position: topics.length + 1,
+        title: closing.title,
+        duration: closing.duration,
+        description: closing.description,
+        learningObjectives: closing.learningObjectives,
+        suggestedActivities: closing.suggestedActivities,
+        materialsNeeded: closing.materialsNeeded,
+        isCollapsible: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ];
+
+    return sections.map((section, index) => ({
+      ...section,
+      position: index,
+    }));
+  }
+
+  private buildLegacySectionsFromUserTopics(
+    payload: SuggestOutlineDto,
+    aiSections: OpenAISessionSection[] | undefined,
+    duration: number,
+  ): SuggestedSessionSection[] {
+    const baseId = Date.now();
+    const { opener, topics, closing } = this.buildUserTopicSectionContent(payload, aiSections, duration);
+
+    const sections: SuggestedSessionSection[] = [
+      {
+        id: `legacy-opener-${baseId}`,
+        type: opener.type,
+        position: 0,
+        title: opener.title,
+        duration: opener.duration,
+        description: opener.description,
+        learningObjectives: opener.learningObjectives,
+        suggestedActivities: opener.suggestedActivities,
+      },
+      ...topics.map((topic, index) => ({
+        id: `legacy-topic-${index}-${baseId}`,
+        type: topic.type,
+        position: index + 1,
+        title: topic.title,
+        duration: topic.duration,
+        description: topic.description,
+        learningObjectives: topic.learningObjectives,
+        suggestedActivities: topic.suggestedActivities,
+      })),
+      {
+        id: `legacy-closing-${baseId}`,
+        type: closing.type,
+        position: topics.length + 1,
+        title: closing.title,
+        duration: closing.duration,
+        description: closing.description,
+        learningObjectives: closing.learningObjectives,
+        suggestedActivities: closing.suggestedActivities,
+      },
+    ];
+
+    return sections.map((section, index) => ({
+      ...section,
+      position: index,
+    }));
+  }
+
+  private buildUserTopicSectionContent(
+    payload: SuggestOutlineDto,
+    aiSections: OpenAISessionSection[] | undefined,
+    duration: number,
+  ): {
+    opener: OutlineSectionContent;
+    topics: OutlineSectionContent[];
+    closing: OutlineSectionContent;
+  } {
+    const userTopics = payload.topics ?? [];
+    const aiSectionsWithTypes = (aiSections ?? []).map((section, index) => ({
+      data: section,
+      type: this.mapSectionType(section.title ?? '', index),
+    }));
+
+    const openerCandidate = aiSectionsWithTypes.find(item => item.type === 'opener')?.data;
+    const closingCandidate = [...aiSectionsWithTypes].reverse().find(item => item.type === 'closing')?.data;
+    const topicCandidates = aiSectionsWithTypes
+      .filter(item => item.type !== 'opener' && item.type !== 'closing')
+      .map(item => item.data);
+
+    const fallbackTopicDuration = this.getFallbackTopicDuration(duration, userTopics.length);
+
+    const topics: OutlineSectionContent[] = userTopics.map((topic, index) => {
+      const aiTopic = topicCandidates[index];
+      const durationMinutes =
+        typeof topic.durationMinutes === 'number' && Number.isFinite(topic.durationMinutes) && topic.durationMinutes > 0
+          ? Math.round(topic.durationMinutes)
+          : fallbackTopicDuration;
+
+      return {
+        type: 'topic',
+        title: this.selectSectionTitle(aiTopic?.title, topic.title),
+        description: this.mergeTopicDescription(aiTopic?.description, topic.description, topic.title, payload),
+        duration: Math.max(1, durationMinutes),
+        learningObjectives: this.normalizeStringArray(aiTopic?.learningObjectives),
+        suggestedActivities: this.normalizeStringArray(aiTopic?.suggestedActivities),
+        materialsNeeded: this.normalizeStringArray(aiTopic?.materialsNeeded),
+      };
+    });
+
+    const totalTopicDuration = topics.reduce((sum, section) => sum + section.duration, 0);
+    const { openerDuration, closingDuration } = this.deriveFramingDurations(duration, totalTopicDuration);
+
+    const opener: OutlineSectionContent = {
+      type: 'opener',
+      title: this.selectSectionTitle(openerCandidate?.title, 'Opening & Welcome'),
+      description: this.mergeOpenerDescription(openerCandidate?.description, payload),
+      duration: openerDuration,
+      learningObjectives: this.normalizeStringArray(openerCandidate?.learningObjectives),
+      suggestedActivities: this.normalizeStringArray(openerCandidate?.suggestedActivities),
+      materialsNeeded: this.normalizeStringArray(openerCandidate?.materialsNeeded),
+    };
+
+    const closing: OutlineSectionContent = {
+      type: 'closing',
+      title: this.selectSectionTitle(closingCandidate?.title, 'Closing & Next Steps'),
+      description: this.mergeClosingDescription(closingCandidate?.description, payload),
+      duration: closingDuration,
+      learningObjectives: this.normalizeStringArray(closingCandidate?.learningObjectives),
+      suggestedActivities: this.normalizeStringArray(closingCandidate?.suggestedActivities),
+      materialsNeeded: this.normalizeStringArray(closingCandidate?.materialsNeeded),
+    };
+
+    return { opener, topics, closing };
+  }
+
+  private getFallbackTopicDuration(targetDuration: number, topicCount: number): number {
+    if (!Number.isFinite(targetDuration) || targetDuration <= 0 || topicCount <= 0) {
+      return 15;
+    }
+
+    const segments = Math.max(topicCount + 2, 3); // Include opener and closing
+    const approx = Math.round(targetDuration / segments);
+    return Math.max(5, approx);
+  }
+
+  private deriveFramingDurations(
+    targetDuration: number,
+    totalTopicDuration: number,
+  ): { openerDuration: number; closingDuration: number } {
+    if (!Number.isFinite(targetDuration) || targetDuration <= 0) {
+      return { openerDuration: 5, closingDuration: 5 };
+    }
+
+    const remaining = Math.round(targetDuration - totalTopicDuration);
+
+    if (remaining > 10) {
+      const openerDuration = Math.max(5, Math.round(remaining * 0.6));
+      const closingDuration = Math.max(5, remaining - openerDuration);
+      return { openerDuration, closingDuration };
+    }
+
+    if (remaining > 0) {
+      const baseline = Math.max(remaining, 10);
+      const openerDuration = Math.max(5, Math.round(baseline * 0.6));
+      const closingDuration = Math.max(5, baseline - openerDuration);
+      return { openerDuration, closingDuration };
+    }
+
+    return { openerDuration: 5, closingDuration: 5 };
+  }
+
+  private selectSectionTitle(candidate?: string | null, fallback?: string): string {
+    if (candidate && candidate.trim()) {
+      return candidate.trim();
+    }
+
+    if (fallback && fallback.trim()) {
+      return fallback.trim();
+    }
+
+    return 'Session Segment';
+  }
+
+  private mergeTopicDescription(
+    aiDescription: string | undefined,
+    userDescription: string | undefined,
+    topicTitle: string,
+    payload: SuggestOutlineDto,
+  ): string {
+    const parts: string[] = [];
+
+    if (aiDescription && aiDescription.trim()) {
+      parts.push(aiDescription.trim());
+    }
+
+    if (userDescription && userDescription.trim()) {
+      parts.push(userDescription.trim());
+    }
+
+    if (parts.length === 0) {
+      const outcomeSnippet = payload.desiredOutcome ? ` to advance ${payload.desiredOutcome}` : '';
+      parts.push(`Explore ${topicTitle}${outcomeSnippet}.`);
+    }
+
+    return parts.join('\n\n');
+  }
+
+  private mergeOpenerDescription(aiDescription: string | undefined, payload: SuggestOutlineDto): string {
+    if (aiDescription && aiDescription.trim()) {
+      return aiDescription.trim();
+    }
+
+    const desiredOutcome = payload.desiredOutcome ? ` and underline the goal of ${payload.desiredOutcome}` : '';
+    const problem = payload.currentProblem ? ` Address the current challenge: ${payload.currentProblem}.` : '';
+
+    return `Welcome participants, clarify the session flow${desiredOutcome}.${problem}`.trim();
+  }
+
+  private mergeClosingDescription(aiDescription: string | undefined, payload: SuggestOutlineDto): string {
+    if (aiDescription && aiDescription.trim()) {
+      return aiDescription.trim();
+    }
+
+    const desiredOutcome = payload.desiredOutcome
+      ? `Reinforce how commitments support ${payload.desiredOutcome}. `
+      : 'Capture the top takeaways. ';
+
+    return `${desiredOutcome}Outline immediate next steps and encourage follow-through.`.trim();
+  }
+
+  private normalizeStringArray(input?: unknown): string[] | undefined {
+    if (!Array.isArray(input)) {
+      return undefined;
+    }
+
+    const cleaned = (input as unknown[])
+      .map(item => (typeof item === 'string' ? item.trim() : ''))
+      .filter((value): value is string => value.length > 0);
+
+    return cleaned.length > 0 ? cleaned : undefined;
   }
 
   private mapSectionType(title: string, index: number): SectionType {
@@ -1656,6 +1990,7 @@ export class SessionsService {
         currentProblem: payload.currentProblem,
         sessionType: payload.sessionType,
         specificTopics: payload.specificTopics,
+        topics: payload.topics,
         duration,
         audienceSize: payload.audienceSize,
         // Audience details
@@ -1871,6 +2206,7 @@ export class SessionsService {
       locationCapacity: location?.capacity ?? payload.locationCapacity,
       locationTimezone: location?.timezone ?? payload.locationTimezone,
       locationNotes: location?.notes ?? payload.locationNotes,
+      topics: payload.topics,
       ragWeight,
       variantIndex: meta.index,
       variantLabel: meta.label,
@@ -1927,38 +2263,48 @@ export class SessionsService {
       outlineContext
     );
 
-    let sections: FlexibleSessionSection[] = aiOutline.sections.map(
-      (section: any, index: number): FlexibleSessionSection => ({
-        id: `ai-${Date.now()}-${meta.index}-${index}`,
-        type: this.mapSectionType(section.title, index),
-        position: index,
-        title: typeof section.title === 'string' ? section.title : `Section ${index + 1}`,
-        duration: typeof section.duration === 'number' && Number.isFinite(section.duration)
-          ? Math.max(1, Math.round(section.duration))
-          : Math.max(5, Math.round(duration / Math.max(1, aiOutline.sections.length))),
-        description: typeof section.description === 'string' ? section.description : '',
-        learningObjectives: Array.isArray(section.learningObjectives) ? section.learningObjectives : [],
-        suggestedActivities: Array.isArray(section.suggestedActivities) ? section.suggestedActivities : [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }),
-    );
+    const userTopics = Array.isArray(payload.topics) ? payload.topics.filter(Boolean) : [];
 
-    sections = this.ensureRequiredSectionCoverage(sections, duration);
-    sections = this.applyStructuredDurationDefaults(sections, duration);
-    sections = this.applyVariantPersonaAdjustments(sections, meta.label);
+    let sections: FlexibleSessionSection[];
 
-    let balancedSections = this.balanceDurations(sections, duration);
+    if (userTopics.length > 0) {
+      sections = this.buildFlexibleSectionsFromUserTopics(payload, aiOutline.sections, duration);
+    } else {
+      sections = aiOutline.sections.map(
+        (section: any, index: number): FlexibleSessionSection => ({
+          id: `ai-${Date.now()}-${meta.index}-${index}`,
+          type: this.mapSectionType(section.title, index),
+          position: index,
+          title: typeof section.title === 'string' ? section.title : `Section ${index + 1}`,
+          duration: typeof section.duration === 'number' && Number.isFinite(section.duration)
+            ? Math.max(1, Math.round(section.duration))
+            : Math.max(5, Math.round(duration / Math.max(1, aiOutline.sections.length))),
+          description: typeof section.description === 'string' ? section.description : '',
+          learningObjectives: Array.isArray(section.learningObjectives) ? section.learningObjectives : [],
+          suggestedActivities: Array.isArray(section.suggestedActivities) ? section.suggestedActivities : [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }),
+      );
 
-    const matchingTopics = await this.findMatchingTopics(balancedSections);
-    let enhancedSections = await this.associateTopicsWithSections(balancedSections, matchingTopics);
+      sections = this.ensureRequiredSectionCoverage(sections, duration);
+      sections = this.applyStructuredDurationDefaults(sections, duration);
+      sections = this.applyVariantPersonaAdjustments(sections, meta.label);
+      sections = this.balanceDurations(sections, duration);
+    }
 
-    // Final pass to guarantee duration alignment and sequential positions
-    balancedSections = this.balanceDurations(enhancedSections, duration);
-    const finalSections = balancedSections.map((section, index) => ({
-      ...section,
-      position: index,
-    }));
+    const matchingTopics = await this.findMatchingTopics(sections);
+    const enhancedSectionsRaw = await this.associateTopicsWithSections(sections, matchingTopics);
+
+    const finalSections: FlexibleSessionSection[] = userTopics.length > 0
+      ? (enhancedSectionsRaw.map((section, index) => ({
+          ...section,
+          position: index,
+        })) as FlexibleSessionSection[])
+      : (this.balanceDurations(enhancedSectionsRaw, duration).map((section, index) => ({
+          ...section,
+          position: index,
+        })) as FlexibleSessionSection[]);
 
     const totalDuration = finalSections.reduce((acc, s) => acc + s.duration, 0);
 

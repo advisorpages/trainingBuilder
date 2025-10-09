@@ -104,6 +104,7 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     desiredOutcome: metadata.desiredOutcome,
     currentProblem: metadata.currentProblem,
     specificTopics: metadata.specificTopics,
+    topics: metadata.topics,
     date: metadata.startDate,
     startTime: metadata.startTime,
     endTime: metadata.endTime,
