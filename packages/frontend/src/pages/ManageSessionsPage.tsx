@@ -134,7 +134,7 @@ const SessionsTable: React.FC<{
                   size="sm"
                   onClick={() => onEditSession(session.id)}
                 >
-                  Edit in Builder
+                  Edit Session
                 </Button>
               </td>
             </tr>
@@ -402,7 +402,7 @@ export const ManageSessionsPage: React.FC = () => {
   };
 
   const handleEditSession = (sessionId: string) => {
-    navigate(`/sessions/builder/${sessionId}`);
+    navigate(`/sessions/edit/${sessionId}`);
   };
 
   const handleNewSession = () => {

@@ -10,6 +10,8 @@ import { AiPromptsModule } from '../ai-prompts/ai-prompts.module';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { VariantConfigsModule } from '../variant-configs/variant-configs.module';
+import { TopicsModule } from '../topics/topics.module';
+import { TopicsService } from '../topics/topics.service';
 import { AIInteraction } from '../../entities/ai-interaction.entity';
 import {
   Session,
@@ -41,9 +43,10 @@ import {
     AiPromptsModule,
     AnalyticsModule,
     VariantConfigsModule,
+    TopicsModule,
   ],
   controllers: [SessionsController],
-  providers: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService],
+  providers: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService, TopicsService],
   exports: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService],
 })
 export class SessionsModule {}

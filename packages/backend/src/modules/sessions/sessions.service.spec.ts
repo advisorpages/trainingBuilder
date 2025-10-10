@@ -16,19 +16,85 @@ import {
   UserRole,
   ContentSource,
   SessionContentKind,
+  SessionStatus,
 } from '../../entities';
 import { SessionsService } from './sessions.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { SuggestedSessionType } from './dto/suggest-outline.dto';
+import { TopicsService } from '../topics/topics.service';
+import { ReadinessScoringService } from './services/readiness-scoring.service';
+import { OpenAIService } from '../../services/openai.service';
+import { PromptRegistryService } from '../../services/prompt-registry.service';
+import { RagIntegrationService } from '../../services/rag-integration.service';
+import { AIInteractionsService } from '../../services/ai-interactions.service';
+import { AnalyticsTelemetryService } from '../../services/analytics-telemetry.service';
+import { AiPromptSettingsService } from '../../services/ai-prompt-settings.service';
+import { VariantConfigService } from '../../services/variant-config.service';
+import { ConfigService } from '@nestjs/config';
+
+const mockReadinessScoringService = {
+  calculateReadinessScore: jest.fn().mockResolvedValue({
+    score: 100,
+    maxScore: 100,
+    percentage: 100,
+    checks: [],
+    canPublish: true,
+    recommendedActions: [],
+  }),
+  getReadinessThreshold: jest.fn().mockReturnValue(0),
+  canPublish: jest.fn().mockResolvedValue(true),
+};
+
+const mockOpenAIService = {
+  isConfigured: jest.fn().mockReturnValue(false),
+  generateSessionOutline: jest.fn(),
+};
+
+const mockPromptRegistryService = {
+  registerPrompt: jest.fn(),
+  getPrompt: jest.fn(),
+};
+
+const mockRagIntegrationService = {
+  queryRAGWithRetry: jest.fn().mockResolvedValue({ results: [] }),
+};
+
+const mockAIInteractionsService = {
+  create: jest.fn().mockResolvedValue(undefined),
+};
+
+const mockConfigService = {
+  get: jest.fn().mockReturnValue(false),
+};
+
+const mockAnalyticsTelemetryService = {
+  recordEvent: jest.fn(),
+};
+
+const mockPromptSettingsService = {
+  getCurrentSettings: jest.fn().mockResolvedValue({
+    settings: {
+      variantPersonas: [],
+      quickTweaks: [],
+    },
+  }),
+};
+
+const mockVariantConfigService = {
+  getVariantLabel: jest.fn().mockResolvedValue('Default'),
+  getVariantDescription: jest.fn().mockResolvedValue('Default description'),
+  getVariantInstruction: jest.fn().mockResolvedValue('Default instruction'),
+};
 
 describe('SessionsService', () => {
-let service: SessionsService | undefined;
-let topicRepository: Repository<Topic> | undefined;
-let incentiveRepository: Repository<Incentive> | undefined;
-let userRepository: Repository<User> | undefined;
-let dataSource: DataSource | undefined;
-let container: StartedTestContainer | undefined;
-let runtimeAvailable = true;
+  let service: SessionsService | undefined;
+  let topicRepository: Repository<Topic> | undefined;
+  let incentiveRepository: Repository<Incentive> | undefined;
+  let userRepository: Repository<User> | undefined;
+  let sessionRepository: Repository<Session> | undefined;
+  let dataSource: DataSource | undefined;
+  let container: StartedTestContainer | undefined;
+  let runtimeAvailable = true;
 
   beforeAll(async () => {
     jest.setTimeout(60000);
@@ -72,13 +138,26 @@ let runtimeAvailable = true;
           User,
         ]),
       ],
-      providers: [SessionsService],
+      providers: [
+        SessionsService,
+        TopicsService,
+        { provide: ReadinessScoringService, useValue: mockReadinessScoringService },
+        { provide: OpenAIService, useValue: mockOpenAIService },
+        { provide: PromptRegistryService, useValue: mockPromptRegistryService },
+        { provide: RagIntegrationService, useValue: mockRagIntegrationService },
+        { provide: AIInteractionsService, useValue: mockAIInteractionsService },
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: AnalyticsTelemetryService, useValue: mockAnalyticsTelemetryService },
+        { provide: AiPromptSettingsService, useValue: mockPromptSettingsService },
+        { provide: VariantConfigService, useValue: mockVariantConfigService },
+      ],
     }).compile();
 
     service = moduleRef.get(SessionsService);
     topicRepository = moduleRef.get(getRepositoryToken(Topic));
     incentiveRepository = moduleRef.get(getRepositoryToken(Incentive));
     userRepository = moduleRef.get(getRepositoryToken(User));
+    sessionRepository = moduleRef.get(getRepositoryToken(Session));
     dataSource = moduleRef.get(DataSource);
 
     await userRepository.save(
@@ -88,6 +167,10 @@ let runtimeAvailable = true;
         role: UserRole.CONTENT_DEVELOPER,
       }),
     );
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
   afterAll(async () => {
@@ -121,6 +204,76 @@ let runtimeAvailable = true;
     const fetched = await service.findOne(session.id);
     expect(fetched.topic?.id).toEqual(topic.id);
     expect(fetched.incentives).toHaveLength(1);
+  });
+
+  it('imports sessions with reusable topics and enriched fields', async () => {
+    if (!runtimeAvailable || !service || !topicRepository || !sessionRepository) {
+      return;
+    }
+
+    const importResult = await service.importSessions({
+      sessions: [
+        {
+          title: 'AI Leadership 101',
+          status: SessionStatus.DRAFT,
+          objective: 'Help leaders understand the foundations of AI adoption.',
+          topics: [
+            {
+              name: 'AI Foundations',
+              description: 'Intro to AI concepts',
+              learningOutcomes: 'Explain key AI terms to stakeholders',
+              trainerNotes: 'Share a success story from the field',
+              materialsNeeded: 'Slides, markers',
+              deliveryGuidance: 'Encourage open discussion',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(importResult.created).toBe(1);
+    expect(importResult.updated).toBe(0);
+    expect(importResult.topicsCreated).toBe(1);
+    expect(importResult.topicsUpdated).toBe(0);
+    expect(importResult.errors).toHaveLength(0);
+
+    const savedTopic = await topicRepository.findOne({ where: { name: 'AI Foundations' } });
+    expect(savedTopic).toBeDefined();
+    expect(savedTopic?.description).toBe('Intro to AI concepts');
+    expect(savedTopic?.learningOutcomes).toContain('Explain key AI terms');
+
+    const savedSession = await sessionRepository.findOne({
+      where: { title: 'AI Leadership 101' },
+      relations: ['topic'],
+    });
+
+    expect(savedSession).toBeDefined();
+    expect(savedSession?.topic?.id).toEqual(savedTopic?.id);
+
+    const secondImport = await service.importSessions({
+      sessions: [
+        {
+          title: 'AI Leadership Advanced',
+          status: SessionStatus.DRAFT,
+          topics: [
+            {
+              name: 'AI Foundations',
+              trainerNotes: 'Updated facilitation notes',
+              materialsNeeded: 'Case studies, whiteboard',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(secondImport.created).toBe(1);
+    expect(secondImport.topicsCreated).toBe(0);
+    expect(secondImport.topicsUpdated).toBeGreaterThan(0);
+    expect(secondImport.errors).toHaveLength(0);
+
+    const updatedTopic = await topicRepository.findOne({ where: { name: 'AI Foundations' } });
+    expect(updatedTopic?.trainerNotes).toBe('Updated facilitation notes');
+    expect(updatedTopic?.materialsNeeded).toBe('Case studies, whiteboard');
   });
 
   it('creates a content version for a session', async () => {

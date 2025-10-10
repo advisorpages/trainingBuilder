@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, ILike } from 'typeorm';
 import { randomUUID } from 'crypto';
 import {
   Incentive,
@@ -54,8 +54,10 @@ import {
   PromptSandboxSettings,
   PromptVariantPersona,
 } from '../../services/ai-prompt-settings.service';
-import { ImportSessionsDto, ImportSessionItemDto } from './dto/import-sessions.dto';
+import { ImportSessionsDto, ImportSessionItemDto, ImportSessionTopicDto } from './dto/import-sessions.dto';
 import { recordsToCsv, CsvColumn } from '../../utils/csv.util';
+import { TopicsService } from '../topics/topics.service';
+import { ImportTopicsDto, ImportTopicItemDto } from '../topics/dto/import-topics.dto';
 
 export interface RagSource {
   filename: string;
@@ -148,6 +150,19 @@ interface SessionContentVersionExport {
   content: Record<string, unknown>;
 }
 
+interface SessionExportTopic {
+  id: number;
+  name: string;
+  description?: string | null;
+  learningOutcomes?: string | null;
+  trainerNotes?: string | null;
+  materialsNeeded?: string | null;
+  deliveryGuidance?: string | null;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 export interface SessionExportRecord {
   id: string;
   title: string;
@@ -168,6 +183,7 @@ export interface SessionExportRecord {
   publishedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  topics: SessionExportTopic[];
   latestContentVersion: Omit<SessionContentVersionExport, 'createdAt' | 'updatedAt'> | null;
   contentVersions: SessionContentVersionExport[];
 }
@@ -244,6 +260,7 @@ export class SessionsService {
     private readonly analyticsTelemetry: AnalyticsTelemetryService,
     private readonly promptSettingsService: AiPromptSettingsService,
     private readonly variantConfigService: VariantConfigService,
+    private readonly topicsService: TopicsService,
   ) {
     this.enableVariantGenerationV2 = this.configService.get<boolean>('ENABLE_VARIANT_GENERATION_V2', false);
     this.variantRolloutPercentage = this.configService.get<number>('VARIANT_GENERATION_ROLLOUT_PERCENTAGE', 0);
@@ -1641,7 +1658,7 @@ export class SessionsService {
 
   async exportAllSessionsDetailed(): Promise<SessionExportRecord[]> {
     const sessions = await this.sessionsRepository.find({
-      relations: ['contentVersions', 'category', 'location', 'audience', 'tone'],
+      relations: ['contentVersions', 'category', 'location', 'audience', 'tone', 'topic'],
       order: { updatedAt: 'DESC' },
     });
 
@@ -1682,6 +1699,22 @@ export class SessionsService {
         publishedAt: this.toIsoString(session.publishedAt),
         createdAt: this.toIsoString(session.createdAt),
         updatedAt: this.toIsoString(session.updatedAt),
+        topics: session.topic
+          ? [
+              {
+                id: session.topic.id,
+                name: session.topic.name,
+                description: session.topic.description ?? null,
+                learningOutcomes: session.topic.learningOutcomes ?? null,
+                trainerNotes: session.topic.trainerNotes ?? null,
+                materialsNeeded: session.topic.materialsNeeded ?? null,
+                deliveryGuidance: session.topic.deliveryGuidance ?? null,
+                isActive: session.topic.isActive,
+                createdAt: this.toIsoString(session.topic.createdAt),
+                updatedAt: this.toIsoString(session.topic.updatedAt),
+              },
+            ]
+          : [],
         latestContentVersion: latestAccepted
           ? {
               id: latestAccepted.id,
@@ -1727,6 +1760,19 @@ export class SessionsService {
       { key: 'publishedAt' },
       { key: 'createdAt' },
       { key: 'updatedAt' },
+      {
+        key: 'topics',
+        header: 'topics',
+        transform: (value) => {
+          if (!Array.isArray(value)) {
+            return '[]';
+          }
+          if (value.length === 0) {
+            return '[]';
+          }
+          return JSON.stringify(value);
+        },
+      },
       { key: 'latestContentVersion.id', header: 'latestContentVersionId' },
       { key: 'latestContentVersion.kind', header: 'latestContentVersionKind' },
       { key: 'latestContentVersion.status', header: 'latestContentVersionStatus' },
@@ -1764,8 +1810,19 @@ export class SessionsService {
       created: 0,
       updated: 0,
       errors: [] as string[],
+      topicsCreated: 0,
+      topicsUpdated: 0,
     };
 
+    // Phase 1: Process all topics first to ensure they exist before sessions reference them
+    const topicProcessingResults = await this.processTopicsFromSessions(payload.sessions);
+
+    // Add topic processing results to summary
+    summary.topicsCreated = topicProcessingResults.created;
+    summary.topicsUpdated = topicProcessingResults.updated;
+    summary.errors.push(...topicProcessingResults.errors.map(error => `Topic: ${error}`));
+
+    // Phase 2: Process sessions with topics now available
     for (const sessionDto of payload.sessions) {
       try {
         const result = await this.upsertSessionFromImport(sessionDto);
@@ -1782,6 +1839,147 @@ export class SessionsService {
     }
 
     return summary;
+  }
+
+  private async processTopicsFromSessions(sessions: ImportSessionItemDto[]) {
+    const summary = {
+      total: 0,
+      created: 0,
+      updated: 0,
+      errors: [] as string[],
+    };
+
+    // Collect all unique topics from all sessions
+    const topicMap = new Map<string, ImportSessionTopicDto>();
+
+    for (const session of sessions) {
+      if (session.topics && session.topics.length > 0) {
+        for (const topic of session.topics) {
+          // Validate topic data
+          if (!topic.name || topic.name.trim().length === 0) {
+            summary.errors.push(`Session "${session.title}": Topic missing name`);
+            continue;
+          }
+
+          const normalizedTopic = this.normalizeTopicForImport(topic);
+          const key = normalizedTopic.id ? `id:${normalizedTopic.id}` : `name:${normalizedTopic.name!.toLowerCase()}`;
+
+          if (!topicMap.has(key)) {
+            topicMap.set(key, normalizedTopic);
+            summary.total++;
+          } else {
+            const existingTopic = topicMap.get(key)!;
+            topicMap.set(key, this.mergeTopicImportData(existingTopic, normalizedTopic));
+          }
+        }
+      }
+    }
+
+    // Process each unique topic using the existing topics service
+    for (const [key, topicDto] of topicMap) {
+      try {
+        const result = await this.upsertTopicFromSession(topicDto);
+        if (result === 'created') {
+          summary.created++;
+        } else {
+          summary.updated++;
+        }
+      } catch (error: any) {
+        const message = error?.message ?? 'Unknown error';
+        const topicName = topicDto.name || 'Unknown';
+        summary.errors.push(`${topicName}: ${message}`);
+        this.logger.error(`Failed to process topic "${topicName}": ${message}`, error.stack);
+      }
+    }
+
+    return summary;
+  }
+
+  private normalizeTopicForImport(topic: ImportSessionTopicDto): ImportSessionTopicDto {
+    const normalized: ImportSessionTopicDto = { ...topic };
+
+    if (normalized.name) {
+      normalized.name = normalized.name.trim();
+    }
+    if (normalized.description) {
+      normalized.description = normalized.description.trim();
+    }
+    if (normalized.learningOutcomes) {
+      normalized.learningOutcomes = normalized.learningOutcomes.trim();
+    }
+    if (normalized.trainerNotes) {
+      normalized.trainerNotes = normalized.trainerNotes.trim();
+    }
+    if (normalized.materialsNeeded) {
+      normalized.materialsNeeded = normalized.materialsNeeded.trim();
+    }
+    if (normalized.deliveryGuidance) {
+      normalized.deliveryGuidance = normalized.deliveryGuidance.trim();
+    }
+
+    return normalized;
+  }
+
+  private mergeTopicImportData(
+    existing: ImportSessionTopicDto,
+    incoming: ImportSessionTopicDto,
+  ): ImportSessionTopicDto {
+    const merged: ImportSessionTopicDto = { ...existing };
+
+    if (incoming.id) {
+      merged.id = incoming.id;
+    }
+
+    if (incoming.name && incoming.name.trim().length > 0) {
+      merged.name = incoming.name.trim();
+    }
+
+    const stringKeys: (keyof Pick<
+      ImportSessionTopicDto,
+      'description' | 'learningOutcomes' | 'trainerNotes' | 'materialsNeeded' | 'deliveryGuidance'
+    >)[] = ['description', 'learningOutcomes', 'trainerNotes', 'materialsNeeded', 'deliveryGuidance'];
+
+    for (const key of stringKeys) {
+      const value = incoming[key];
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          merged[key] = trimmed;
+        }
+      }
+    }
+
+    if (typeof incoming.isActive === 'boolean') {
+      merged.isActive = incoming.isActive;
+    }
+
+    return merged;
+  }
+
+  private async upsertTopicFromSession(topicDto: ImportSessionTopicDto): Promise<'created' | 'updated'> {
+    let topicPayload = this.normalizeTopicForImport(topicDto);
+
+    if (topicPayload.id && (!topicPayload.name || topicPayload.name.trim().length === 0)) {
+      const existing = await this.topicsRepository.findOne({ where: { id: topicPayload.id } });
+      if (!existing) {
+        throw new Error(`Topic with ID ${topicPayload.id} not found`);
+      }
+      topicPayload = {
+        ...topicPayload,
+        name: existing.name,
+      };
+    }
+
+    // Use the existing topics service method for consistency
+    const importDto = new ImportTopicsDto();
+    importDto.topics = [topicPayload as ImportTopicItemDto];
+
+    const result = await this.topicsService.importTopics(importDto);
+    if (result.errors.length > 0) {
+      throw new Error(result.errors[0]);
+    }
+
+    return result.created > 0 ? 'created' : 'updated';
   }
 
   private async upsertSessionFromImport(sessionDto: ImportSessionItemDto): Promise<'created' | 'updated'> {
@@ -1865,8 +2063,80 @@ export class SessionsService {
       session.publishedAt = new Date();
     }
 
+    // Handle topic associations if topics were provided
+    if (sessionDto.topics && sessionDto.topics.length > 0) {
+      await this.associateTopicsWithSession(session, sessionDto.topics);
+    }
+
     await this.sessionsRepository.save(session);
     return isNew ? 'created' : 'updated';
+  }
+
+  private async associateTopicsWithSession(session: Session, sessionTopics: ImportSessionTopicDto[]): Promise<void> {
+    const topicIds = new Set<number>();
+    const errors: string[] = [];
+
+    for (const sessionTopic of sessionTopics) {
+      try {
+        let topic: Topic | null = null;
+
+        // Find existing topic by ID if provided
+        if (sessionTopic.id) {
+          topic = await this.topicsRepository.findOne({ where: { id: sessionTopic.id } });
+          if (!topic) {
+            errors.push(`Topic with ID ${sessionTopic.id} not found`);
+            continue;
+          }
+        }
+
+        // If not found by ID, try to find by name
+        const topicName = sessionTopic.name?.trim();
+
+        if (!topic && topicName) {
+          topic = await this.topicsRepository.findOne({
+            where: { name: ILike(topicName) },
+          });
+
+          if (!topic) {
+            errors.push(`Topic "${topicName}" not found (should have been created in import phase)`);
+            continue;
+          }
+        }
+
+        if (!topic) {
+          errors.push(`Topic could not be identified (missing both ID and name)`);
+          continue;
+        }
+
+        topicIds.add(topic.id);
+      } catch (error: any) {
+        const message = error?.message ?? 'Unknown error';
+        const topicName = sessionTopic.name || `ID:${sessionTopic.id}`;
+        errors.push(`Error processing topic "${topicName}": ${message}`);
+        this.logger.error(`Error associating topic "${topicName}" with session "${session.title}": ${message}`);
+      }
+    }
+
+    // Update the session's topic relationship
+    if (topicIds.size > 0) {
+      try {
+        const topics = await this.topicsRepository.find({ where: { id: In([...topicIds]) } });
+        if (topics.length > 0) {
+          session.topic = topics[0]; // For now, associate with the first topic
+          // Note: The current entity structure seems to support only one topic per session
+          // If multiple topics are needed, the entity relationship would need to be updated
+        }
+      } catch (error: any) {
+        const message = error?.message ?? 'Unknown error';
+        errors.push(`Error updating session topic relationship: ${message}`);
+        this.logger.error(`Error updating topic relationship for session "${session.title}": ${message}`);
+      }
+    }
+
+    // Log any errors that occurred during topic association
+    if (errors.length > 0) {
+      this.logger.warn(`Topic association issues for session "${session.title}":`, errors);
+    }
   }
 
   async bulkUpdateStatus(sessionIds: string[], status: SessionStatus): Promise<{ updated: number }> {
