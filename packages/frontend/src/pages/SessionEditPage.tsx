@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Session, SessionStatus, Trainer, Incentive } from '@leadership-training/shared';
 import { sessionService } from '../services/session.service';
@@ -12,6 +12,8 @@ import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { BuilderLayout } from '../layouts/BuilderLayout';
 import { Topic, Location, Audience, Tone } from '@leadership-training/shared';
+import { EnhancedTopicSelection } from '../components/sessions/EnhancedTopicSelection';
+import { SessionTopicDetail } from '../components/sessions/EnhancedTopicCard';
 
 interface FormData {
   title: string;
@@ -62,12 +64,6 @@ const SessionEditPage: React.FC = () => {
   // Current associations
   const [currentTrainers, setCurrentTrainers] = useState<Trainer[]>([]);
   const [currentIncentives, setCurrentIncentives] = useState<Incentive[]>([]);
-  const [topicSearch, setTopicSearch] = useState('');
-  const [showCreateTopicForm, setShowCreateTopicForm] = useState(false);
-  const [newTopicName, setNewTopicName] = useState('');
-  const [newTopicDescription, setNewTopicDescription] = useState('');
-  const [creatingTopic, setCreatingTopic] = useState(false);
-  const [topicCreationError, setTopicCreationError] = useState<string | null>(null);
 
   // Load session data
   useEffect(() => {
@@ -198,24 +194,26 @@ const SessionEditPage: React.FC = () => {
     }
   }, [session]);
 
-  const selectedTopics = useMemo(
-    () => topics.filter(topic => formData.topicIds.includes(topic.id)),
-    [topics, formData.topicIds],
-  );
-
-  const filteredTopics = useMemo(() => {
-    if (!topicSearch.trim()) {
-      return topics;
-    }
-    const searchValue = topicSearch.trim().toLowerCase();
-    return topics.filter(topic => {
-      const nameMatch = topic.name.toLowerCase().includes(searchValue);
-      const descriptionMatch = topic.description
-        ? topic.description.toLowerCase().includes(searchValue)
-        : false;
-      return nameMatch || descriptionMatch;
+  const sortedTopics = useMemo(() => {
+    const topicsCopy = [...topics];
+    topicsCopy.sort((a, b) => {
+      const aUpdated = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const bUpdated = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return bUpdated - aUpdated;
     });
-  }, [topics, topicSearch]);
+    return topicsCopy;
+  }, [topics]);
+
+  const handleTopicSelectionChange = useCallback((details: SessionTopicDetail[]) => {
+    const orderedTopicIds = [...details]
+      .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
+      .map(detail => detail.topicId);
+
+    setFormData(prev => ({
+      ...prev,
+      topicIds: orderedTopicIds,
+    }));
+  }, []);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -245,61 +243,6 @@ const SessionEditPage: React.FC = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
-    }
-  };
-
-  const handleToggleTopic = (topicId: number) => {
-    setFormData(prev => {
-      const alreadySelected = prev.topicIds.includes(topicId);
-      const nextTopicIds = alreadySelected
-        ? prev.topicIds.filter(id => id !== topicId)
-        : [...prev.topicIds, topicId];
-      return { ...prev, topicIds: nextTopicIds };
-    });
-  };
-
-  const handleRemoveTopic = (topicId: number) => {
-    setFormData(prev => ({ ...prev, topicIds: prev.topicIds.filter(id => id !== topicId) }));
-  };
-
-  const resetTopicCreationForm = () => {
-    setNewTopicName('');
-    setNewTopicDescription('');
-    setTopicCreationError(null);
-  };
-
-  const handleToggleTopicCreationForm = () => {
-    setShowCreateTopicForm(prev => {
-      if (prev) {
-        resetTopicCreationForm();
-      }
-      return !prev;
-    });
-  };
-
-  const handleCreateTopic = async () => {
-    if (!newTopicName.trim()) {
-      setTopicCreationError('Topic name is required');
-      return;
-    }
-
-    try {
-      setCreatingTopic(true);
-      const createdTopic = await topicService.createTopic({
-        name: newTopicName.trim(),
-        description: newTopicDescription.trim() || undefined,
-      });
-
-      setTopics(prev => [...prev, createdTopic]);
-      setFormData(prev => ({ ...prev, topicIds: [...prev.topicIds, createdTopic.id] }));
-      resetTopicCreationForm();
-      setShowCreateTopicForm(false);
-      setTopicSearch('');
-    } catch (error) {
-      console.error('Failed to create topic:', error);
-      setTopicCreationError('Failed to create topic. Please try again.');
-    } finally {
-      setCreatingTopic(false);
     }
   };
 
@@ -470,143 +413,15 @@ const SessionEditPage: React.FC = () => {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-slate-900">Associations</h3>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Topics
-                  </label>
-                  <div className="space-y-3">
-                    {selectedTopics.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedTopics.map(topic => (
-                          <span
-                            key={topic.id}
-                            className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
-                          >
-                            {topic.name}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveTopic(topic.id)}
-                              className="text-blue-600 transition hover:text-blue-800 focus:outline-none"
-                              aria-label={`Remove ${topic.name}`}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-500">No topics selected yet.</p>
-                    )}
-
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={topicSearch}
-                        onChange={(e) => setTopicSearch(e.target.value)}
-                        placeholder="Search topics by name or description..."
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                      />
-                      {topicSearch && (
-                        <button
-                          type="button"
-                          onClick={() => setTopicSearch('')}
-                          className="absolute inset-y-0 right-0 px-3 text-slate-400 transition hover:text-slate-600"
-                          aria-label="Clear topic search"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-200">
-                      {filteredTopics.length > 0 ? (
-                        filteredTopics.map(topic => {
-                          const isSelected = formData.topicIds.includes(topic.id);
-                          return (
-                            <label
-                              key={topic.id}
-                              className={`flex cursor-pointer items-start gap-3 border-b border-slate-100 px-3 py-2 last:border-0 ${
-                                isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => handleToggleTopic(topic.id)}
-                                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <div>
-                                <div className="text-sm font-medium text-slate-900">{topic.name}</div>
-                                {topic.description && (
-                                  <div className="mt-1 text-xs text-slate-600">{topic.description}</div>
-                                )}
-                              </div>
-                            </label>
-                          );
-                        })
-                      ) : (
-                        <div className="px-3 py-4 text-sm text-slate-500">No topics found.</div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleToggleTopicCreationForm}
-                      >
-                        {showCreateTopicForm ? 'Cancel' : 'Create Topic'}
-                      </Button>
-                    </div>
-
-                    {showCreateTopicForm && (
-                      <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">
-                            Topic Name *
-                          </label>
-                          <input
-                            type="text"
-                            value={newTopicName}
-                            onChange={(e) => setNewTopicName(e.target.value)}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">
-                            Description
-                          </label>
-                          <textarea
-                            value={newTopicDescription}
-                            onChange={(e) => setNewTopicDescription(e.target.value)}
-                            rows={3}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                        {topicCreationError && (
-                          <p className="text-sm text-red-600">{topicCreationError}</p>
-                        )}
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            onClick={handleCreateTopic}
-                            disabled={creatingTopic}
-                          >
-                            {creatingTopic ? 'Creating...' : 'Save Topic'}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleToggleTopicCreationForm}
-                          >
-                            Dismiss
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <h4 className="text-md font-semibold text-slate-900">Topics</h4>
+                  <EnhancedTopicSelection
+                    topics={sortedTopics}
+                    trainers={trainers}
+                    initialSelectedTopics={formData.topicIds}
+                    onSelectionChange={handleTopicSelectionChange}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

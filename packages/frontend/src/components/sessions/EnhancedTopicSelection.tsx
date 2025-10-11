@@ -21,35 +21,35 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'usage' | 'recent'>('name');
   const [showActiveOnly, setShowActiveOnly] = useState(true);
+  const [showRecentlyUpdated, setShowRecentlyUpdated] = useState(false);
+  const [showHighUsageOnly, setShowHighUsageOnly] = useState(false);
 
   // Initialize selected topics (only once)
-  useEffect(() => {
-    if (initialSelectedTopics.length > 0 && selectedTopicDetails.length === 0) {
-      const initialDetails = initialSelectedTopics.map((topicId, index) => ({
-        topicId,
-        sequenceOrder: index + 1,
-        durationMinutes: 30, // default duration
-        assignedTrainerId: undefined,
-        notes: ''
-      }));
-      setSelectedTopicDetails(initialDetails);
-    }
-  }, [initialSelectedTopics]);
+useEffect(() => {
+  if (initialSelectedTopics.length > 0 && selectedTopicDetails.length === 0) {
+    const initialDetails = initialSelectedTopics.map((topicId, index) => ({
+      topicId,
+      sequenceOrder: index + 1,
+      durationMinutes: 30, // default duration
+      assignedTrainerId: undefined,
+      notes: ''
+    }));
+    setSelectedTopicDetails(initialDetails);
+  }
+  // We only want this to run once on mount when selection is empty.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initialSelectedTopics, selectedTopicDetails.length]);
 
-  // Calculate total duration whenever selection changes
-  useEffect(() => {
-    const total = selectedTopicDetails.reduce((sum, detail) => sum + detail.durationMinutes, 0);
-    setTotalDuration(total);
-    onSelectionChange(selectedTopicDetails);
-  }, [selectedTopicDetails]);
+// Calculate total duration whenever selection changes
+useEffect(() => {
+  const total = selectedTopicDetails.reduce((sum, detail) => sum + detail.durationMinutes, 0);
+  setTotalDuration(total);
+  onSelectionChange(selectedTopicDetails);
+}, [selectedTopicDetails, onSelectionChange]);
 
-  const isTopicSelected = (topicId: number) => {
-    return selectedTopicDetails.some(detail => detail.topicId === topicId);
-  };
+  const isTopicSelected = (topicId: number) => selectedTopicDetails.some(detail => detail.topicId === topicId);
 
-  const getTopicDetail = (topicId: number) => {
-    return selectedTopicDetails.find(detail => detail.topicId === topicId);
-  };
+  const getTopicDetail = (topicId: number) => selectedTopicDetails.find(detail => detail.topicId === topicId);
 
   const handleTopicSelect = (topicId: number, selected: boolean) => {
     if (selected) {
@@ -101,194 +101,281 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
     return detail ? detail.sequenceOrder : selectedTopicDetails.length + 1;
   };
 
-  // Filter and sort topics
-  const filteredAndSortedTopics = React.useMemo(() => {
-    let filtered = topics.filter(topic => {
-      // Filter by active status
-      if (showActiveOnly && !topic.isActive) return false;
+  const clearFilters = () => {
+    setShowActiveOnly(true);
+    setShowRecentlyUpdated(false);
+    setShowHighUsageOnly(false);
+    setSortBy('name');
+    setSearchTerm('');
+  };
 
-      // Filter by search term
+  const filteredAndSortedTopics = React.useMemo(() => {
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+
+    const filtered = topics.filter(topic => {
+      if (showActiveOnly && !topic.isActive) {
+        return false;
+      }
+
+      if (showRecentlyUpdated) {
+        const updatedAt = topic.updatedAt ? new Date(topic.updatedAt).getTime() : 0;
+        if (Number.isNaN(updatedAt) || now - updatedAt > THIRTY_DAYS_MS) {
+          return false;
+        }
+      }
+
+      if (showHighUsageOnly) {
+        const usageCount = Array.isArray(topic.sessions) ? topic.sessions.length : 0;
+        if (usageCount < 3) {
+          return false;
+        }
+      }
+
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
-        return (
-          topic.name.toLowerCase().includes(searchLower) ||
-          (topic.description && topic.description.toLowerCase().includes(searchLower))
-        );
+        const matchesName = topic.name.toLowerCase().includes(searchLower);
+        const matchesDescription =
+          typeof topic.description === 'string' && topic.description.toLowerCase().includes(searchLower);
+        const matchesLearningOutcomes =
+          typeof topic.learningOutcomes === 'string' &&
+          topic.learningOutcomes.toLowerCase().includes(searchLower);
+
+        if (!(matchesName || matchesDescription || matchesLearningOutcomes)) {
+          return false;
+        }
       }
 
       return true;
     });
 
-    // Sort topics
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
         case 'recent':
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        case 'usage':
-          // For now, sort by name as we don't have usage data yet
-          // TODO: Implement usage-based sorting when backend provides usage stats
-          return a.name.localeCompare(b.name);
+        case 'usage': {
+          const usageA = Array.isArray(a.sessions) ? a.sessions.length : 0;
+          const usageB = Array.isArray(b.sessions) ? b.sessions.length : 0;
+          if (usageA === usageB) {
+            return a.name.localeCompare(b.name);
+          }
+          return usageB - usageA;
+        }
         default:
           return 0;
       }
     });
 
     return filtered;
-  }, [topics, searchTerm, sortBy, showActiveOnly]);
+  }, [topics, searchTerm, sortBy, showActiveOnly, showRecentlyUpdated, showHighUsageOnly]);
+
+  const activeFilterCount =
+    Number(!showActiveOnly) + Number(showRecentlyUpdated) + Number(showHighUsageOnly) + (sortBy !== 'name' ? 1 : 0);
 
   return (
     <div className="space-y-6">
-      {/* Header with summary */}
-      <div className="flex justify-between items-center">
-        <h3 className="text-md font-medium text-gray-900">Session Topics</h3>
-        {selectedTopicDetails.length > 0 && (
-          <div className="text-sm text-gray-600">
-            <span className="font-medium">{selectedTopicDetails.length} topics selected</span>
-            <span className="ml-2">• Total duration: {formatTotalDuration(totalDuration)}</span>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <div className="space-y-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-md font-medium text-gray-900">Session Topics</h3>
+              <span className="text-sm text-gray-500">
+                {filteredAndSortedTopics.length} topic{filteredAndSortedTopics.length !== 1 ? 's' : ''} available
+              </span>
+            </div>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Search by topic name, description, or outcomes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Clear search</span>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="flex items-center space-x-2">
+                <label className="text-sm font-medium text-gray-700">Sort:</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'name' | 'usage' | 'recent')}
+                  className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="name">Name (A-Z)</option>
+                  <option value="recent">Recently Updated</option>
+                  <option value="usage">Most Used</option>
+                </select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowActiveOnly((prev) => !prev)}
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition ${
+                    showActiveOnly
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-300 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                  }`}
+                >
+                  {showActiveOnly ? 'Active only' : 'Include inactive'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRecentlyUpdated((prev) => !prev)}
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition ${
+                    showRecentlyUpdated
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-300 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                  }`}
+                >
+                  Recently updated
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowHighUsageOnly((prev) => !prev)}
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-sm transition ${
+                    showHighUsageOnly
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-300 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                  }`}
+                >
+                  Popular topics
+                </button>
+              </div>
+
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-sm text-blue-600 hover:text-blue-500"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* Search and Filter Controls */}
-      <div className="space-y-4">
-        {/* Search Bar */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <input
-            type="text"
-            placeholder="Search topics by name or description..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            >
-              <svg className="h-4 w-4 text-gray-400 hover:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-
-        {/* Filter Controls */}
-        <div className="flex flex-wrap gap-4 items-center">
-          {/* Sort Dropdown */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Sort by:</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'name' | 'usage' | 'recent')}
-              className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            >
-              <option value="name">Name (A-Z)</option>
-              <option value="recent">Recently Updated</option>
-              <option value="usage">Most Used</option>
-            </select>
-          </div>
-
-          {/* Active Filter Toggle */}
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="showActiveOnly"
-              checked={showActiveOnly}
-              onChange={(e) => setShowActiveOnly(e.target.checked)}
-              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="showActiveOnly" className="text-sm font-medium text-gray-700">
-              Active topics only
-            </label>
-          </div>
-
-          {/* Results count */}
-          <div className="text-sm text-gray-500 ml-auto">
-            {filteredAndSortedTopics.length} topic{filteredAndSortedTopics.length !== 1 ? 's' : ''} available
-          </div>
-        </div>
-      </div>
-
-      {/* Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-        <p className="text-sm text-blue-800">
-          Select topics for your session. For each selected topic, you can specify the duration,
-          assign a trainer, and add notes. Once selected, you can drag and drop items in the Session Flow Summary to reorder them.
-        </p>
-      </div>
-
-      {/* Topic Cards Grid */}
-      <div className="grid grid-cols-1 gap-4">
-        {filteredAndSortedTopics.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.5-1.294-5.647-3.379m-.353-1.621A7.963 7.963 0 014 12c0-4.418 3.582-8 8-8s8 3.582 8 8c0 2.152-.851 4.12-2.264 5.621m-7.736 2.379A7.962 7.962 0 0112 21c2.34 0 4.5-1.294 5.647-3.379" />
-            </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No topics found</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {searchTerm
-                ? `No topics match "${searchTerm}". Try adjusting your search terms.`
-                : 'No topics available with the current filters.'
-              }
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <p className="text-sm text-blue-800">
+              Browse topics on the left and build your session flow on the right. Drag selected topics to reorder, adjust
+              duration, or assign trainers without leaving this screen.
             </p>
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="mt-3 text-sm text-blue-600 hover:text-blue-500"
-              >
-                Clear search
-              </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {filteredAndSortedTopics.length === 0 ? (
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.5-1.294-5.647-3.379m-.353-1.621A7.963 7.963 0 014 12c0-4.418 3.582-8 8-8s8 3.582 8 8c0 2.152-.851 4.12-2.264 5.621m-7.736 2.379A7.962 7.962 0 0112 21c2.34 0 4.5-1.294 5.647-3.379" />
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No topics found</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Try adjusting your filters or clearing the search.
+                </p>
+                <button
+                  onClick={clearFilters}
+                  className="mt-3 text-sm text-blue-600 hover:text-blue-500"
+                >
+                  Reset filters
+                </button>
+              </div>
+            ) : (
+              filteredAndSortedTopics.map((topic) => (
+                <EnhancedTopicCard
+                  key={topic.id}
+                  topic={topic}
+                  trainers={trainers}
+                  isSelected={isTopicSelected(topic.id)}
+                  sessionTopicDetail={getTopicDetail(topic.id)}
+                  onSelect={(selected) => handleTopicSelect(topic.id, selected)}
+                  onDetailChange={handleTopicDetailChange}
+                  sequenceOrder={getSequenceOrder(topic.id)}
+                />
+              ))
             )}
           </div>
-        ) : (
-          filteredAndSortedTopics.map((topic) => (
-          <EnhancedTopicCard
-            key={topic.id}
-            topic={topic}
-            trainers={trainers}
-            isSelected={isTopicSelected(topic.id)}
-            sessionTopicDetail={getTopicDetail(topic.id)}
-            onSelect={(selected) => handleTopicSelect(topic.id, selected)}
-            onDetailChange={handleTopicDetailChange}
-            sequenceOrder={getSequenceOrder(topic.id)}
-          />
-          ))
-        )}
-      </div>
-
-      {/* Draggable Session Flow Summary */}
-      <DraggableSessionFlow
-        selectedTopicDetails={selectedTopicDetails}
-        topics={topics}
-        trainers={trainers}
-        onReorder={handleReorder}
-      />
-
-      {/* Validation warnings */}
-      {totalDuration > 480 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-yellow-800">
-                <strong>Long session warning:</strong> Total duration ({formatTotalDuration(totalDuration)})
-                exceeds 8 hours. Consider breaking this into multiple sessions.
-              </p>
-            </div>
-          </div>
         </div>
-      )}
+
+        <aside className="lg:sticky lg:top-4 space-y-4">
+          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-start justify-between border-b border-gray-200 p-4">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900">Selected Topics</h4>
+                <p className="mt-1 text-xs text-gray-500">
+                  {selectedTopicDetails.length} selected • {formatTotalDuration(totalDuration)}
+                </p>
+              </div>
+              {selectedTopicDetails.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTopicDetails([])}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-500"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            <div className="p-4">
+              {selectedTopicDetails.length === 0 ? (
+                <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+                  <p className="text-sm text-gray-600">
+                    Select topics from the catalog to build your session agenda. Drag topics to reorder and edit details
+                    as you go.
+                  </p>
+                </div>
+              ) : (
+                <DraggableSessionFlow
+                  selectedTopicDetails={selectedTopicDetails}
+                  topics={topics}
+                  trainers={trainers}
+                  onReorder={handleReorder}
+                />
+              )}
+            </div>
+
+            {totalDuration > 480 && (
+              <div className="border-t border-gray-200 bg-yellow-50 p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path
+                        fillRule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-xs text-yellow-800">
+                      <strong>Long session:</strong> {formatTotalDuration(totalDuration)} scheduled. Consider splitting the flow or
+                      trimming durations.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 };

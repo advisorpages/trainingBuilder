@@ -11,7 +11,6 @@ import { AIContentSection } from './AIContentSection';
 import { EnhancedTopicSelection } from './EnhancedTopicSelection';
 import { SessionTopicDetail } from './EnhancedTopicCard';
 import { DynamicFieldsSection } from './DynamicFieldsSection';
-import { ReadOnlyTopicsDisplay } from './ReadOnlyTopicsDisplay';
 import { CategorySelect } from '../ui/CategorySelect';
 
 interface SessionFormProps {
@@ -111,7 +110,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [jsonError, setJsonError] = useState<string>('');
 
   // Loading states for dropdown data
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -121,7 +119,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const [categories, setCategories] = useState<Category[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [sessionTopicDetails, setSessionTopicDetails] = useState<SessionTopicDetail[]>([]);
 
   // Auto-save and draft management state
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -201,19 +198,20 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   // Set initial form data for comparison
   useEffect(() => {
     initialFormDataRef.current = { ...formData };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   // Save form data locally on changes (for crash recovery)
   useEffect(() => {
-    if (!session && Object.keys(formData).some(key => {
-      const value = formData[key as keyof typeof formData];
-      return value !== '' && value !== null && value !== undefined;
-    })) {
-      const saveTimeout = setTimeout(() => {
-        saveDraftLocally(formData);
-      }, 1000);
+    if (!session) {
+      const hasData = Object.values(formData).some((value) => value !== '' && value !== null && value !== undefined);
+      if (hasData) {
+        const saveTimeout = setTimeout(() => {
+          saveDraftLocally(formData);
+        }, 1000);
 
-      return () => clearTimeout(saveTimeout);
+        return () => clearTimeout(saveTimeout);
+      }
     }
   }, [formData, session, saveDraftLocally]);
 
@@ -472,13 +470,10 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     // Validate content structure before processing
     const validationError = validateAIContentStructure(content);
     if (validationError) {
-      setJsonError(validationError);
+      console.warn('AI content validation failed:', validationError);
       setFormData(prev => ({ ...prev, aiGeneratedContent: content }));
       return;
     }
-
-    // Clear any previous JSON errors
-    setJsonError('');
 
     const newFormData = {
       ...formData,
@@ -505,53 +500,14 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
     // Check for common AI content fields to ensure it's structured correctly
     const expectedFields = ['headlines', 'description', 'keyBenefits', 'callToAction', 'socialMedia', 'emailCopy'];
-    const hasAnyExpectedField = expectedFields.some(field => content.hasOwnProperty(field));
+    // eslint-disable-next-line no-prototype-builtins
+    const hasAnyExpectedField = expectedFields.some(field => Object.prototype.hasOwnProperty.call(content, field));
 
     if (!hasAnyExpectedField) {
       return 'AI content does not contain expected fields. Please ensure it includes at least one of: headlines, description, keyBenefits, callToAction, socialMedia, or emailCopy';
     }
 
     return null;
-  };
-
-  const handleRawJsonChange = (jsonString: string) => {
-    if (!jsonString.trim()) {
-      setJsonError('');
-      setFormData(prev => ({ ...prev, aiGeneratedContent: null }));
-      return;
-    }
-
-    try {
-      const newAiContent = JSON.parse(jsonString);
-
-      // Validate the structure
-      const validationError = validateAIContentStructure(newAiContent);
-      if (validationError) {
-        setJsonError(validationError);
-        // Still allow the update to let user see the parsed content
-        setFormData(prev => ({ ...prev, aiGeneratedContent: newAiContent }));
-        return;
-      }
-
-      setJsonError('');
-      handleAIContentGenerated(newAiContent);
-    } catch (e) {
-      const error = e as Error;
-      let errorMessage = 'Invalid JSON format';
-
-      // Provide more specific error messages for common JSON issues
-      if (error.message.includes('Unexpected token')) {
-        errorMessage += ': Check for missing quotes, commas, or brackets';
-      } else if (error.message.includes('Unexpected end')) {
-        errorMessage += ': JSON appears to be incomplete';
-      } else if (error.message.includes('position')) {
-        errorMessage += ': ' + error.message;
-      }
-
-      setJsonError(errorMessage);
-      // To allow user to fix the error, we update the form with the invalid string
-      setFormData(prev => ({ ...prev, aiGeneratedContent: jsonString as any }));
-    }
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -618,19 +574,9 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     }
   };
 
-  const handleTopicChange = (topicId: string, checked: boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      topicIds: checked
-        ? [...prev.topicIds, topicId]
-        : prev.topicIds.filter((id: string) => id !== topicId)
-    }));
-  };
-
   const handleSessionTopicDetailsChange = useCallback((details: SessionTopicDetail[]) => {
-    setSessionTopicDetails(details);
     // Update form data with topic IDs in the correct order
-    const orderedTopicIds = details
+    const orderedTopicIds = [...details]
       .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
       .map(detail => detail.topicId.toString());
 
@@ -1020,46 +966,40 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           )}
 
           {/* Topics Section */}
-          {session ? (
-            /* Read-only topics display for existing sessions */
-            <ReadOnlyTopicsDisplay selectedTopics={session.topics || []} />
-          ) : (
-            /* Enhanced Topics Selection for new sessions */
-            topics.length > 0 ? (
-              <EnhancedTopicSelection
-                topics={topics}
-                trainers={trainers}
-                initialSelectedTopics={formData.topicIds.map(id => Number(id))}
-                onSelectionChange={handleSessionTopicDetailsChange}
-              />
-            ) : isLoadingData ? (
-              <div>
-                <h3 className="text-md font-medium text-gray-900 mb-4">Session Topics</h3>
-                <div className="flex items-center space-x-2 text-gray-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                  <span className="text-sm">Loading topics...</span>
-                </div>
+          {topics.length > 0 ? (
+            <EnhancedTopicSelection
+              topics={topics}
+              trainers={trainers}
+              initialSelectedTopics={formData.topicIds.map(id => Number(id))}
+              onSelectionChange={handleSessionTopicDetailsChange}
+            />
+          ) : isLoadingData ? (
+            <div>
+              <h3 className="text-md font-medium text-gray-900 mb-4">Session Topics</h3>
+              <div className="flex items-center space-x-2 text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                <span className="text-sm">Loading topics...</span>
               </div>
-            ) : (
-              <div>
-                <h3 className="text-md font-medium text-gray-900 mb-4">Session Topics</h3>
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                        </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-medium text-yellow-800">Topics Not Available</h3>
-                      <p className="mt-1 text-sm text-yellow-700">
-                        Unable to load topic options. Please refresh the page or contact support if this persists.
-                      </p>
-                    </div>
+            </div>
+          ) : (
+            <div>
+              <h3 className="text-md font-medium text-gray-900 mb-4">Session Topics</h3>
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-yellow-800">Topics Not Available</h3>
+                    <p className="mt-1 text-sm text-yellow-700">
+                      Unable to load topic options. Please refresh the page or contact support if this persists.
+                    </p>
                   </div>
                 </div>
               </div>
-            )
+            </div>
           )}
 
 
