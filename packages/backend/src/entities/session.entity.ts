@@ -3,6 +3,7 @@ import {
   Entity,
   Index,
   JoinColumn,
+  JoinTable,
   ManyToMany,
   ManyToOne,
   OneToMany,
@@ -98,9 +99,13 @@ export class Session extends BaseEntity {
   @JoinColumn({ name: 'tone_id' })
   tone?: Tone;
 
-  @ManyToOne(() => Topic, (topic) => topic.sessions, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'topic_id' })
-  topic?: Topic;
+  @ManyToMany(() => Topic, (topic) => topic.sessions, { cascade: false })
+  @JoinTable({
+    name: 'session_topics',
+    joinColumn: { name: 'session_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'topic_id', referencedColumnName: 'id' },
+  })
+  topics: Topic[];
 
   @ManyToMany(() => Incentive, (incentive) => incentive.sessions)
   incentives: Incentive[];

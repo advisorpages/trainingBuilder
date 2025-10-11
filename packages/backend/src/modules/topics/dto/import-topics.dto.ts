@@ -9,6 +9,7 @@ import {
   IsString,
   Min,
   ValidateNested,
+  IsObject,
 } from 'class-validator';
 
 export class ImportTopicItemDto {
@@ -44,6 +45,10 @@ export class ImportTopicItemDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  aiGeneratedContent?: Record<string, unknown>;
 }
 
 export class ImportTopicsDto {

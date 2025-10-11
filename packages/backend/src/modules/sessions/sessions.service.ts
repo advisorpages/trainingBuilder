@@ -17,6 +17,10 @@ import {
   LocationType,
   MeetingPlatform,
   ContentStatus,
+  TrainerAssignment,
+  Trainer,
+  TrainerAssignmentRole,
+  TrainerAssignmentStatus,
 } from '../../entities';
 import { ReadinessScore, ReadinessScoringService } from './services/readiness-scoring.service';
 import { CreateSessionDto } from './dto/create-session.dto';
@@ -243,6 +247,10 @@ export class SessionsService {
     private readonly topicsRepository: Repository<Topic>,
     @InjectRepository(Incentive)
     private readonly incentivesRepository: Repository<Incentive>,
+    @InjectRepository(TrainerAssignment)
+    private readonly trainerAssignmentsRepository: Repository<TrainerAssignment>,
+    @InjectRepository(Trainer)
+    private readonly trainersRepository: Repository<Trainer>,
     @InjectRepository(SessionContentVersion)
     private readonly contentRepository: Repository<SessionContentVersion>,
     @InjectRepository(SessionStatusLog)
@@ -333,7 +341,7 @@ export class SessionsService {
   }): Promise<Session[]> {
     const queryBuilder = this.sessionsRepository
       .createQueryBuilder('session')
-      .leftJoinAndSelect('session.topic', 'topic')
+      .leftJoinAndSelect('session.topics', 'topic')
       .leftJoinAndSelect('session.landingPage', 'landingPage')
       .leftJoinAndSelect('session.incentives', 'incentives')
       .leftJoinAndSelect('session.trainerAssignments', 'trainerAssignments')
@@ -345,7 +353,7 @@ export class SessionsService {
     }
 
     if (filters?.topicId !== undefined) {
-      queryBuilder.andWhere('session.topicId = :topicId', { topicId: filters.topicId });
+      queryBuilder.andWhere('topic.id = :topicId', { topicId: filters.topicId });
     }
 
     if (filters?.trainerId) {
@@ -358,7 +366,7 @@ export class SessionsService {
   async findOne(id: string): Promise<Session> {
     const session = await this.sessionsRepository.findOne({
       where: { id },
-      relations: ['topic', 'landingPage', 'incentives', 'trainerAssignments', 'contentVersions', 'agendaItems'],
+      relations: ['topics', 'landingPage', 'incentives', 'trainerAssignments', 'contentVersions', 'agendaItems'],
     });
 
     if (!session) {
@@ -369,7 +377,9 @@ export class SessionsService {
   }
 
   async create(dto: CreateSessionDto): Promise<Session> {
-    const topic = dto.topicId ? await this.findTopic(dto.topicId) : undefined;
+    const topicIds = this.normalizeTopicIds(dto.topicIds, dto.topicId);
+    const topics = await this.fetchTopicsByIds(topicIds);
+
     const incentives = dto.incentiveIds?.length
       ? await this.incentivesRepository.find({ where: { id: In(dto.incentiveIds) } })
       : [];
@@ -380,7 +390,7 @@ export class SessionsService {
       objective: dto.objective,
       status: dto.status ?? SessionStatus.DRAFT,
       readinessScore: dto.readinessScore ?? 0,
-      topic,
+      topics,
       incentives,
     });
 
@@ -398,6 +408,10 @@ export class SessionsService {
 
     if (dto.locationId !== undefined) {
       session.locationId = dto.locationId;
+    }
+
+    if (dto.categoryId !== undefined) {
+      session.categoryId = dto.categoryId;
     }
 
     if (dto.audienceId !== undefined) {
@@ -419,12 +433,55 @@ export class SessionsService {
     const session = await this.findOne(id);
     const previousStatus = session.status;
 
-    if (dto.topicId) {
-      session.topic = await this.findTopic(dto.topicId);
+    if (dto.topicIds !== undefined) {
+      const normalizedIds = this.normalizeTopicIds(dto.topicIds);
+      session.topics = await this.fetchTopicsByIds(normalizedIds);
+    } else if (dto.topicId !== undefined) {
+      const normalizedIds = this.normalizeTopicIds(undefined, dto.topicId);
+      session.topics = await this.fetchTopicsByIds(normalizedIds);
     }
 
     if (dto.incentiveIds) {
       session.incentives = await this.incentivesRepository.find({ where: { id: In(dto.incentiveIds) } });
+    }
+
+    if (dto.trainerIds) {
+      try {
+        // Handle trainer assignments
+        if (dto.trainerIds.length === 0) {
+          // Remove all existing trainer assignments
+          await this.trainerAssignmentsRepository.delete({ session: { id } });
+          session.trainerAssignments = [];
+        } else {
+          // Get the trainers
+          const trainers = await this.trainersRepository.find({
+            where: { id: In(dto.trainerIds) }
+          });
+
+          if (trainers.length > 0) {
+            // Remove existing assignments for this session
+            await this.trainerAssignmentsRepository.delete({ session: { id } });
+
+            // Create new assignments
+            const newAssignments = trainers.map((trainer, index) => {
+              const assignment = this.trainerAssignmentsRepository.create({
+                session,
+                trainer,
+                role: index === 0 ? TrainerAssignmentRole.FACILITATOR : TrainerAssignmentRole.ASSISTANT,
+                status: TrainerAssignmentStatus.PENDING,
+                assignedAt: new Date(),
+              });
+              return assignment;
+            });
+
+            session.trainerAssignments = await this.trainerAssignmentsRepository.save(newAssignments);
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Error handling trainer assignments for session ${id}:`, error);
+        // Don't fail the entire update if trainer assignments fail
+        // Just log the error and continue
+      }
     }
 
     if (dto.title !== undefined) session.title = dto.title;
@@ -433,6 +490,7 @@ export class SessionsService {
     if (dto.locationId !== undefined) session.locationId = dto.locationId;
     if (dto.audienceId !== undefined) session.audienceId = dto.audienceId;
     if (dto.toneId !== undefined) session.toneId = dto.toneId;
+    if (dto.categoryId !== undefined) session.categoryId = dto.categoryId;
 
     if (dto.startTime !== undefined) {
       session.scheduledAt = dto.startTime ? new Date(dto.startTime) : undefined;
@@ -508,6 +566,43 @@ export class SessionsService {
   private readonly enableVariantGenerationV2: boolean;
   private readonly variantRolloutPercentage: number;
   private readonly logVariantSelections: boolean;
+
+  private normalizeTopicIds(topicIds?: number[] | null, singleTopicId?: number | null): number[] {
+    const collected = [
+      ...(Array.isArray(topicIds) ? topicIds : []),
+      ...(singleTopicId !== null && singleTopicId !== undefined ? [singleTopicId] : []),
+    ];
+
+    const uniqueIds = new Set<number>();
+    for (const rawId of collected) {
+      if (typeof rawId === 'number' && !Number.isNaN(rawId)) {
+        uniqueIds.add(rawId);
+      }
+    }
+
+    return Array.from(uniqueIds);
+  }
+
+  private async fetchTopicsByIds(topicIds: number[]): Promise<Topic[]> {
+    if (topicIds.length === 0) {
+      return [];
+    }
+
+    const topics = await this.topicsRepository.find({ where: { id: In(topicIds) } });
+    const topicsById = new Map(topics.map((topic) => [topic.id, topic]));
+    const orderedTopics: Topic[] = [];
+
+    for (const id of topicIds) {
+      const topic = topicsById.get(id);
+      if (topic) {
+        orderedTopics.push(topic);
+      } else {
+        this.logger.warn(`Topic ${id} requested but not found while attaching to session`);
+      }
+    }
+
+    return orderedTopics;
+  }
 
   private async findMatchingTopics(sections: TopicAwareSection[]): Promise<TopicReference[]> {
     try {
@@ -1218,6 +1313,8 @@ export class SessionsService {
       ).toISOString();
     }
 
+    const primaryTopic = session?.topics?.[0];
+
     return {
       id: session?.id ?? sessionId,
       draftId: sessionId,
@@ -1226,10 +1323,10 @@ export class SessionsService {
       readinessScore: session?.readinessScore ?? (payload?.readinessScore ?? 0),
       status: session?.status ?? SessionStatus.DRAFT,
       sessionType: metadata.sessionType ?? 'workshop',
-      category: session?.topic
+      category: primaryTopic
         ? {
-            id: session.topic.id,
-            name: session.topic.name,
+            id: primaryTopic.id,
+            name: primaryTopic.name,
           }
         : metadata.category
         ? { name: metadata.category }
@@ -1658,7 +1755,7 @@ export class SessionsService {
 
   async exportAllSessionsDetailed(): Promise<SessionExportRecord[]> {
     const sessions = await this.sessionsRepository.find({
-      relations: ['contentVersions', 'category', 'location', 'audience', 'tone', 'topic'],
+      relations: ['contentVersions', 'category', 'location', 'audience', 'tone', 'topics'],
       order: { updatedAt: 'DESC' },
     });
 
@@ -1699,22 +1796,18 @@ export class SessionsService {
         publishedAt: this.toIsoString(session.publishedAt),
         createdAt: this.toIsoString(session.createdAt),
         updatedAt: this.toIsoString(session.updatedAt),
-        topics: session.topic
-          ? [
-              {
-                id: session.topic.id,
-                name: session.topic.name,
-                description: session.topic.description ?? null,
-                learningOutcomes: session.topic.learningOutcomes ?? null,
-                trainerNotes: session.topic.trainerNotes ?? null,
-                materialsNeeded: session.topic.materialsNeeded ?? null,
-                deliveryGuidance: session.topic.deliveryGuidance ?? null,
-                isActive: session.topic.isActive,
-                createdAt: this.toIsoString(session.topic.createdAt),
-                updatedAt: this.toIsoString(session.topic.updatedAt),
-              },
-            ]
-          : [],
+        topics: (session.topics ?? []).map((topic) => ({
+          id: topic.id,
+          name: topic.name,
+          description: topic.description ?? null,
+          learningOutcomes: topic.learningOutcomes ?? null,
+          trainerNotes: topic.trainerNotes ?? null,
+          materialsNeeded: topic.materialsNeeded ?? null,
+          deliveryGuidance: topic.deliveryGuidance ?? null,
+          isActive: topic.isActive,
+          createdAt: this.toIsoString(topic.createdAt),
+          updatedAt: this.toIsoString(topic.updatedAt),
+        })),
         latestContentVersion: latestAccepted
           ? {
               id: latestAccepted.id,
@@ -1862,13 +1955,14 @@ export class SessionsService {
           }
 
           const normalizedTopic = this.normalizeTopicForImport(topic);
-          const key = normalizedTopic.id ? `id:${normalizedTopic.id}` : `name:${normalizedTopic.name!.toLowerCase()}`;
+          const normalizedName = normalizedTopic.name ? normalizedTopic.name.toLowerCase() : '';
+          const key = normalizedTopic.id ? `id:${normalizedTopic.id}` : `name:${normalizedName}`;
 
-          if (!topicMap.has(key)) {
+          const existingTopic = topicMap.get(key);
+          if (!existingTopic) {
             topicMap.set(key, normalizedTopic);
             summary.total++;
           } else {
-            const existingTopic = topicMap.get(key)!;
             topicMap.set(key, this.mergeTopicImportData(existingTopic, normalizedTopic));
           }
         }
@@ -1876,7 +1970,7 @@ export class SessionsService {
     }
 
     // Process each unique topic using the existing topics service
-    for (const [key, topicDto] of topicMap) {
+    for (const topicDto of topicMap.values()) {
       try {
         const result = await this.upsertTopicFromSession(topicDto);
         if (result === 'created') {
@@ -2073,7 +2167,8 @@ export class SessionsService {
   }
 
   private async associateTopicsWithSession(session: Session, sessionTopics: ImportSessionTopicDto[]): Promise<void> {
-    const topicIds = new Set<number>();
+    const topicIds: number[] = [];
+    const seenIds = new Set<number>();
     const errors: string[] = [];
 
     for (const sessionTopic of sessionTopics) {
@@ -2108,7 +2203,10 @@ export class SessionsService {
           continue;
         }
 
-        topicIds.add(topic.id);
+        if (!seenIds.has(topic.id)) {
+          seenIds.add(topic.id);
+          topicIds.push(topic.id);
+        }
       } catch (error: any) {
         const message = error?.message ?? 'Unknown error';
         const topicName = sessionTopic.name || `ID:${sessionTopic.id}`;
@@ -2118,19 +2216,12 @@ export class SessionsService {
     }
 
     // Update the session's topic relationship
-    if (topicIds.size > 0) {
-      try {
-        const topics = await this.topicsRepository.find({ where: { id: In([...topicIds]) } });
-        if (topics.length > 0) {
-          session.topic = topics[0]; // For now, associate with the first topic
-          // Note: The current entity structure seems to support only one topic per session
-          // If multiple topics are needed, the entity relationship would need to be updated
-        }
-      } catch (error: any) {
-        const message = error?.message ?? 'Unknown error';
-        errors.push(`Error updating session topic relationship: ${message}`);
-        this.logger.error(`Error updating topic relationship for session "${session.title}": ${message}`);
-      }
+    try {
+      session.topics = await this.fetchTopicsByIds(topicIds);
+    } catch (error: any) {
+      const message = error?.message ?? 'Unknown error';
+      errors.push(`Error updating session topic relationship: ${message}`);
+      this.logger.error(`Error updating topic relationship for session "${session.title}": ${message}`);
     }
 
     // Log any errors that occurred during topic association
@@ -2396,14 +2487,6 @@ export class SessionsService {
         averageSimilarity: undefined,
       },
     };
-  }
-
-  private async findTopic(topicId: number): Promise<Topic> {
-    const topic = await this.topicsRepository.findOne({ where: { id: topicId } });
-    if (!topic) {
-      throw new NotFoundException(`Topic ${topicId} not found`);
-    }
-    return topic;
   }
 
   /**
@@ -3159,10 +3242,12 @@ export class SessionsService {
 
     updated.forEach((section, index) => {
       const type = section.type ?? 'custom';
-      if (!grouped.has(type)) {
-        grouped.set(type, []);
+      const existing = grouped.get(type);
+      if (existing) {
+        existing.push(index);
+      } else {
+        grouped.set(type, [index]);
       }
-      grouped.get(type)!.push(index);
     });
 
     for (const [type, weight] of Object.entries(ratios) as Array<[SectionType, number]>) {

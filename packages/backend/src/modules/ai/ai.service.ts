@@ -177,7 +177,7 @@ export class AiService {
     try {
       const session = await this.sessionsRepository.findOne({
         where: { id: sessionId },
-        relations: ['topic', 'incentives', 'trainerAssignments', 'audience', 'tone'],
+        relations: ['topics', 'incentives', 'trainerAssignments', 'audience', 'tone'],
       });
 
       return session;
@@ -189,11 +189,13 @@ export class AiService {
   private async generateContextualSuggestions(context: Session | null, kind: string): Promise<ContextualSuggestion[]> {
     const suggestions: ContextualSuggestion[] = [];
 
+    const primaryTopic = context?.topics?.[0];
+
     // Topic-based suggestions
-    if (context?.topic) {
+    if (primaryTopic) {
       suggestions.push({
         id: 'topic-context',
-        text: `Focus on ${context.topic.name} fundamentals and practical applications`,
+        text: `Focus on ${primaryTopic.name} fundamentals and practical applications`,
         category: 'topic',
         relevanceScore: 0.9,
       });
@@ -314,9 +316,11 @@ export class AiService {
     if (context) {
       const contextParts: string[] = [];
 
+      const primaryTopic = context.topics?.[0];
+
       // Topic context
-      if (context.topic) {
-        contextParts.push(`Topic: ${context.topic.name}`);
+      if (primaryTopic) {
+        contextParts.push(`Topic: ${primaryTopic.name}`);
       }
 
       // Rich Audience context
@@ -374,7 +378,7 @@ export class AiService {
   }
 
   private generatePlaceholderContent(payload: GenerateContentPayload, context: Session | null) {
-    const topicName = context?.topic?.name || 'Professional Development';
+    const topicName = context?.topics?.[0]?.name || 'Professional Development';
     const audienceName = context?.audience?.name || 'professionals';
 
     switch (payload.kind) {

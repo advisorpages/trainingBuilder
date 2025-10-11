@@ -196,13 +196,13 @@ describe('SessionsService', () => {
 
     const session = await service.create({
       title: 'Leading with Confidence',
-      topicId: topic.id,
+      topicIds: [topic.id],
       incentiveIds: [incentive.id],
     });
 
     expect(session.id).toBeDefined();
     const fetched = await service.findOne(session.id);
-    expect(fetched.topic?.id).toEqual(topic.id);
+    expect(fetched.topics?.[0]?.id).toEqual(topic.id);
     expect(fetched.incentives).toHaveLength(1);
   });
 
@@ -244,11 +244,11 @@ describe('SessionsService', () => {
 
     const savedSession = await sessionRepository.findOne({
       where: { title: 'AI Leadership 101' },
-      relations: ['topic'],
+      relations: ['topics'],
     });
 
     expect(savedSession).toBeDefined();
-    expect(savedSession?.topic?.id).toEqual(savedTopic?.id);
+    expect(savedSession?.topics?.[0]?.id).toEqual(savedTopic?.id);
 
     const secondImport = await service.importSessions({
       sessions: [

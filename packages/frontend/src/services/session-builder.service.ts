@@ -1,5 +1,4 @@
 import { api } from './api.service';
-import { SessionStatus } from '@leadership-training/shared';
 import type { LocationType, MeetingPlatform, Session } from '@leadership-training/shared';
 
 export interface SessionBuilderInput {
@@ -272,6 +271,16 @@ const sanitizeSessionBuilderInput = (input: SessionBuilderInput) => {
   return cleanInput;
 };
 
+type TopicPersistencePayload = {
+  name: string;
+  description?: string;
+  learningOutcomes?: string;
+  trainerNotes?: string;
+  materialsNeeded?: string;
+  deliveryGuidance?: string;
+  aiGeneratedContent?: Record<string, unknown>;
+};
+
 export class SessionBuilderService {
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
@@ -377,28 +386,21 @@ export class SessionBuilderService {
 
   async createSessionFromOutline(request: CreateSessionFromOutlineRequest): Promise<any> {
     try {
-      // Transform outline into session creation format
-      const topicId = await this.resolveTopicIdByName(request.input.category);
+      const topicIds = await this.ensureTopicsFromOutline(
+        request.outline,
+        request.input.categoryName ?? request.input.category,
+      );
+
       const sessionData = this.transformOutlineToSession(
         request.outline,
         request.input,
-        topicId,
+        topicIds,
         request.readinessScore,
       );
 
       console.log('Session data being sent to backend:', sessionData);
       const response = await api.post<Session>('/sessions', sessionData);
       const createdSession = response.data;
-
-      try {
-        await this.ensureTopicsFromOutline(
-          request.outline,
-          createdSession?.status,
-          request.input.categoryName ?? request.input.category,
-        );
-      } catch (topicError) {
-        console.warn('Failed to ensure outline topics exist', topicError);
-      }
 
       return createdSession;
     } catch (error: any) {
@@ -482,7 +484,7 @@ export class SessionBuilderService {
   private transformOutlineToSession(
     outline: SessionOutline,
     input: SessionBuilderInput,
-    topicId?: string,
+    topicIds?: number[],
     readinessScore?: number,
   ): Record<string, unknown> {
     const fallbackTitle = input.title?.trim() || 'Untitled Session';
@@ -517,8 +519,25 @@ export class SessionBuilderService {
       payload.objective = objective;
     }
 
-    if (topicId) {
-      payload.topicId = topicId;
+    if (typeof input.categoryId === 'number' && !Number.isNaN(input.categoryId)) {
+      payload.categoryId = input.categoryId;
+    }
+
+    if (Array.isArray(topicIds) && topicIds.length > 0) {
+      const uniqueIds = Array.from(
+        new Set(
+          topicIds
+            .map((value) => Number(value))
+            .filter((value) => typeof value === 'number' && !Number.isNaN(value)),
+        ),
+      );
+
+      if (uniqueIds.length > 0) {
+        payload.topicIds = uniqueIds;
+        if (uniqueIds.length === 1) {
+          payload.topicId = uniqueIds[0];
+        }
+      }
     }
 
     if (typeof input.locationId === 'number') {
@@ -543,9 +562,9 @@ export class SessionBuilderService {
     ${input.specificTopics ? `Specific topics: ${input.specificTopics}` : ''}`;
   }
 
-  private topicLookupCache: { map: Map<string, string>; fetchedAt: number } | null = null;
+  private topicLookupCache: { map: Map<string, number>; fetchedAt: number } | null = null;
 
-  private async getTopicLookup(forceRefresh = false): Promise<Map<string, string>> {
+  private async getTopicLookup(forceRefresh = false): Promise<Map<string, number>> {
     const isStale =
       forceRefresh ||
       !this.topicLookupCache ||
@@ -555,10 +574,13 @@ export class SessionBuilderService {
       try {
         const response = await api.get('/topics');
         const topics = Array.isArray(response.data) ? response.data : [];
-        const map = new Map<string, string>();
+        const map = new Map<string, number>();
         topics.forEach((topic: any) => {
           if (topic?.name && topic?.id) {
-            map.set(String(topic.name).toLowerCase(), String(topic.id));
+            const normalized = String(topic.name).trim().toLowerCase();
+            if (normalized) {
+              map.set(normalized, Number(topic.id));
+            }
           }
         });
         this.topicLookupCache = { map, fetchedAt: Date.now() };
@@ -569,103 +591,225 @@ export class SessionBuilderService {
       }
     }
 
-    return this.topicLookupCache?.map ?? new Map();
+    return this.topicLookupCache?.map ?? new Map<string, number>();
   }
 
-  private async resolveTopicIdByName(name?: string): Promise<string | undefined> {
+  private buildTopicPayload(
+    section: FlexibleSessionSection,
+    categoryName?: string,
+  ): TopicPersistencePayload | null {
+    const rawName = section.associatedTopic?.name ?? section.title;
+    const name = typeof rawName === 'string' ? rawName.trim() : '';
+
     if (!name) {
-      return undefined;
+      return null;
     }
 
-    const normalized = name.trim().toLowerCase();
-    if (!normalized) {
-      return undefined;
+    const payload: TopicPersistencePayload = { name };
+
+    if (typeof section.description === 'string' && section.description.trim()) {
+      payload.description = section.description.trim();
     }
 
-    const lookup = await this.getTopicLookup();
-    return lookup.get(normalized);
+    if (Array.isArray(section.learningObjectives) && section.learningObjectives.length > 0) {
+      payload.learningOutcomes = section.learningObjectives.join('\n');
+    }
+
+    if (typeof section.trainerNotes === 'string' && section.trainerNotes.trim()) {
+      payload.trainerNotes = section.trainerNotes.trim();
+    }
+
+    if (Array.isArray(section.materialsNeeded) && section.materialsNeeded.length > 0) {
+      payload.materialsNeeded = section.materialsNeeded.join('\n');
+    }
+
+    if (typeof section.deliveryGuidance === 'string' && section.deliveryGuidance.trim()) {
+      payload.deliveryGuidance = section.deliveryGuidance.trim();
+    }
+
+    if (!payload.description && typeof section.associatedTopic?.description === 'string') {
+      const trimmed = section.associatedTopic.description.trim();
+      if (trimmed) {
+        payload.description = trimmed;
+      }
+    }
+
+    if (!payload.learningOutcomes && typeof section.associatedTopic?.learningOutcomes === 'string') {
+      const trimmed = section.associatedTopic.learningOutcomes.trim();
+      if (trimmed) {
+        payload.learningOutcomes = trimmed;
+      }
+    }
+
+    if (!payload.trainerNotes && typeof section.associatedTopic?.trainerNotes === 'string') {
+      const trimmed = section.associatedTopic.trainerNotes.trim();
+      if (trimmed) {
+        payload.trainerNotes = trimmed;
+      }
+    }
+
+    if (!payload.materialsNeeded && typeof section.associatedTopic?.materialsNeeded === 'string') {
+      const trimmed = section.associatedTopic.materialsNeeded.trim();
+      if (trimmed) {
+        payload.materialsNeeded = trimmed;
+      }
+    }
+
+    if (!payload.deliveryGuidance && typeof section.associatedTopic?.deliveryGuidance === 'string') {
+      const trimmed = section.associatedTopic.deliveryGuidance.trim();
+      if (trimmed) {
+        payload.deliveryGuidance = trimmed;
+      }
+    }
+
+    const aiGeneratedContent: Record<string, unknown> = {
+      source: 'session-builder',
+      capturedAt: new Date().toISOString(),
+      sectionId: section.id,
+      sectionType: section.type,
+      sectionTitle: section.title,
+    };
+
+    if (categoryName) {
+      aiGeneratedContent.categoryName = categoryName;
+    }
+
+    if (typeof section.duration === 'number' && !Number.isNaN(section.duration)) {
+      aiGeneratedContent.defaultDurationMinutes = section.duration;
+    }
+
+    if (Array.isArray(section.learningObjectives) && section.learningObjectives.length > 0) {
+      aiGeneratedContent.learningObjectives = section.learningObjectives;
+    }
+
+    if (section.trainerNotes) {
+      aiGeneratedContent.trainerNotes = section.trainerNotes;
+    }
+
+    if (section.materialsNeeded) {
+      aiGeneratedContent.materialsNeeded = section.materialsNeeded;
+    }
+
+    if (section.deliveryGuidance) {
+      aiGeneratedContent.deliveryGuidance = section.deliveryGuidance;
+    }
+
+    if (Array.isArray(section.suggestedActivities) && section.suggestedActivities.length > 0) {
+      aiGeneratedContent.suggestedActivities = section.suggestedActivities;
+    }
+
+    payload.aiGeneratedContent = aiGeneratedContent;
+
+    return payload;
   }
 
   private async ensureTopicsFromOutline(
     outline: SessionOutline,
-    _status?: SessionStatus,
     categoryName?: string,
-  ): Promise<void> {
+  ): Promise<number[]> {
     if (!outline?.sections?.length) {
-      return;
-    }
-
-    const topicSections = outline.sections.filter((section) => section.type === 'topic');
-    const suggestionSections = topicSections.filter((section) =>
-      section.isTopicSuggestion || !section.associatedTopic
-    );
-
-    if (suggestionSections.length === 0) {
-      return;
+      return [];
     }
 
     const lookup = await this.getTopicLookup();
-    const newlyCreated: string[] = [];
+    const topicIds: number[] = [];
+    const seenTopicIds = new Set<number>();
 
-    for (const section of suggestionSections) {
-      const name = section.title?.trim();
-      if (!name) {
+    const topicSections = outline.sections.filter((section) => section.type === 'topic');
+
+    for (const section of topicSections) {
+      const payload = this.buildTopicPayload(section, categoryName);
+      if (!payload) {
         continue;
       }
 
-      const key = name.toLowerCase();
-      if (lookup.has(key)) {
-        continue;
-      }
-
-      const payload: Record<string, unknown> = { name };
-
-      if (section.description?.trim()) {
-        payload.description = section.description.trim();
-      }
-
-      if (section.learningObjectives?.length) {
-        payload.learningOutcomes = section.learningObjectives.join('\n');
-      }
-
-      if (section.trainerNotes?.trim?.()) {
-        payload.trainerNotes = section.trainerNotes.trim();
-      }
-
-      if (section.materialsNeeded?.length) {
-        payload.materialsNeeded = section.materialsNeeded.join('\n');
-      }
-
-      if (section.deliveryGuidance?.trim?.()) {
-        payload.deliveryGuidance = section.deliveryGuidance.trim();
-      }
-
-      payload.aiGeneratedContent = {
-        ...(typeof section.duration === 'number' ? { defaultDurationMinutes: section.duration } : {}),
-        source: 'session-builder',
-        capturedAt: new Date().toISOString(),
-        categoryName: categoryName ?? '',
-        learningOutcomes: section.learningObjectives?.join('\n') ?? undefined,
-        trainerNotes: section.trainerNotes ?? undefined,
-        materialsNeeded: Array.isArray(section.materialsNeeded) ? section.materialsNeeded.join('\n') : undefined,
-        deliveryGuidance: section.deliveryGuidance ?? undefined,
-      };
-
-      try {
-        const response = await api.post('/topics', payload);
-        const topic = response.data as { id?: number | string } | undefined;
-        if (topic?.id) {
-          lookup.set(key, String(topic.id));
-          newlyCreated.push(name);
+      const normalizedNames = new Set<string>();
+      if (typeof payload.name === 'string') {
+        const normalized = payload.name.toLowerCase();
+        if (normalized) {
+          normalizedNames.add(normalized);
         }
-      } catch (error) {
-        console.warn(`Failed to create topic "${name}" from outline`, error);
+      }
+
+      if (section.title) {
+        const normalized = section.title.trim().toLowerCase();
+        if (normalized) {
+          normalizedNames.add(normalized);
+        }
+      }
+
+      if (section.associatedTopic?.name) {
+        const normalized = section.associatedTopic.name.trim().toLowerCase();
+        if (normalized) {
+          normalizedNames.add(normalized);
+        }
+      }
+
+      let topicId: number | undefined;
+      const associatedId = (section.associatedTopic?.id ??
+        (section.associatedTopic as any)?.topicId ??
+        (section as any).topicId) as number | string | undefined;
+
+      if (associatedId !== undefined && associatedId !== null) {
+        const parsed = Number(associatedId);
+        if (!Number.isNaN(parsed)) {
+          topicId = parsed;
+        }
+      }
+
+      if (!topicId) {
+        for (const key of normalizedNames) {
+          const existing = lookup.get(key);
+          if (typeof existing === 'number' && !Number.isNaN(existing)) {
+            topicId = existing;
+            break;
+          }
+        }
+      }
+
+      if (!topicId) {
+        try {
+          const response = await api.post('/topics', payload);
+          const topic = response.data as { id?: number | string } | undefined;
+          if (topic?.id !== undefined && topic?.id !== null) {
+            const parsed = Number(topic.id);
+            if (!Number.isNaN(parsed)) {
+              topicId = parsed;
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to create topic "${String(payload.name)}" from outline`, error);
+          continue;
+        }
+      } else {
+        try {
+          await api.patch(`/topics/${topicId}`, payload);
+        } catch (error) {
+          console.warn(`Failed to update topic "${String(payload.name)}" (ID: ${topicId})`, error);
+        }
+      }
+
+      if (!topicId || Number.isNaN(topicId)) {
+        continue;
+      }
+
+      for (const key of normalizedNames) {
+        if (key) {
+          lookup.set(key, topicId);
+        }
+      }
+
+      if (!seenTopicIds.has(topicId)) {
+        seenTopicIds.add(topicId);
+        topicIds.push(topicId);
       }
     }
 
-    if (newlyCreated.length > 0) {
+    if (topicIds.length > 0) {
       this.topicLookupCache = { map: lookup, fetchedAt: Date.now() };
     }
+
+    return topicIds;
   }
 
   // PHASE 5: Training Kit and Marketing Kit Methods

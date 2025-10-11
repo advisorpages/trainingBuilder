@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionsController } from './sessions.controller';
 import { SessionsService } from './sessions.service';
@@ -23,6 +23,8 @@ import {
   Topic,
   Incentive,
   Location,
+  TrainerAssignment,
+  Trainer,
 } from '../../entities';
 
 @Module({
@@ -37,6 +39,8 @@ import {
       Topic,
       Incentive,
       Location,
+      TrainerAssignment,
+      Trainer,
       AIInteraction,
     ]),
     PromptsModule,

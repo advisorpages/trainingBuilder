@@ -1,4 +1,4 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, ManyToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Session } from './session.entity';
 
 @Entity({ name: 'topics' })
@@ -36,6 +36,6 @@ export class Topic {
   @Column({ type: 'text', nullable: true })
   deliveryGuidance?: string;
 
-  @OneToMany(() => Session, (session) => session.topic)
+  @ManyToMany(() => Session, (session) => session.topics)
   sessions: Session[];
 }

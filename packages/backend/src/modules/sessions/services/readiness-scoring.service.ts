@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Session, SessionStatus } from '../../../entities';
+import { Session } from '../../../entities';
 
 export interface ReadinessCheck {
   id: string;

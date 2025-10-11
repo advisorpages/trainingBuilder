@@ -35,8 +35,19 @@ export class CreateSessionDto {
 
   @IsOptional()
   @IsArray()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  topicIds?: number[];
+
+  @IsOptional()
+  @IsArray()
   @IsUUID('4', { each: true })
   incentiveIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  trainerIds?: number[];
 
   @IsOptional()
   @IsISO8601()
@@ -60,6 +71,11 @@ export class CreateSessionDto {
   @Type(() => Number)
   @IsInt()
   toneId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  categoryId?: number;
 
   @IsOptional()
   @IsEnum(SessionStatus)

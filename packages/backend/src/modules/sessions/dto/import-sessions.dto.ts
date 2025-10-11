@@ -12,7 +12,6 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { SessionStatus } from '../../../entities/session.entity';
-import { ImportTopicItemDto } from '../../topics/dto/import-topics.dto';
 
 export class ImportSessionTopicDto {
   @IsOptional()

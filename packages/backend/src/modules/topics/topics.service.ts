@@ -96,6 +96,7 @@ export class TopicsService {
       trainerNotes: dto.trainerNotes,
       materialsNeeded: dto.materialsNeeded,
       deliveryGuidance: dto.deliveryGuidance,
+      aiGeneratedContent: dto.aiGeneratedContent,
     });
 
     return this.topicRepository.save(topic);
@@ -110,6 +111,9 @@ export class TopicsService {
     if (dto.trainerNotes !== undefined) topic.trainerNotes = dto.trainerNotes;
     if (dto.materialsNeeded !== undefined) topic.materialsNeeded = dto.materialsNeeded;
     if (dto.deliveryGuidance !== undefined) topic.deliveryGuidance = dto.deliveryGuidance;
+    if (dto.aiGeneratedContent !== undefined) topic.aiGeneratedContent = dto.aiGeneratedContent;
+
+    topic.updatedAt = new Date();
 
     return this.topicRepository.save(topic);
   }
@@ -118,7 +122,12 @@ export class TopicsService {
     const topic = await this.findOne(id);
 
     // Check if topic is used by any sessions
-    const sessionCount = await this.sessionRepository.count({ where: { topic: { id: parseInt(id) } } });
+    const topicId = Number.parseInt(id, 10);
+    const sessionCount = await this.sessionRepository
+      .createQueryBuilder('session')
+      .leftJoin('session.topics', 'topic')
+      .where('topic.id = :topicId', { topicId })
+      .getCount();
 
     if (sessionCount > 0) {
       return {
@@ -250,10 +259,12 @@ export class TopicsService {
       existing.trainerNotes = topicDto.trainerNotes ?? existing.trainerNotes ?? null;
       existing.materialsNeeded = topicDto.materialsNeeded ?? existing.materialsNeeded ?? null;
       existing.deliveryGuidance = topicDto.deliveryGuidance ?? existing.deliveryGuidance ?? null;
+      existing.aiGeneratedContent = topicDto.aiGeneratedContent ?? existing.aiGeneratedContent ?? null;
       if (typeof topicDto.isActive === 'boolean') {
         existing.isActive = topicDto.isActive;
       }
 
+      existing.updatedAt = new Date();
       await this.topicRepository.save(existing);
       return 'updated';
     }
@@ -266,6 +277,7 @@ export class TopicsService {
       materialsNeeded: topicDto.materialsNeeded,
       deliveryGuidance: topicDto.deliveryGuidance,
       isActive: typeof topicDto.isActive === 'boolean' ? topicDto.isActive : true,
+      aiGeneratedContent: topicDto.aiGeneratedContent,
     });
 
     await this.topicRepository.save(topic);

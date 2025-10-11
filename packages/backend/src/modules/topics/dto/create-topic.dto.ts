@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsObject } from 'class-validator';
 
 export class CreateTopicDto {
   @IsString()
@@ -23,4 +23,8 @@ export class CreateTopicDto {
   @IsOptional()
   @IsString()
   deliveryGuidance?: string;
+
+  @IsOptional()
+  @IsObject()
+  aiGeneratedContent?: Record<string, unknown>;
 }
