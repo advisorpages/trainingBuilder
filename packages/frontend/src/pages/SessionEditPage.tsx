@@ -318,24 +318,27 @@ const SessionEditPage: React.FC = () => {
       title="Edit Session"
       subtitle={`Editing: ${session.title}`}
     >
-      <div className="max-w-4xl mx-auto space-y-6">
-        <Card className="p-6">
-          <form className="space-y-6">
-            {/* Basic Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-900">Basic Information</h3>
+      <div className="max-w-6xl mx-auto space-y-8">
+        <Card className="p-8">
+          <form className="space-y-8">
+            {/* Session Details */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-slate-900">Session Details</h2>
+                <div className="h-px bg-slate-200 flex-1"></div>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-2">
-                    Title *
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                  <label htmlFor="title" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Session Title *
                   </label>
                   <input
                     type="text"
                     id="title"
                     value={formData.title}
                     onChange={(e) => handleInputChange('title', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg ${
                       errors.title ? 'border-red-500' : 'border-slate-300'
                     }`}
                     placeholder="Enter session title"
@@ -343,162 +346,15 @@ const SessionEditPage: React.FC = () => {
                   {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title}</p>}
                 </div>
 
-                <div className="md:col-span-2">
-                  <label htmlFor="subtitle" className="block text-sm font-medium text-slate-700 mb-2">
-                    Subtitle
-                  </label>
-                  <input
-                    type="text"
-                    id="subtitle"
-                    value={formData.subtitle || ''}
-                    onChange={(e) => handleInputChange('subtitle', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter session subtitle (optional)"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label htmlFor="objective" className="block text-sm font-medium text-slate-700 mb-2">
-                    Objective
-                  </label>
-                  <textarea
-                    id="objective"
-                    value={formData.objective || ''}
-                    onChange={(e) => handleInputChange('objective', e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Describe the session objective (optional)"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Scheduling */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-900">Scheduling</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="startTime" className="block text-sm font-medium text-slate-700 mb-2">
-                    Start Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    id="startTime"
-                    value={formData.startTime || ''}
-                    onChange={(e) => handleInputChange('startTime', e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="endTime" className="block text-sm font-medium text-slate-700 mb-2">
-                    End Time
-                  </label>
-                  <input
-                    type="datetime-local"
-                    id="endTime"
-                    value={formData.endTime || ''}
-                    onChange={(e) => handleInputChange('endTime', e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.endTime ? 'border-red-500' : 'border-slate-300'
-                    }`}
-                  />
-                  {errors.endTime && <p className="mt-1 text-sm text-red-600">{errors.endTime}</p>}
-                </div>
-              </div>
-            </div>
-
-            {/* Associations */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-900">Associations</h3>
-
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-md font-semibold text-slate-900">Topics</h4>
-                  <EnhancedTopicSelection
-                    topics={sortedTopics}
-                    trainers={trainers}
-                    initialSelectedTopics={formData.topicIds}
-                    onSelectionChange={handleTopicSelectionChange}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="locationId" className="block text-sm font-medium text-slate-700 mb-2">
-                      Location
-                    </label>
-                    <select
-                      id="locationId"
-                      value={formData.locationId || ''}
-                      onChange={(e) => handleInputChange('locationId', e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Select a location</option>
-                      {locations.map(location => (
-                        <option key={location.id} value={location.id}>
-                          {location.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="audienceId" className="block text-sm font-medium text-slate-700 mb-2">
-                      Audience
-                    </label>
-                    <select
-                      id="audienceId"
-                      value={formData.audienceId || ''}
-                      onChange={(e) => handleInputChange('audienceId', e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Select an audience</option>
-                      {audiences.map(audience => (
-                        <option key={audience.id} value={audience.id}>
-                          {audience.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor="toneId" className="block text-sm font-medium text-slate-700 mb-2">
-                      Tone
-                    </label>
-                    <select
-                      id="toneId"
-                      value={formData.toneId || ''}
-                      onChange={(e) => handleInputChange('toneId', e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Select a tone</option>
-                      {tones.map(tone => (
-                        <option key={tone.id} value={tone.id}>
-                          {tone.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Status and Settings */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-900">Status & Settings</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="status" className="block text-sm font-medium text-slate-700 mb-2">
+                <div className="space-y-4">
+                  <label htmlFor="status" className="block text-sm font-semibold text-slate-700 mb-2">
                     Status
                   </label>
                   <select
                     id="status"
                     value={formData.status || SessionStatus.DRAFT}
                     onChange={(e) => handleInputChange('status', e.target.value as SessionStatus)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
                   >
                     <option value={SessionStatus.DRAFT}>Draft</option>
                     <option value={SessionStatus.REVIEW}>Review</option>
@@ -510,174 +366,335 @@ const SessionEditPage: React.FC = () => {
                   </select>
                 </div>
 
-                <div>
-                  <label htmlFor="readinessScore" className="block text-sm font-medium text-slate-700 mb-2">
-                    Readiness Score
+                <div className="lg:col-span-3">
+                  <label htmlFor="subtitle" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Subtitle
                   </label>
                   <input
-                    type="number"
-                    id="readinessScore"
-                    value={formData.readinessScore || 0}
-                    onChange={(e) => handleInputChange('readinessScore', e.target.value ? Number(e.target.value) : 0)}
-                    min="0"
-                    max="100"
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.readinessScore ? 'border-red-500' : 'border-slate-300'
-                    }`}
+                    type="text"
+                    id="subtitle"
+                    value={formData.subtitle || ''}
+                    onChange={(e) => handleInputChange('subtitle', e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter session subtitle (optional)"
                   />
-                  {errors.readinessScore && <p className="mt-1 text-sm text-red-600">{errors.readinessScore}</p>}
+                </div>
+
+                <div className="lg:col-span-3">
+                  <label htmlFor="objective" className="block text-sm font-semibold text-slate-700 mb-2">
+                    Learning Objective
+                  </label>
+                  <textarea
+                    id="objective"
+                    value={formData.objective || ''}
+                    onChange={(e) => handleInputChange('objective', e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Describe what participants will learn (optional)"
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Trainer Assignments */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-900">Trainer Assignments</h3>
+            {/* Session Content - Topics */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-slate-900">Session Content</h2>
+                <div className="h-px bg-slate-200 flex-1"></div>
+              </div>
 
-              {/* Current Trainers */}
-              {currentTrainers.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-slate-700">Currently Assigned Trainers:</h4>
-                  <div className="space-y-2">
-                    {currentTrainers.map(trainer => (
-                      <div key={trainer.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                        <div>
-                          <div className="font-medium text-slate-900">{trainer.name}</div>
-                          {trainer.expertiseTags && trainer.expertiseTags.length > 0 && (
-                            <div className="text-sm text-slate-600">
-                              Expertise: {trainer.expertiseTags.join(', ')}
+              <EnhancedTopicSelection
+                topics={sortedTopics}
+                trainers={trainers}
+                initialSelectedTopics={formData.topicIds}
+                onSelectionChange={handleTopicSelectionChange}
+              />
+            </div>
+
+            {/* Session Logistics */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-slate-900">Session Logistics</h2>
+                <div className="h-px bg-slate-200 flex-1"></div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-900">When</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="startTime" className="block text-sm font-medium text-slate-700 mb-2">
+                        Start Time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        id="startTime"
+                        value={formData.startTime || ''}
+                        onChange={(e) => handleInputChange('startTime', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="endTime" className="block text-sm font-medium text-slate-700 mb-2">
+                        End Time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        id="endTime"
+                        value={formData.endTime || ''}
+                        onChange={(e) => handleInputChange('endTime', e.target.value)}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                          errors.endTime ? 'border-red-500' : 'border-slate-300'
+                        }`}
+                      />
+                      {errors.endTime && <p className="mt-1 text-sm text-red-600">{errors.endTime}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-900">Where & Who</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="locationId" className="block text-sm font-medium text-slate-700 mb-2">
+                        Location
+                      </label>
+                      <select
+                        id="locationId"
+                        value={formData.locationId || ''}
+                        onChange={(e) => handleInputChange('locationId', e.target.value ? Number(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Select a location</option>
+                        {locations.map(location => (
+                          <option key={location.id} value={location.id}>
+                            {location.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="audienceId" className="block text-sm font-medium text-slate-700 mb-2">
+                        Target Audience
+                      </label>
+                      <select
+                        id="audienceId"
+                        value={formData.audienceId || ''}
+                        onChange={(e) => handleInputChange('audienceId', e.target.value ? Number(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Select an audience</option>
+                        {audiences.map(audience => (
+                          <option key={audience.id} value={audience.id}>
+                            {audience.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="toneId" className="block text-sm font-medium text-slate-700 mb-2">
+                        Session Tone
+                      </label>
+                      <select
+                        id="toneId"
+                        value={formData.toneId || ''}
+                        onChange={(e) => handleInputChange('toneId', e.target.value ? Number(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Select a tone</option>
+                        {tones.map(tone => (
+                          <option key={tone.id} value={tone.id}>
+                            {tone.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Session Management */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-slate-900">Session Management</h2>
+                <div className="h-px bg-slate-200 flex-1"></div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Training Team */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-900">Training Team</h3>
+
+                  {/* Current Trainers */}
+                  {currentTrainers.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium text-slate-700">Currently Assigned Trainers:</h4>
+                      <div className="space-y-3">
+                        {currentTrainers.map(trainer => (
+                          <div key={trainer.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border">
+                            <div className="flex-1">
+                              <div className="font-semibold text-slate-900">{trainer.name}</div>
+                              {trainer.expertiseTags && trainer.expertiseTags.length > 0 && (
+                                <div className="text-sm text-slate-600 mt-1">
+                                  Expertise: {trainer.expertiseTags.join(', ')}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newTrainerIds = formData.trainerIds?.filter(id => id !== trainer.id) || [];
-                            handleInputChange('trainerIds', newTrainerIds);
-                            setCurrentTrainers(prev => prev.filter(t => t.id !== trainer.id));
-                          }}
-                        >
-                          Remove
-                        </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newTrainerIds = formData.trainerIds?.filter(id => id !== trainer.id) || [];
+                                handleInputChange('trainerIds', newTrainerIds);
+                                setCurrentTrainers(prev => prev.filter(t => t.id !== trainer.id));
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Add Trainer */}
+                  <div>
+                    <label htmlFor="addTrainer" className="block text-sm font-medium text-slate-700 mb-2">
+                      Add Trainer
+                    </label>
+                    <select
+                      id="addTrainer"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      onChange={(e) => {
+                        const trainerId = Number(e.target.value);
+                        if (trainerId && !formData.trainerIds?.includes(trainerId)) {
+                          const newTrainerIds = [...(formData.trainerIds || []), trainerId];
+                          handleInputChange('trainerIds', newTrainerIds);
+
+                          const trainer = trainers.find(t => t.id === trainerId);
+                          if (trainer) {
+                            setCurrentTrainers(prev => [...prev, trainer]);
+                          }
+                        }
+                        e.target.value = '';
+                      }}
+                    >
+                      <option value="">Select a trainer to add</option>
+                      {trainers
+                        .filter(trainer => !formData.trainerIds?.includes(trainer.id))
+                        .map(trainer => (
+                          <option key={trainer.id} value={trainer.id}>
+                            {trainer.name}
+                            {trainer.expertiseTags && trainer.expertiseTags.length > 0 &&
+                              ` (${trainer.expertiseTags.join(', ')})`
+                            }
+                          </option>
+                        ))}
+                    </select>
                   </div>
                 </div>
-              )}
 
-              {/* Add Trainer */}
-              <div>
-                <label htmlFor="addTrainer" className="block text-sm font-medium text-slate-700 mb-2">
-                  Add Trainer
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    id="addTrainer"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    onChange={(e) => {
-                      const trainerId = Number(e.target.value);
-                      if (trainerId && !formData.trainerIds?.includes(trainerId)) {
-                        const newTrainerIds = [...(formData.trainerIds || []), trainerId];
-                        handleInputChange('trainerIds', newTrainerIds);
+                {/* Session Perks */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-900">Session Perks</h3>
 
-                        const trainer = trainers.find(t => t.id === trainerId);
-                        if (trainer) {
-                          setCurrentTrainers(prev => [...prev, trainer]);
-                        }
-                      }
-                      e.target.value = '';
-                    }}
-                  >
-                    <option value="">Select a trainer to add</option>
-                    {trainers
-                      .filter(trainer => !formData.trainerIds?.includes(trainer.id))
-                      .map(trainer => (
-                        <option key={trainer.id} value={trainer.id}>
-                          {trainer.name}
-                          {trainer.expertiseTags && trainer.expertiseTags.length > 0 &&
-                            ` (${trainer.expertiseTags.join(', ')})`
+                  {/* Current Incentives */}
+                  {currentIncentives.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-medium text-slate-700">Currently Attached Incentives:</h4>
+                      <div className="space-y-3">
+                        {currentIncentives.map(incentive => (
+                          <div key={incentive.id} className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div className="flex-1">
+                              <div className="font-semibold text-slate-900">{incentive.title}</div>
+                              {incentive.description && (
+                                <div className="text-sm text-slate-600 mt-1">{incentive.description}</div>
+                              )}
+                              <div className="text-xs text-slate-500 mt-1">
+                                Status: {incentive.status} |
+                                Valid: {new Date(incentive.startDate).toLocaleDateString()} - {new Date(incentive.endDate).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newIncentiveIds = formData.incentiveIds?.filter(id => id !== incentive.id) || [];
+                                handleInputChange('incentiveIds', newIncentiveIds);
+                                setCurrentIncentives(prev => prev.filter(inc => inc.id !== incentive.id));
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add Incentive */}
+                  <div>
+                    <label htmlFor="addIncentive" className="block text-sm font-medium text-slate-700 mb-2">
+                      Add Incentive
+                    </label>
+                    <select
+                      id="addIncentive"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      onChange={(e) => {
+                        const incentiveId = e.target.value;
+                        if (incentiveId && !formData.incentiveIds?.includes(incentiveId)) {
+                          const newIncentiveIds = [...(formData.incentiveIds || []), incentiveId];
+                          handleInputChange('incentiveIds', newIncentiveIds);
+
+                          const incentive = incentives.find(inc => inc.id === incentiveId);
+                          if (incentive) {
+                            setCurrentIncentives(prev => [...prev, incentive]);
                           }
-                        </option>
-                      ))}
-                  </select>
+                        }
+                        e.target.value = '';
+                      }}
+                    >
+                      <option value="">Select an incentive to add</option>
+                      {incentives
+                        .filter(incentive => !formData.incentiveIds?.includes(incentive.id))
+                        .map(incentive => (
+                          <option key={incentive.id} value={incentive.id}>
+                            {incentive.title}
+                            {incentive.description && ` - ${incentive.description}`}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Incentives */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-900">Incentives</h3>
-
-              {/* Current Incentives */}
-              {currentIncentives.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-slate-700">Currently Attached Incentives:</h4>
-                  <div className="space-y-2">
-                    {currentIncentives.map(incentive => (
-                      <div key={incentive.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                        <div>
-                          <div className="font-medium text-slate-900">{incentive.title}</div>
-                          {incentive.description && (
-                            <div className="text-sm text-slate-600">{incentive.description}</div>
-                          )}
-                          <div className="text-xs text-slate-500">
-                            Status: {incentive.status} |
-                            Valid: {new Date(incentive.startDate).toLocaleDateString()} - {new Date(incentive.endDate).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const newIncentiveIds = formData.incentiveIds?.filter(id => id !== incentive.id) || [];
-                            handleInputChange('incentiveIds', newIncentiveIds);
-                            setCurrentIncentives(prev => prev.filter(inc => inc.id !== incentive.id));
-                          }}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
+              {/* Session Configuration */}
+              <div className="bg-slate-50 rounded-lg p-6 border">
+                <h3 className="text-lg font-semibold text-slate-900 mb-4">Session Configuration</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="readinessScore" className="block text-sm font-medium text-slate-700 mb-2">
+                      Readiness Score (0-100)
+                    </label>
+                    <input
+                      type="number"
+                      id="readinessScore"
+                      value={formData.readinessScore || 0}
+                      onChange={(e) => handleInputChange('readinessScore', e.target.value ? Number(e.target.value) : 0)}
+                      min="0"
+                      max="100"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.readinessScore ? 'border-red-500' : 'border-slate-300'
+                      }`}
+                    />
+                    {errors.readinessScore && <p className="mt-1 text-sm text-red-600">{errors.readinessScore}</p>}
                   </div>
-                </div>
-              )}
-
-              {/* Add Incentive */}
-              <div>
-                <label htmlFor="addIncentive" className="block text-sm font-medium text-slate-700 mb-2">
-                  Add Incentive
-                </label>
-                <div className="flex gap-2">
-                  <select
-                    id="addIncentive"
-                    className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    onChange={(e) => {
-                      const incentiveId = e.target.value;
-                      if (incentiveId && !formData.incentiveIds?.includes(incentiveId)) {
-                        const newIncentiveIds = [...(formData.incentiveIds || []), incentiveId];
-                        handleInputChange('incentiveIds', newIncentiveIds);
-
-                        const incentive = incentives.find(inc => inc.id === incentiveId);
-                        if (incentive) {
-                          setCurrentIncentives(prev => [...prev, incentive]);
-                        }
-                      }
-                      e.target.value = '';
-                    }}
-                  >
-                    <option value="">Select an incentive to add</option>
-                    {incentives
-                      .filter(incentive => !formData.incentiveIds?.includes(incentive.id))
-                      .map(incentive => (
-                        <option key={incentive.id} value={incentive.id}>
-                          {incentive.title}
-                          {incentive.description && ` - ${incentive.description}`}
-                        </option>
-                      ))}
-                  </select>
                 </div>
               </div>
             </div>

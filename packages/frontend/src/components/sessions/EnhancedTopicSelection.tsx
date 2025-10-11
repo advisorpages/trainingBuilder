@@ -176,7 +176,7 @@ useEffect(() => {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(380px,1fr)]">
         <div className="space-y-6">
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">

@@ -28,6 +28,7 @@ interface VariantSelectorProps {
   variants: Variant[];
   onSelect: (variantId: string) => void;
   onSaveForLater?: (variantId: string) => void;
+  selectedVariantId?: string;
   isLoading?: boolean;
   loadingProgress?: number;
   loadingStage?: string;
@@ -134,6 +135,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
   variants,
   onSelect,
   onSaveForLater,
+  selectedVariantId,
   isLoading = false,
   loadingProgress = 0,
   loadingStage = ''
@@ -240,16 +242,31 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
         {variants.map((variant) => {
           const [showSources, setShowSources] = React.useState(false);
           const contribution = calculateContributionMix(variant);
+          const isSelected = selectedVariantId === variant.id;
 
           return (
             <div
               key={variant.id}
-              className="border border-gray-200 rounded-lg p-4 sm:p-5 md:p-6 hover:shadow-lg hover:border-blue-300 transition-all"
+              className={`border rounded-lg p-4 sm:p-5 md:p-6 transition-all ${
+                isSelected
+                  ? 'border-green-500 bg-green-50 shadow-lg ring-2 ring-green-500 ring-opacity-50'
+                  : 'border-gray-200 hover:shadow-lg hover:border-blue-300'
+              }`}
             >
               {/* Header */}
               <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-base sm:text-lg text-gray-900">{variant.label}</h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-base sm:text-lg text-gray-900">{variant.label}</h3>
+                    {isSelected && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-600 text-white text-xs font-medium rounded-full">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                        Selected
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">{variant.description}</p>
                 </div>
                 <div
@@ -355,12 +372,28 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
               <div className="flex gap-2">
                 <Button
                   onClick={() => onSelect(variant.id)}
-                  className="flex-1 text-sm sm:text-base"
-                  variant="default"
-                  aria-label="Select & Edit"
+                  className={`flex-1 text-sm sm:text-base ${
+                    isSelected
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : ''
+                  }`}
+                  variant={isSelected ? 'default' : 'default'}
+                  aria-label={isSelected ? 'Selected' : 'Select & Edit'}
                 >
-                  <span className="hidden sm:inline" aria-hidden="true">Select & Edit</span>
-                  <span className="sm:hidden" aria-hidden="true">Select</span>
+                  {isSelected ? (
+                    <>
+                      <svg className="h-4 w-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="hidden sm:inline" aria-hidden="true">Selected</span>
+                      <span className="sm:hidden" aria-hidden="true">✓</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="hidden sm:inline" aria-hidden="true">Select & Edit</span>
+                      <span className="sm:hidden" aria-hidden="true">Select</span>
+                    </>
+                  )}
                 </Button>
                 {onSaveForLater && (
                   <Button

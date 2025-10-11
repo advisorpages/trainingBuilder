@@ -98,7 +98,10 @@ export const TopicInputRepeater = ({ topics, onChange, category }: TopicInputRep
         </Button>
         <Button
           type="button"
-          onClick={() => setIsLibraryOpen(true)}
+          onClick={() => {
+            console.log('🔘 Add from Library button clicked');
+            setIsLibraryOpen(true);
+          }}
           variant="ghost"
           size="sm"
         >

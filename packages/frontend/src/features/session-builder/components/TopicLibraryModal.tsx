@@ -22,11 +22,14 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
 
   const fetchTopics = React.useCallback(async (search?: string) => {
     try {
+      console.log('🚀 TopicLibraryModal: fetchTopics called with search:', search);
       setLoading(true);
       setError(null);
       const suggestions = await sessionBuilderService.getPastTopics(search);
+      console.log('📋 TopicLibraryModal: received suggestions:', suggestions);
       setTopics(suggestions);
     } catch (err) {
+      console.error('💥 TopicLibraryModal: error fetching topics:', err);
       setError((err as Error).message);
     } finally {
       setLoading(false);
@@ -34,10 +37,12 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
   }, []);
 
   React.useEffect(() => {
+    console.log('🚪 TopicLibraryModal useEffect triggered:', { open, category });
     if (!open) {
       return;
     }
 
+    console.log('📖 TopicLibraryModal opening, fetching topics...');
     // Prefill search with session category on first open
     setSearchTerm((prev) => (prev || category || '').trim());
     void fetchTopics(category);
@@ -49,10 +54,16 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
     return () => window.removeEventListener('keydown', handler);
   }, [open, category, fetchTopics, onClose]);
 
-  if (!open) return null;
+  if (!open) {
+    console.log('🚪 TopicLibraryModal: modal closed, not rendering');
+    return null;
+  }
+
+  console.log('🎨 TopicLibraryModal: rendering modal with topics:', topics.length);
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    console.log('🔍 TopicLibraryModal: search submitted with term:', searchTerm.trim());
     void fetchTopics(searchTerm.trim() || undefined);
   };
 

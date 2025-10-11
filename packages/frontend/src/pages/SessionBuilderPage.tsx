@@ -13,7 +13,9 @@ import {
   useBuilderSteps,
   VersionComparison,
   DebugPanel,
-  useApiDebugger
+  useApiDebugger,
+  SessionSectionEditor,
+  SessionPreview
 } from '../features/session-builder/components';
 import { VariantSelector } from '../components/session-builder/VariantSelector';
 import { SessionBuilderProvider, useSessionBuilder } from '../features/session-builder/state/SessionBuilderContext';
@@ -73,6 +75,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
   const [isVersionCompareOpen, setIsVersionCompareOpen] = React.useState(false);
   const [compareVersionIds, setCompareVersionIds] = React.useState<[string, string]>(['', '']);
   const [isDebugOpen, setIsDebugOpen] = React.useState(false);
+  const [selectedVariantId, setSelectedVariantId] = React.useState<string | undefined>(undefined);
   const hasBootstrappedVariants = React.useRef(false);
 
   // Enable API debugging
@@ -186,6 +189,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
   React.useEffect(() => {
     if (variantsStatus === 'idle') {
       hasBootstrappedVariants.current = false;
+      setSelectedVariantId(undefined); // Clear selection when regenerating
     }
   }, [variantsStatus]);
 
@@ -218,6 +222,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
   };
 
   const handleVariantSelect = React.useCallback(async (variantId: string) => {
+    setSelectedVariantId(variantId);
     await selectVariant(variantId);
     // Don't auto-jump to review - let user click Next when ready
   }, [selectVariant]);
@@ -235,6 +240,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
           variants={variants}
           onSelect={handleVariantSelect}
           onSaveForLater={handleSaveVariantForLater}
+          selectedVariantId={selectedVariantId}
           isLoading
         />
       );
@@ -278,6 +284,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
             variants={variants}
             onSelect={handleVariantSelect}
             onSaveForLater={handleSaveVariantForLater}
+            selectedVariantId={selectedVariantId}
           />
         </div>
       );
@@ -407,86 +414,58 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
           </div>
         );
       case 'review':
-        return (
-          <div className="space-y-4 sm:space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 md:p-8 shadow-sm">
-              <div className="max-w-2xl mx-auto text-center space-y-3 sm:space-y-4">
-                <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-2 sm:mb-4">
-                  <svg className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl sm:text-2xl font-semibold text-slate-900">Review Your Session Outline</h3>
-                <p className="text-sm sm:text-base text-slate-600">
-                  Your session outline is displayed in the preview panel{' '}
-                  <span className="hidden lg:inline">on the right</span>
-                  <span className="lg:hidden">(toggle to view)</span>. You can review all sections, edit content, and make adjustments.
-                </p>
-
-                <div className="grid gap-3 sm:gap-4 mt-6 sm:mt-8 text-left">
-                  <div className="border border-slate-200 rounded-lg p-3 sm:p-4 bg-slate-50">
-                    <h4 className="text-sm sm:text-base font-semibold text-slate-900 mb-1 sm:mb-2 flex items-center gap-2">
-                      <span className="text-blue-600">1.</span> Review Content
-                    </h4>
-                    <p className="text-xs sm:text-sm text-slate-600">
-                      Check the preview panel to see all session sections, timings, and details.
-                    </p>
-                  </div>
-
-                  <div className="border border-slate-200 rounded-lg p-3 sm:p-4 bg-slate-50">
-                    <h4 className="text-sm sm:text-base font-semibold text-slate-900 mb-1 sm:mb-2 flex items-center gap-2">
-                      <span className="text-blue-600">2.</span> Make Edits
-                    </h4>
-                    <p className="text-xs sm:text-sm text-slate-600">
-                      Use the edit tools in the preview panel to modify sections, update metadata, or add new content.
-                    </p>
-                  </div>
-
-                  <div className="border border-slate-200 rounded-lg p-3 sm:p-4 bg-slate-50">
-                    <h4 className="text-sm sm:text-base font-semibold text-slate-900 mb-1 sm:mb-2 flex items-center gap-2">
-                      <span className="text-blue-600">3.</span> Generate New Version
-                    </h4>
-                    <p className="text-xs sm:text-sm text-slate-600">
-                      If you want a different approach, go back to the previous step to regenerate variants.
-                    </p>
-                  </div>
-                </div>
-
-                {draft.aiVersions.length > 1 && (
-                  <div className="pt-4">
-                    <Button variant="outline" size="sm" className="sm:size-default" onClick={openVersionComparison}>
-                      Compare All Versions
-                    </Button>
-                  </div>
-                )}
-              </div>
+        return draft.outline ? (
+          <SessionSectionEditor
+            outline={draft.outline}
+            onUpdateSection={handleUpdateSection}
+            onAddSection={handleAddSection}
+            onDeleteSection={handleDeleteSection}
+            onMoveSection={handleMoveSection}
+            onDuplicateSection={handleDuplicateSection}
+            metadata={draft.metadata}
+            onOpenQuickAdd={() => setQuickAddOpen(true)}
+          />
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
             </div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">No Outline Selected</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Please go back to the Generate step and select an outline to review.
+            </p>
+            <Button onClick={() => goToStep('generate')} variant="outline">
+              Back to Generate
+            </Button>
           </div>
         );
       case 'finalize':
-        return (
-          <div className="text-center py-8 sm:py-12 px-4">
-            <div className="mx-auto w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
-              <svg className="h-6 w-6 sm:h-8 sm:w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        return draft.outline ? (
+          <SessionPreview
+            outline={draft.outline}
+            metadata={draft.metadata}
+            readinessScore={draft.readinessScore}
+            onPublish={() => void publishSession()}
+            onEdit={() => goToStep('review')}
+            isPublishing={isPublishing}
+            isPublished={publishStatus === 'success'}
+          />
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
-            <h2 className="text-lg sm:text-xl font-semibold text-slate-900 mb-2">Session Ready!</h2>
-            <p className="text-sm sm:text-base text-slate-600 mb-6 max-w-md mx-auto">
-              Your session is complete and ready to publish. Use the Export tab in the preview to download or share your session.
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">No Session to Preview</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Please go back to the Review step to complete your session.
             </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-3 max-w-xs sm:max-w-none mx-auto">
-              <Button onClick={() => goToStep('review')} variant="outline" className="w-full sm:w-auto">
-                Review Content
-              </Button>
-              <Button
-                onClick={() => void publishSession()}
-                disabled={!draft || !canPublish || isPublishing || publishStatus === 'success'}
-                className="w-full sm:w-auto"
-              >
-                {isPublishing ? 'Publishing…' : publishStatus === 'success' ? 'Published' : 'Publish Session'}
-              </Button>
-            </div>
+            <Button onClick={() => goToStep('review')} variant="outline">
+              Back to Review
+            </Button>
           </div>
         );
       default:

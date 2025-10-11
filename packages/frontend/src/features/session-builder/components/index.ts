@@ -10,3 +10,5 @@ export * from './DebugPanel';
 export * from './TopicInput';
 export * from './TopicInputRepeater';
 export * from './TopicLibraryModal';
+export * from './SessionSectionEditor';
+export * from './SessionPreview';
