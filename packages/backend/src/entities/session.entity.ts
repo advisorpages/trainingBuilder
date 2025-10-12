@@ -15,7 +15,9 @@ import { Incentive } from './incentive.entity';
 import { LandingPage } from './landing-page.entity';
 import { SessionAgendaItem } from './session-agenda-item.entity';
 import { SessionContentVersion } from './session-content-version.entity';
+import { SessionTopic } from './session-topic.entity';
 import { TrainerAssignment } from './trainer-assignment.entity';
+import { Trainer } from './trainer.entity';
 import { SessionStatusLog } from './session-status-log.entity';
 import { User } from './user.entity';
 import { Category } from './category.entity';
@@ -83,6 +85,9 @@ export class Session extends BaseEntity {
   @Column({ type: 'int', name: 'category_id', nullable: true })
   categoryId?: number;
 
+  @Column({ type: 'int', name: 'trainer_id', nullable: true })
+  trainerId?: number;
+
   @ManyToOne(() => Category, (category) => category.sessions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'category_id' })
   category?: Category;
@@ -99,6 +104,10 @@ export class Session extends BaseEntity {
   @JoinColumn({ name: 'tone_id' })
   tone?: Tone;
 
+  @ManyToOne(() => Trainer, (trainer) => trainer.sessions, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'trainer_id' })
+  trainer?: Trainer;
+
   @ManyToMany(() => Topic, (topic) => topic.sessions, { cascade: false })
   @JoinTable({
     name: 'session_topics',
@@ -106,6 +115,11 @@ export class Session extends BaseEntity {
     inverseJoinColumn: { name: 'topic_id', referencedColumnName: 'id' },
   })
   topics: Topic[];
+
+  @OneToMany(() => SessionTopic, (sessionTopic) => sessionTopic.session, {
+    cascade: false,
+  })
+  sessionTopics: SessionTopic[];
 
   @ManyToMany(() => Incentive, (incentive) => incentive.sessions)
   incentives: Incentive[];

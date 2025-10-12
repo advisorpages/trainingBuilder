@@ -37,6 +37,14 @@ export const TrainerList: React.FC<TrainerListProps> = ({ onEdit, onDelete }) =>
       }
 
       const response = await trainerService.getTrainers(queryParams);
+
+      // Debug logging
+      console.log('[TrainerList] Loaded trainers:', response.trainers);
+      console.log('[TrainerList] Total trainers:', response.total);
+      console.log('[TrainerList] Active trainers:', response.trainers.filter(t => t.isActive).length);
+      console.log('[TrainerList] Inactive trainers:', response.trainers.filter(t => !t.isActive).length);
+      console.log('[TrainerList] Query params:', queryParams);
+
       setTrainers(response.trainers);
       setTotalPages(response.totalPages);
       setTotal(response.total);
@@ -117,9 +125,38 @@ export const TrainerList: React.FC<TrainerListProps> = ({ onEdit, onDelete }) =>
       </div>
 
       {/* Results Info */}
-      <div className="text-sm text-gray-600">
-        Showing {trainers.length} of {total} trainers
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-600">
+          Showing {trainers.length} of {total} trainers
+        </div>
+        <div className="flex items-center space-x-4 text-sm">
+          <span className="flex items-center">
+            <span className="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+            Active: {trainers.filter(t => t.isActive).length}
+          </span>
+          <span className="flex items-center">
+            <span className="inline-block w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+            Inactive: {trainers.filter(t => !t.isActive).length}
+          </span>
+        </div>
       </div>
+
+      {/* Warning when no active trainers */}
+      {trainers.filter(t => t.isActive).length === 0 && !showInactive && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-yellow-800 mb-1">No Active Trainers</h3>
+              <p className="text-sm text-yellow-700">
+                You have trainers in the system, but none are marked as active. Trainers must be active to appear in session assignment dropdowns. Edit a trainer and ensure "Active" is checked.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Trainers Table */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">

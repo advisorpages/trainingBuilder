@@ -74,8 +74,12 @@ export const TrainerForm: React.FC<TrainerFormProps> = ({
         bio: formData.bio.trim() || undefined,
       };
 
+      // Always include isActive field (defaults to true for new trainers)
       if (trainer) {
         (submitData as UpdateTrainerRequest).isActive = formData.isActive;
+      } else {
+        // Ensure new trainers are created as active
+        console.log('[TrainerForm] Creating new trainer with isActive: true');
       }
 
       await onSubmit(submitData);

@@ -26,6 +26,17 @@ export enum UserRole {
 }
 
 // Session-related types
+export interface SessionTopicLink {
+  sessionId: string;
+  topicId: number;
+  sequenceOrder: number;
+  durationMinutes?: number | null;
+  trainerId?: number | null;
+  notes?: string | null;
+  topic?: Topic;
+  trainer?: Trainer;
+}
+
 export interface Session {
   id: string;
   title: string;
@@ -62,11 +73,12 @@ export interface Session {
   // Relations
   author: User;
   location?: Location;
-  trainer?: Trainer;
   audience?: Audience;
   tone?: Tone;
   category?: Category;
   topics?: Topic[];
+  sessionTopics?: SessionTopicLink[];
+  trainer?: Trainer;
 }
 
 export enum SessionStatus {

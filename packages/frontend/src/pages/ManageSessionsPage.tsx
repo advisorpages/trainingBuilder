@@ -57,8 +57,72 @@ const SessionsTable: React.FC<{
     }
   };
 
+  // Helper: Get all topics in sequence order
+  const getOrderedTopics = (session: Session) => {
+    if (!session.sessionTopics || session.sessionTopics.length === 0) {
+      return session.topics || [];
+    }
+    return [...session.sessionTopics]
+      .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
+      .map(st => st.topic)
+      .filter(t => t !== undefined) as any[];
+  };
+
+  // Helper: Get all unique trainers
+  const getAllTrainers = (session: Session) => {
+    if (!session.sessionTopics || session.sessionTopics.length === 0) {
+      return [];
+    }
+    const uniqueTrainers = new Map();
+    session.sessionTopics.forEach(st => {
+      if (st.trainer && st.trainerId) {
+        uniqueTrainers.set(st.trainerId, st.trainer);
+      }
+    });
+    return Array.from(uniqueTrainers.values());
+  };
+
+  // Helper: Format duration from minutes
+  const formatDuration = (durationMinutes?: number) => {
+    if (!durationMinutes || durationMinutes <= 0) {
+      return '—';
+    }
+
+    if (durationMinutes < 60) {
+      return `${durationMinutes}m`;
+    }
+    const hours = Math.floor(durationMinutes / 60);
+    const mins = durationMinutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
+
+  // Helper: Format date and time with null safety
+  const formatDateTime = (dateTime?: Date | string | null) => {
+    if (!dateTime) {
+      return {
+        date: 'Not scheduled',
+        time: ''
+      };
+    }
+
+    const date = new Date(dateTime);
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return {
+        date: 'Invalid date',
+        time: ''
+      };
+    }
+
+    return {
+      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+    };
+  };
+
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
       <table className="min-w-full divide-y divide-slate-200">
         <thead className="bg-slate-50">
           <tr>
@@ -70,75 +134,146 @@ const SessionsTable: React.FC<{
                 className="rounded border-slate-300"
               />
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
               Title
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
               Status
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-              Topic
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+              Topics
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-              Trainer
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+              Trainers
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-              Last Updated
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+              Date & Time
             </th>
-            <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+              Duration
+            </th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+              Location
+            </th>
+            <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
               Actions
             </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 bg-white">
-          {(sessions || []).map((session) => (
-            <tr key={session.id} className="hover:bg-slate-50">
-              <td className="px-4 py-4">
-                <input
-                  type="checkbox"
-                  checked={selectedSessions.includes(session.id)}
-                  onChange={(e) => handleSelectSession(session.id, e.target.checked)}
-                  className="rounded border-slate-300"
-                />
-              </td>
-              <td className="px-6 py-4">
-                <div>
-                  <div className="text-sm font-medium text-slate-900">{session.title}</div>
-                  {session.subtitle && (
-                    <div className="text-sm text-slate-500">{session.subtitle}</div>
-                  )}
-                  {session.readinessScore !== undefined && (
-                    <div className="mt-1 text-xs text-slate-400">
-                      Readiness: {session.readinessScore}%
+          {(sessions || []).map((session) => {
+            const orderedTopics = getOrderedTopics(session);
+            const trainers = getAllTrainers(session);
+            // Use scheduledAt instead of startTime (which doesn't exist in the entity)
+            const { date, time } = formatDateTime((session as any).scheduledAt);
+
+            return (
+              <tr key={session.id} className="hover:bg-slate-50">
+                <td className="px-4 py-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedSessions.includes(session.id)}
+                    onChange={(e) => handleSelectSession(session.id, e.target.checked)}
+                    className="rounded border-slate-300"
+                  />
+                </td>
+                <td className="px-4 py-4">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900 max-w-[200px] truncate" title={session.title}>
+                      {session.title}
                     </div>
+                    {session.subtitle && (
+                      <div className="text-xs text-slate-500 max-w-[200px] truncate" title={session.subtitle}>
+                        {session.subtitle}
+                      </div>
+                    )}
+                    {session.readinessScore !== undefined && (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Readiness: {session.readinessScore}%
+                      </div>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-4">
+                  <StatusBadge status={session.status} />
+                </td>
+                <td className="px-4 py-4">
+                  {orderedTopics.length > 0 ? (
+                    <div className="text-sm">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                          {orderedTopics.length} {orderedTopics.length === 1 ? 'topic' : 'topics'}
+                        </span>
+                      </div>
+                      <div className="text-slate-700 text-xs">
+                        {orderedTopics.map((t, i) => (
+                          <div key={i} className="py-0.5">
+                            {i + 1}. {t.name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-400">—</span>
                   )}
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <StatusBadge status={session.status} />
-              </td>
-              <td className="px-6 py-4 text-sm text-slate-900">
-                {session.topics && session.topics.length > 0 ? session.topics[0].name : '—'}
-              </td>
-              <td className="px-6 py-4 text-sm text-slate-900">
-                {(session as SessionWithRelations).trainerAssignments?.length
-                  ? (session as SessionWithRelations).trainerAssignments![0].trainer.name
-                  : '—'}
-              </td>
-              <td className="px-6 py-4 text-sm text-slate-500">
-                {new Date(session.updatedAt).toLocaleDateString()}
-              </td>
-              <td className="px-6 py-4 text-right text-sm">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onEditSession(session.id)}
-                >
-                  Edit Session
-                </Button>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-4 py-4">
+                  {trainers.length > 0 ? (
+                    <div className="text-sm">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                          {trainers.length} {trainers.length === 1 ? 'trainer' : 'trainers'}
+                        </span>
+                      </div>
+                      <div className="text-slate-700 text-xs">
+                        {trainers.map((t: any, i) => (
+                          <div key={i} className="py-0.5">
+                            {t.name}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-400">Not assigned</span>
+                  )}
+                </td>
+                <td className="px-4 py-4">
+                  <div className="text-sm">
+                    <div className="text-slate-900 font-medium">{date}</div>
+                    <div className="text-slate-500 text-xs">{time}</div>
+                  </div>
+                </td>
+                <td className="px-4 py-4 text-sm text-slate-900">
+                  {formatDuration((session as any).durationMinutes)}
+                </td>
+                <td className="px-4 py-4">
+                  {session.location ? (
+                    <div className="text-sm">
+                      <div className="text-slate-900 max-w-[150px] truncate" title={session.location.name}>
+                        {session.location.name}
+                      </div>
+                      {session.location.locationType && (
+                        <div className="text-xs text-slate-500 capitalize">
+                          {session.location.locationType}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-slate-400">Not set</span>
+                  )}
+                </td>
+                <td className="px-4 py-4 text-right text-sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEditSession(session.id)}
+                  >
+                    Edit
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

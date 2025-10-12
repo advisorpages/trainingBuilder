@@ -30,6 +30,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS session_topics (
     session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
     topic_id INTEGER REFERENCES topics(id) ON DELETE CASCADE,
+    trainer_id INTEGER REFERENCES trainers(id) ON DELETE SET NULL,
+    sequence_order INTEGER DEFAULT 1,
+    duration_minutes INTEGER,
+    notes TEXT,
     PRIMARY KEY (session_id, topic_id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -93,6 +97,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_author ON sessions(author_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_trainer ON sessions(trainer_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_location ON sessions(location_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(is_active);
+CREATE INDEX IF NOT EXISTS idx_session_topics_trainer ON session_topics(trainer_id);
+CREATE INDEX IF NOT EXISTS idx_session_topics_sequence ON session_topics(session_id, sequence_order);
 
 CREATE INDEX IF NOT EXISTS idx_registrations_session ON registrations(session_id);
 CREATE INDEX IF NOT EXISTS idx_registrations_email ON registrations(email);

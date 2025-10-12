@@ -7,6 +7,7 @@ interface EnhancedTopicSelectionProps {
   topics: Topic[];
   trainers: Trainer[];
   initialSelectedTopics?: number[];
+  initialTopicDetails?: SessionTopicDetail[];
   onSelectionChange: (selectedTopicDetails: SessionTopicDetail[]) => void;
 }
 
@@ -14,6 +15,7 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
   topics,
   trainers,
   initialSelectedTopics = [],
+  initialTopicDetails,
   onSelectionChange
 }) => {
   const [selectedTopicDetails, setSelectedTopicDetails] = useState<SessionTopicDetail[]>([]);
@@ -24,9 +26,33 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
   const [showRecentlyUpdated, setShowRecentlyUpdated] = useState(false);
   const [showHighUsageOnly, setShowHighUsageOnly] = useState(false);
 
+  useEffect(() => {
+    if (
+      initialTopicDetails &&
+      initialTopicDetails.length > 0 &&
+      selectedTopicDetails.length === 0
+    ) {
+      const normalized = initialTopicDetails
+        .map((detail, index) => ({
+          topicId: detail.topicId,
+          sequenceOrder: detail.sequenceOrder ?? index + 1,
+          durationMinutes: detail.durationMinutes ?? 30,
+          assignedTrainerId: detail.assignedTrainerId ?? undefined,
+          notes: detail.notes ?? '',
+        }))
+        .sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+
+      setSelectedTopicDetails(normalized);
+    }
+  }, [initialTopicDetails, selectedTopicDetails.length]);
+
   // Initialize selected topics (only once)
 useEffect(() => {
-  if (initialSelectedTopics.length > 0 && selectedTopicDetails.length === 0) {
+  if (
+    (!initialTopicDetails || initialTopicDetails.length === 0) &&
+    initialSelectedTopics.length > 0 &&
+    selectedTopicDetails.length === 0
+  ) {
     const initialDetails = initialSelectedTopics.map((topicId, index) => {
       const topic = topics.find(t => t.id === topicId);
       const savedPosition = (topic as any)?.aiGeneratedContent?.sectionPosition ?? (index + 1);

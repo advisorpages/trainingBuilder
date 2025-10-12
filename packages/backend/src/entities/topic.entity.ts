@@ -1,5 +1,6 @@
-import { Column, Entity, ManyToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, ManyToMany, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Session } from './session.entity';
+import { SessionTopic } from './session-topic.entity';
 
 @Entity({ name: 'topics' })
 export class Topic {
@@ -38,4 +39,9 @@ export class Topic {
 
   @ManyToMany(() => Session, (session) => session.topics)
   sessions: Session[];
+
+  @OneToMany(() => SessionTopic, (sessionTopic) => sessionTopic.topic, {
+    cascade: false,
+  })
+  sessionTopics: SessionTopic[];
 }

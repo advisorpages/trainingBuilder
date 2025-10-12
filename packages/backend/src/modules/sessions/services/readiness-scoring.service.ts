@@ -104,7 +104,10 @@ export class ReadinessScoringService {
     });
 
     // Assignment & Delivery Checks (20 points total)
-    const hasTrainerAssigned = session.trainerAssignments && session.trainerAssignments.length > 0;
+    const sessionTopics = session.sessionTopics ?? [];
+    const hasTrainerAssigned = sessionTopics.some(
+      (sessionTopic) => sessionTopic.trainerId !== undefined && sessionTopic.trainerId !== null,
+    );
     checks.push({
       id: 'trainer-assigned',
       name: 'Trainer Assignment',

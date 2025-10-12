@@ -26,11 +26,11 @@ type SessionFormState = {
   startTime: string;
   endTime: string;
   locationId: number | '';
-  trainerId: number | '';
   audienceId: number | '';
   toneId: number | '';
   categoryId: number | '';
   topicIds: string[];
+  sessionTopics: SessionTopicDetail[];
   maxRegistrations: number;
   aiGeneratedContent: Record<string, any> | string | null;
   promotionalHeadline: string | null;
@@ -90,11 +90,17 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     startTime: getDefaultStartTime(),
     endTime: getDefaultEndTime(),
     locationId: session?.locationId || '',
-    trainerId: session?.trainerId || '',
     audienceId: session?.audienceId || '',
     toneId: session?.toneId || '',
     categoryId: session?.categoryId || '',
-    topicIds: session?.topics?.map(t => t.id.toString()) || [] as string[],
+    topicIds: session?.topics?.map(t => t.id.toString()) || ([] as string[]),
+    sessionTopics: (session?.sessionTopics || []).map((sessionTopic, index) => ({
+      topicId: sessionTopic.topicId,
+      sequenceOrder: sessionTopic.sequenceOrder ?? index + 1,
+      durationMinutes: sessionTopic.durationMinutes ?? 30,
+      assignedTrainerId: sessionTopic.trainerId ?? undefined,
+      notes: sessionTopic.notes ?? '',
+    })),
     maxRegistrations: session?.maxRegistrations || 50,
     aiGeneratedContent: session?.aiGeneratedContent || null,
     promotionalHeadline: session?.promotionalHeadline || null,
@@ -119,6 +125,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const [categories, setCategories] = useState<Category[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Auto-save and draft management state
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -166,6 +173,9 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           topicService.getActiveTopics()
         ]);
 
+        console.log('[SessionForm] Loaded trainers:', trainersResponse);
+        console.log('[SessionForm] Trainers count:', trainersResponse.length);
+
         setTrainers(trainersResponse);
         setLocations(locationsResponse);
         setAudiences(audiencesResponse);
@@ -173,12 +183,18 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         setCategories(categoriesResponse);
         setTopics(topicsResponse);
 
+        if (trainersResponse.length === 0) {
+          console.warn('[SessionForm] No active trainers found!');
+          setLoadError('No active trainers available. Please ensure trainers are added and marked as active.');
+        }
+
         // Debug logging for topics
         console.log('Topics loaded:', topicsResponse);
         console.log('Topics count:', topicsResponse.length);
       } catch (error) {
-        console.error('Failed to load form data:', error);
-        console.error('Error details:', error.response?.data || error.message);
+        console.error('[SessionForm] Failed to load form data:', error);
+        console.error('[SessionForm] Error details:', error.response?.data || error.message);
+        setLoadError('Failed to load trainers. Please refresh the page or contact support.');
         // Keep loading false to show form even if data fails to load
       } finally {
         setIsLoadingData(false);
@@ -187,6 +203,44 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
     loadFormData();
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      title: session.title || '',
+      description: session.description || '',
+      startTime: session.startTime ? new Date(session.startTime).toISOString().slice(0, 16) : prev.startTime,
+      endTime: session.endTime ? new Date(session.endTime).toISOString().slice(0, 16) : prev.endTime,
+      locationId: session.locationId || '',
+      audienceId: session.audienceId || '',
+      toneId: session.toneId || '',
+      categoryId: session.categoryId || '',
+      topicIds: session.topics?.map((topic) => topic.id.toString()) || [],
+      sessionTopics: (session.sessionTopics || []).map((sessionTopic, index) => ({
+        topicId: sessionTopic.topicId,
+        sequenceOrder: sessionTopic.sequenceOrder ?? index + 1,
+        durationMinutes: sessionTopic.durationMinutes ?? 30,
+        assignedTrainerId: sessionTopic.trainerId ?? undefined,
+        notes: sessionTopic.notes ?? '',
+      })),
+      maxRegistrations: session.maxRegistrations || prev.maxRegistrations,
+      aiGeneratedContent: session.aiGeneratedContent || prev.aiGeneratedContent,
+      promotionalHeadline: session.promotionalHeadline || prev.promotionalHeadline,
+      promotionalSummary: session.promotionalSummary || prev.promotionalSummary,
+      keyBenefits: Array.isArray(session.keyBenefits)
+        ? JSON.stringify(session.keyBenefits, null, 2)
+        : session.keyBenefits || prev.keyBenefits,
+      callToAction: session.callToAction || prev.callToAction,
+      socialMediaContent: Array.isArray(session.socialMediaContent)
+        ? session.socialMediaContent[0] || prev.socialMediaContent
+        : session.socialMediaContent || prev.socialMediaContent,
+      emailMarketingContent: session.emailMarketingContent || prev.emailMarketingContent,
+    }));
+  }, [session]);
 
   // Check for recoverable draft when form loads
   useEffect(() => {
@@ -224,17 +278,25 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     try {
       setAutoSaveStatus('saving');
 
+      const sessionTopicsPayload = (formData.sessionTopics ?? []).map(detail => ({
+        topicId: detail.topicId,
+        sequenceOrder: detail.sequenceOrder,
+        durationMinutes: detail.durationMinutes,
+        trainerId: detail.assignedTrainerId,
+        notes: detail.notes?.trim() ? detail.notes.trim() : undefined,
+      }));
+
       const submissionData = {
         title: formData.title.trim() || undefined,
         description: formData.description.trim() || undefined,
         startTime: formData.startTime ? new Date(formData.startTime) : undefined,
         endTime: formData.endTime ? new Date(formData.endTime) : undefined,
         locationId: formData.locationId ? Number(formData.locationId) : undefined,
-        trainerId: formData.trainerId ? Number(formData.trainerId) : undefined,
         audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
         toneId: formData.toneId ? Number(formData.toneId) : undefined,
         categoryId: formData.categoryId ? Number(formData.categoryId) : undefined,
         topicIds: formData.topicIds.length > 0 ? formData.topicIds.map((id: string) => Number(id)) : undefined,
+        sessionTopics: sessionTopicsPayload.length > 0 ? sessionTopicsPayload : undefined,
         maxRegistrations: formData.maxRegistrations,
         ...(formData.aiGeneratedContent && { aiGeneratedContent: formData.aiGeneratedContent }),
         ...(formData.promotionalHeadline && { promotionalHeadline: formData.promotionalHeadline }),
@@ -245,17 +307,11 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         ...(formData.emailMarketingContent && { emailMarketingContent: formData.emailMarketingContent }),
       };
 
-      const result = await sessionService.autoSaveDraft(session.id, submissionData);
-
-      if (result.success) {
-        setAutoSaveStatus('saved');
-        setLastSaved(new Date(result.lastSaved));
-        setHasUnsavedChanges(false);
-        setTimeout(() => setAutoSaveStatus('idle'), 2000);
-      } else {
-        setAutoSaveStatus('error');
-        setTimeout(() => setAutoSaveStatus('idle'), 3000);
-      }
+      await sessionService.updateSession(session.id, submissionData);
+      setAutoSaveStatus('saved');
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
     } catch (error) {
       console.error('Auto-save failed:', error);
       setAutoSaveStatus('error');
@@ -418,17 +474,25 @@ export const SessionForm: React.FC<SessionFormProps> = ({
       clearTimeout(autoSaveTimeoutRef.current);
     }
 
+    const sessionTopicsPayload = (formData.sessionTopics ?? []).map(detail => ({
+      topicId: detail.topicId,
+      sequenceOrder: detail.sequenceOrder,
+      durationMinutes: detail.durationMinutes,
+      trainerId: detail.assignedTrainerId,
+      notes: detail.notes?.trim() ? detail.notes.trim() : undefined,
+    }));
+
     const submissionData = {
         title: formData.title.trim(),
         description: formData.description.trim() || undefined,
         startTime: formData.startTime ? new Date(formData.startTime) : undefined,
         endTime: formData.endTime ? new Date(formData.endTime) : undefined,
         locationId: formData.locationId ? Number(formData.locationId) : undefined,
-        trainerId: formData.trainerId ? Number(formData.trainerId) : undefined,
         audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
         toneId: formData.toneId ? Number(formData.toneId) : undefined,
         categoryId: formData.categoryId ? Number(formData.categoryId) : undefined,
         topicIds: formData.topicIds.length > 0 ? formData.topicIds.map((id: string) => Number(id)) : undefined,
+        sessionTopics: sessionTopicsPayload.length > 0 ? sessionTopicsPayload : undefined,
         maxRegistrations: formData.maxRegistrations,
         ...(formData.aiGeneratedContent && { aiGeneratedContent: formData.aiGeneratedContent }),
         ...(formData.promotionalHeadline && { promotionalHeadline: formData.promotionalHeadline }),
@@ -451,7 +515,11 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const handleRecoverDraft = () => {
     const recoveredData = recoverDraft();
     if (recoveredData) {
-      setFormData(recoveredData);
+      setFormData({
+        ...formData,
+        ...recoveredData,
+        sessionTopics: recoveredData.sessionTopics || [],
+      });
       setShowRecoveryModal(false);
     }
   };
@@ -576,13 +644,12 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
   const handleSessionTopicDetailsChange = useCallback((details: SessionTopicDetail[]) => {
     // Update form data with topic IDs in the correct order
-    const orderedTopicIds = [...details]
-      .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
-      .map(detail => detail.topicId.toString());
+    const sortedDetails = [...details].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
 
     setFormData(prev => ({
       ...prev,
-      topicIds: orderedTopicIds
+      topicIds: sortedDetails.map(detail => detail.topicId.toString()),
+      sessionTopics: sortedDetails,
     }));
   }, []);
 
@@ -867,29 +934,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                 </p>
               </div>
 
-              {/* Trainer */}
-              <div>
-                <label htmlFor="trainerId" className="block text-sm font-medium text-gray-700">
-                  Trainer
-                </label>
-                <select
-                  id="trainerId"
-                  value={formData.trainerId}
-                  onChange={(e) => handleInputChange('trainerId', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">Select a trainer...</option>
-                  {trainers.map((trainer) => (
-                    <option key={trainer.id} value={trainer.id}>
-                      {trainer.name}{trainer.expertiseTags?.length ? " - " + trainer.expertiseTags.join(", ") : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-sm text-gray-500">
-                  {trainers.length === 0 ? 'Loading trainers...' : 'Choose an available trainer for this session'}
-                </p>
-              </div>
-
             </div>
           </div>
 
@@ -965,12 +1009,28 @@ export const SessionForm: React.FC<SessionFormProps> = ({
             </div>
           )}
 
+          {/* Warning message for trainer loading issues */}
+          {loadError && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1">
+                  <h3 className="text-sm font-medium text-yellow-800 mb-1">Trainer Loading Issue</h3>
+                  <p className="text-sm text-yellow-700">{loadError}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Topics Section */}
           {topics.length > 0 ? (
             <EnhancedTopicSelection
               topics={topics}
               trainers={trainers}
               initialSelectedTopics={formData.topicIds.map(id => Number(id))}
+              initialTopicDetails={formData.sessionTopics}
               onSelectionChange={handleSessionTopicDetailsChange}
             />
           ) : isLoadingData ? (

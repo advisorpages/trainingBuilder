@@ -175,8 +175,11 @@ export const EnhancedTopicCard: React.FC<EnhancedTopicCardProps> = ({
               value={assignedTrainerId}
               onChange={(e) => handleTrainerChange(e.target.value)}
               className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              disabled={trainers.length === 0}
             >
-              <option value="">Select trainer...</option>
+              <option value="">
+                {trainers.length === 0 ? 'No trainers available' : 'Select trainer...'}
+              </option>
               {trainers.map((trainer) => (
                 <option key={trainer.id} value={trainer.id}>
                   {trainer.name}
@@ -184,6 +187,11 @@ export const EnhancedTopicCard: React.FC<EnhancedTopicCardProps> = ({
                 </option>
               ))}
             </select>
+            {trainers.length === 0 && (
+              <p className="mt-1 text-xs text-gray-500">
+                No active trainers found. Please add trainers in the system settings.
+              </p>
+            )}
           </div>
 
           {/* Notes */}

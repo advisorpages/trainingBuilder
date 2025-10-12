@@ -9,8 +9,36 @@ import {
   IsUUID,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { SessionStatus } from '../../../entities';
+
+export class SessionTopicAssignmentDto {
+  @Type(() => Number)
+  @IsInt()
+  topicId: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sequenceOrder?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  durationMinutes?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  trainerId?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
 
 export class CreateSessionDto {
   @IsString()
@@ -43,11 +71,6 @@ export class CreateSessionDto {
   @IsArray()
   @IsUUID('4', { each: true })
   incentiveIds?: string[];
-
-  @IsOptional()
-  @IsArray()
-  @IsInt({ each: true })
-  trainerIds?: number[];
 
   @IsOptional()
   @IsISO8601()
@@ -86,4 +109,10 @@ export class CreateSessionDto {
   @Min(0)
   @Max(100)
   readinessScore?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SessionTopicAssignmentDto)
+  sessionTopics?: SessionTopicAssignmentDto[];
 }

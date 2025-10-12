@@ -32,7 +32,11 @@ export class SessionsController {
     const parsedTopicId =
       topicIdNumber !== undefined && !Number.isNaN(topicIdNumber) ? topicIdNumber : undefined;
 
-    return this.sessionsService.findAll({ status, topicId: parsedTopicId, trainerId });
+    const trainerIdNumber = trainerId !== undefined ? Number(trainerId) : undefined;
+    const parsedTrainerId =
+      trainerIdNumber !== undefined && !Number.isNaN(trainerIdNumber) ? trainerIdNumber : undefined;
+
+    return this.sessionsService.findAll({ status, topicId: parsedTopicId, trainerId: parsedTrainerId });
   }
 
   @Post('builder/:id/autosave')

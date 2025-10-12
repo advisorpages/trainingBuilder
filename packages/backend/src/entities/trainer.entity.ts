@@ -1,5 +1,6 @@
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { TrainerAssignment } from './trainer-assignment.entity';
+import { Session } from './session.entity';
 
 @Entity({ name: 'trainers' })
 export class Trainer {
@@ -35,4 +36,7 @@ export class Trainer {
 
   @OneToMany(() => TrainerAssignment, (assignment) => assignment.trainer)
   assignments: TrainerAssignment[];
+
+  @OneToMany(() => Session, (session) => session.trainer)
+  sessions: Session[];
 }

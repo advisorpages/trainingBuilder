@@ -5,21 +5,31 @@ import { api } from './api.service';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
 
+export interface SessionTopicAssignmentPayload {
+  topicId: number;
+  sequenceOrder?: number;
+  durationMinutes?: number;
+  trainerId?: number;
+  notes?: string;
+}
+
 export interface CreateSessionRequest {
   title: string;
   description?: string;
   startTime: Date;
   endTime: Date;
   locationId?: number;
-  trainerId?: number;
   audienceId?: number;
   toneId?: number;
   categoryId?: number;
   topicIds?: number[];
   maxRegistrations: number;
+  sessionTopics?: SessionTopicAssignmentPayload[];
 }
 
-export interface UpdateSessionRequest extends Partial<CreateSessionRequest> {}
+export interface UpdateSessionRequest extends Partial<CreateSessionRequest> {
+  sessionTopics?: SessionTopicAssignmentPayload[];
+}
 
 export interface StatusUpdateRequest {
   status: string;

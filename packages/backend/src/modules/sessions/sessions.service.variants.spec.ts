@@ -4,6 +4,7 @@ import { SessionsService, MultiVariantResponse } from './sessions.service';
 import {
   Session,
   Topic,
+  SessionTopic,
   Incentive,
   TrainerAssignment,
   Trainer,
@@ -120,6 +121,7 @@ interface ServiceBundle {
   mocks: {
     sessionRepo: MockRepo<Session>;
     topicsRepo: MockRepo<Topic>;
+    sessionTopicsRepo: MockRepo<SessionTopic>;
     trainerAssignmentsRepo: MockRepo<TrainerAssignment>;
     trainersRepo: MockRepo<Trainer>;
     locationsRepo: MockRepo<Location>;
@@ -142,6 +144,7 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
   sessionRepo.__managerMock?.findOne.mockResolvedValue(null);
 
   const topicsRepo = createRepositoryMock<Topic>();
+  const sessionTopicsRepo = createRepositoryMock<SessionTopic>();
 
   const incentivesRepo = createRepositoryMock<Incentive>();
   const trainerAssignmentsRepo = createRepositoryMock<TrainerAssignment>();
@@ -195,6 +198,7 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     sessionRepo as unknown as Repository<Session>,
     topicsRepo as unknown as Repository<Topic>,
     incentivesRepo as unknown as Repository<Incentive>,
+    sessionTopicsRepo as unknown as Repository<SessionTopic>,
     trainerAssignmentsRepo as unknown as Repository<TrainerAssignment>,
     trainersRepo as unknown as Repository<Trainer>,
     contentRepo as unknown as Repository<SessionContentVersion>,
@@ -218,6 +222,7 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     mocks: {
       sessionRepo,
       topicsRepo,
+      sessionTopicsRepo,
       locationsRepo,
       ragService,
       openAIService,

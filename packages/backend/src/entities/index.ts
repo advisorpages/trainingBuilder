@@ -3,6 +3,7 @@ import { SessionAgendaItem } from './session-agenda-item.entity';
 import { SessionContentVersion } from './session-content-version.entity';
 import { SessionStatusLog } from './session-status-log.entity';
 import { SessionBuilderDraft } from './session-builder-draft.entity';
+import { SessionTopic } from './session-topic.entity';
 import { Topic } from './topic.entity';
 import { Incentive } from './incentive.entity';
 import { LandingPage } from './landing-page.entity';
@@ -26,6 +27,7 @@ export * from './session-agenda-item.entity';
 export * from './session-content-version.entity';
 export * from './session-status-log.entity';
 export * from './session-builder-draft.entity';
+export * from './session-topic.entity';
 export * from './topic.entity';
 export * from './incentive.entity';
 export * from './landing-page.entity';
@@ -49,6 +51,7 @@ export const entities = [
   SessionContentVersion,
   SessionStatusLog,
   SessionBuilderDraft,
+  SessionTopic,
   Topic,
   Incentive,
   LandingPage,

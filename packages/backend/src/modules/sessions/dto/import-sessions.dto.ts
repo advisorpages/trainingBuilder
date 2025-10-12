@@ -32,6 +32,24 @@ export class ImportSessionTopicDto {
   learningOutcomes?: string;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  sequenceOrder?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  durationMinutes?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsInt()
+  trainerId?: number;
+
+  @IsOptional()
   @IsString()
   trainerNotes?: string;
 

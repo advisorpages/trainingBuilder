@@ -92,10 +92,17 @@ export class TrainersService {
   }
 
   async findActive(): Promise<Trainer[]> {
-    return this.trainerRepository.find({
+    const trainers = await this.trainerRepository.find({
       where: { isActive: true },
       order: { name: 'ASC' },
     });
+
+    console.log(`[TrainersService] findActive() returned ${trainers.length} active trainers`);
+    if (trainers.length === 0) {
+      console.warn('[TrainersService] No active trainers found in database!');
+    }
+
+    return trainers;
   }
 
   async create(dto: CreateTrainerDto): Promise<Trainer> {

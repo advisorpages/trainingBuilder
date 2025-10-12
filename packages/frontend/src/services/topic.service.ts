@@ -1,6 +1,5 @@
 import { api } from './api.service';
 import { Topic, TopicAIContent } from '@leadership-training/shared';
-import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateTopicRequest {
   name: string;
@@ -38,26 +37,44 @@ export interface UsageCheckResponse {
 }
 
 class TopicService {
-  private readonly baseUrl = API_ENDPOINTS.TOPICS;
+  private readonly baseUrl = '/topics';
 
   async getTopics(params?: TopicQueryParams): Promise<PaginatedTopicsResponse> {
-    const queryString = params ? new URLSearchParams(
-      Object.entries(params).reduce((acc, [key, value]) => {
-        if (value !== undefined && value !== null) {
-          acc[key] = String(value);
-        }
-        return acc;
-      }, {} as Record<string, string>)
-    ).toString() : '';
+    const response = await api.get<Topic[]>(this.baseUrl);
+    let topics = response.data.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
-    const url = queryString ? `${this.baseUrl}?${queryString}` : this.baseUrl;
-    const response = await api.get<PaginatedTopicsResponse>(url);
-    return response.data;
+    if (params?.isActive !== undefined) {
+      topics = topics.filter(topic => topic.isActive === params.isActive);
+    }
+
+    if (params?.search) {
+      const search = params.search.toLowerCase();
+      topics = topics.filter(topic =>
+        topic.name.toLowerCase().includes(search) ||
+        (topic.description ? topic.description.toLowerCase().includes(search) : false)
+      );
+    }
+
+    const total = topics.length;
+    const limit = Math.max(params?.limit && params.limit > 0 ? params.limit : 20, 1);
+    const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
+    const requestedPage = params?.page && params.page > 0 ? params.page : 1;
+    const page = Math.min(requestedPage, totalPages);
+    const start = (page - 1) * limit;
+    const paginatedTopics = topics.slice(start, start + limit);
+
+    return {
+      topics: paginatedTopics,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   async getActiveTopics(): Promise<Topic[]> {
-    const response = await api.get<Topic[]>(`${this.baseUrl}/active`);
-    return response.data;
+    const response = await api.get<Topic[]>(this.baseUrl);
+    return response.data.filter(topic => topic.isActive);
   }
 
   async getTopic(id: number): Promise<Topic> {

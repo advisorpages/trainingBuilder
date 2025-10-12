@@ -23,6 +23,7 @@ import {
   Topic,
   Incentive,
   Location,
+  SessionTopic,
   TrainerAssignment,
   Trainer,
 } from '../../entities';
@@ -39,6 +40,7 @@ import {
       Topic,
       Incentive,
       Location,
+      SessionTopic,
       TrainerAssignment,
       Trainer,
       AIInteraction,

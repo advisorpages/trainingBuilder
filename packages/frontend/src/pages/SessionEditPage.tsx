@@ -8,7 +8,6 @@ import { incentiveService } from '../services/incentive.service';
 import { LocationSelect } from '../components/ui/LocationSelect';
 import { AudienceSelect } from '../components/ui/AudienceSelect';
 import { ToneSelect } from '../components/ui/ToneSelect';
-import { TrainerSelect } from '../components/ui/TrainerSelect';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { BuilderLayout } from '../layouts/BuilderLayout';
@@ -21,6 +20,7 @@ interface FormData {
   subtitle?: string;
   objective?: string;
   topicIds: number[];
+  sessionTopics: SessionTopicDetail[];
   locationId?: number;
   audienceId?: number;
   toneId?: number;
@@ -29,7 +29,6 @@ interface FormData {
   status?: SessionStatus;
   readinessScore?: number;
   incentiveIds?: string[];
-  trainerIds?: number[];
 }
 
 interface FormErrors {
@@ -48,6 +47,7 @@ const SessionEditPage: React.FC = () => {
     subtitle: '',
     objective: '',
     topicIds: [],
+    sessionTopics: [],
     status: SessionStatus.DRAFT,
     readinessScore: 0,
   });
@@ -58,9 +58,9 @@ const SessionEditPage: React.FC = () => {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [incentives, setIncentives] = useState<Incentive[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Current associations
-  const [currentTrainers, setCurrentTrainers] = useState<Trainer[]>([]);
   const [currentIncentives, setCurrentIncentives] = useState<Incentive[]>([]);
 
   // Load session data
@@ -77,15 +77,43 @@ const SessionEditPage: React.FC = () => {
         setSession(sessionData);
         const sessionWithRelations = sessionData as Session & {
           incentives?: Incentive[];
-          trainerAssignments?: Array<{ trainer: Trainer }>;
-          topics?: Topic[];
-        };
+        sessionTopics?: Array<{
+          sessionId: string;
+          topicId: number;
+          sequenceOrder?: number | null;
+          durationMinutes?: number | null;
+          trainerId?: number | null;
+          notes?: string | null;
+          topic?: Topic;
+          trainer?: Trainer;
+        }>;
+        topics?: Topic[];
+      };
+
+        const sessionTopicDetails: SessionTopicDetail[] = (sessionWithRelations.sessionTopics || []).map((sessionTopic, index) => ({
+          topicId: sessionTopic.topicId,
+          sequenceOrder: sessionTopic.sequenceOrder ?? index + 1,
+          durationMinutes: sessionTopic.durationMinutes ?? 30,
+          assignedTrainerId: sessionTopic.trainerId ?? undefined,
+          notes: sessionTopic.notes ?? '',
+        })).sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+
+        const fallbackTopicDetails: SessionTopicDetail[] = sessionTopicDetails.length > 0
+          ? sessionTopicDetails
+          : (sessionWithRelations.topics || []).map((topic, index) => ({
+              topicId: topic.id,
+              sequenceOrder: index + 1,
+              durationMinutes: 30,
+              assignedTrainerId: undefined,
+              notes: '',
+            }));
 
         setFormData({
           title: sessionData.title || '',
           subtitle: sessionData.subtitle || '',
           objective: sessionData.objective || '',
-          topicIds: sessionWithRelations.topics?.map(topic => topic.id) || [],
+          topicIds: fallbackTopicDetails.map(detail => detail.topicId),
+          sessionTopics: fallbackTopicDetails,
           locationId: sessionData.locationId || undefined,
           audienceId: sessionData.audienceId || undefined,
           toneId: sessionData.toneId || undefined,
@@ -94,11 +122,8 @@ const SessionEditPage: React.FC = () => {
           status: sessionData.status || SessionStatus.DRAFT,
           readinessScore: sessionData.readinessScore || 0,
           incentiveIds: sessionWithRelations.incentives?.map(inc => inc.id) || [],
-          trainerIds: sessionWithRelations.trainerAssignments?.map(ta => ta.trainer.id) || [],
         });
 
-        // Set current associations for display
-        setCurrentTrainers(sessionWithRelations.trainerAssignments?.map(ta => ta.trainer) || []);
         setCurrentIncentives(sessionWithRelations.incentives || []);
       } catch (error) {
         console.error('Failed to load session:', error);
@@ -121,11 +146,20 @@ const SessionEditPage: React.FC = () => {
           incentiveService.getIncentives(),
         ]);
 
+        console.log('[SessionEditPage] Loaded trainers:', trainersData);
+        console.log('[SessionEditPage] Trainers count:', trainersData.length);
+
         setTopics(topicsData);
         setTrainers(trainersData);
         setIncentives(incentivesData);
+
+        if (trainersData.length === 0) {
+          console.warn('[SessionEditPage] No active trainers found!');
+          setLoadError('No active trainers available. Please ensure trainers are added and marked as active.');
+        }
       } catch (error) {
-        console.error('Failed to load dropdown options:', error);
+        console.error('[SessionEditPage] Failed to load dropdown options:', error);
+        setLoadError('Failed to load trainers. Please refresh the page or contact support.');
       }
     };
 
@@ -137,7 +171,13 @@ const SessionEditPage: React.FC = () => {
     if (session) {
       const sessionWithRelations = session as Session & {
         incentives?: Incentive[];
-        trainerAssignments?: Array<{ trainer: Trainer }>;
+        sessionTopics?: Array<{
+          topicId: number;
+          sequenceOrder?: number | null;
+          durationMinutes?: number | null;
+          trainerId?: number | null;
+          notes?: string | null;
+        }>;
         topics?: Topic[];
       };
 
@@ -151,10 +191,25 @@ const SessionEditPage: React.FC = () => {
         : [];
       const currentIncentiveIds = (formData.incentiveIds ?? []).slice().sort();
 
-      const originalTrainerIds = sessionWithRelations.trainerAssignments
-        ? sessionWithRelations.trainerAssignments.map(ta => ta.trainer.id).sort((a, b) => a - b)
-        : [];
-      const currentTrainerIds = (formData.trainerIds ?? []).slice().sort((a, b) => a - b);
+      const originalTopicAssignments = (sessionWithRelations.sessionTopics ?? [])
+        .map((topic) => ({
+          topicId: topic.topicId,
+          sequenceOrder: topic.sequenceOrder ?? 0,
+          durationMinutes: topic.durationMinutes ?? null,
+          trainerId: topic.trainerId ?? null,
+          notes: (topic.notes ?? '').trim(),
+        }))
+        .sort((a, b) => (a.sequenceOrder ?? 0) - (b.sequenceOrder ?? 0));
+
+      const currentTopicAssignments = (formData.sessionTopics ?? [])
+        .map((detail) => ({
+          topicId: detail.topicId,
+          sequenceOrder: detail.sequenceOrder,
+          durationMinutes: detail.durationMinutes ?? null,
+          trainerId: detail.assignedTrainerId ?? null,
+          notes: (detail.notes ?? '').trim(),
+        }))
+        .sort((a, b) => (a.sequenceOrder ?? 0) - (b.sequenceOrder ?? 0));
 
       const hasChanges =
         formData.title !== (session.title || '') ||
@@ -169,7 +224,7 @@ const SessionEditPage: React.FC = () => {
         formData.status !== (session.status || SessionStatus.DRAFT) ||
         formData.readinessScore !== (session.readinessScore || 0) ||
         JSON.stringify(currentIncentiveIds) !== JSON.stringify(originalIncentiveIds) ||
-        JSON.stringify(currentTrainerIds) !== JSON.stringify(originalTrainerIds);
+        JSON.stringify(currentTopicAssignments) !== JSON.stringify(originalTopicAssignments);
 
       setHasUnsavedChanges(hasChanges);
     }
@@ -203,13 +258,12 @@ const SessionEditPage: React.FC = () => {
   }, [topics]);
 
   const handleTopicSelectionChange = useCallback((details: SessionTopicDetail[]) => {
-    const orderedTopicIds = [...details]
-      .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
-      .map(detail => detail.topicId);
+    const sortedDetails = [...details].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
 
     setFormData(prev => ({
       ...prev,
-      topicIds: orderedTopicIds,
+      topicIds: sortedDetails.map(detail => detail.topicId),
+      sessionTopics: sortedDetails,
     }));
   }, []);
 
@@ -260,13 +314,29 @@ const SessionEditPage: React.FC = () => {
         durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / (1000 * 60));
       }
 
+      const sessionTopicsPayload = (formData.sessionTopics ?? []).map(detail => ({
+        topicId: detail.topicId,
+        sequenceOrder: detail.sequenceOrder,
+        durationMinutes: detail.durationMinutes,
+        trainerId: detail.assignedTrainerId,
+        notes: detail.notes?.trim() ? detail.notes.trim() : undefined,
+      }));
+
       const updateData = {
-        ...formData,
+        title: formData.title,
+        subtitle: formData.subtitle,
+        objective: formData.objective,
+        topicIds: formData.topicIds,
+        locationId: formData.locationId,
+        audienceId: formData.audienceId,
+        toneId: formData.toneId,
+        status: formData.status,
+        readinessScore: formData.readinessScore,
         durationMinutes,
         startTime: formData.startTime ? new Date(formData.startTime) : undefined,
         endTime: formData.endTime ? new Date(formData.endTime) : undefined,
         incentiveIds: formData.incentiveIds,
-        trainerIds: formData.trainerIds,
+        sessionTopics: sessionTopicsPayload,
       };
 
       await sessionService.updateSession(session.id, updateData);
@@ -391,7 +461,6 @@ const SessionEditPage: React.FC = () => {
                     placeholder="Describe what participants will learn (optional)"
                   />
                 </div>
-              </div>
             </div>
 
             {/* Session Content - Topics */}
@@ -401,10 +470,25 @@ const SessionEditPage: React.FC = () => {
                 <div className="h-px bg-slate-200 flex-1"></div>
               </div>
 
+              {/* Warning message for trainer loading issues */}
+              {loadError && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-yellow-800 mb-1">Trainer Loading Issue</h3>
+                      <p className="text-sm text-yellow-700">{loadError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <EnhancedTopicSelection
                 topics={sortedTopics}
                 trainers={trainers}
-                initialSelectedTopics={formData.topicIds}
+                initialTopicDetails={formData.sessionTopics}
                 onSelectionChange={handleTopicSelectionChange}
               />
             </div>
@@ -505,66 +589,7 @@ const SessionEditPage: React.FC = () => {
                 <div className="h-px bg-slate-200 flex-1"></div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Training Team */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-slate-900">Training Team</h3>
-
-                  {/* Current Trainers */}
-                  {currentTrainers.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium text-slate-700">Currently Assigned Trainers:</h4>
-                      <div className="space-y-3">
-                        {currentTrainers.map(trainer => (
-                          <div key={trainer.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border">
-                            <div className="flex-1">
-                              <div className="font-semibold text-slate-900">{trainer.name}</div>
-                              {trainer.expertiseTags && trainer.expertiseTags.length > 0 && (
-                                <div className="text-sm text-slate-600 mt-1">
-                                  Expertise: {trainer.expertiseTags.join(', ')}
-                                </div>
-                              )}
-                            </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const newTrainerIds = formData.trainerIds?.filter(id => id !== trainer.id) || [];
-                                handleInputChange('trainerIds', newTrainerIds);
-                                setCurrentTrainers(prev => prev.filter(t => t.id !== trainer.id));
-                              }}
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Add Trainer */}
-                  <div>
-                    <label htmlFor="addTrainer" className="block text-sm font-medium text-slate-700 mb-2">
-                      Add Trainer
-                    </label>
-                    <TrainerSelect
-                      value=""
-                      onChange={(trainer) => {
-                        if (trainer && !formData.trainerIds?.includes(trainer.id)) {
-                          const newTrainerIds = [...(formData.trainerIds || []), trainer.id];
-                          handleInputChange('trainerIds', newTrainerIds);
-                          setCurrentTrainers(prev => [...prev, trainer]);
-                        }
-                      }}
-                      placeholder="Select a trainer to add"
-                      excludeIds={formData.trainerIds || []}
-                    />
-                  </div>
-                </div>
-
-                {/* Session Perks */}
-                <div className="space-y-4">
+              <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-slate-900">Session Perks</h3>
 
                   {/* Current Incentives */}

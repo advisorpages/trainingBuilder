@@ -10,6 +10,7 @@ import {
   SessionContentVersion,
   SessionStatus,
   SessionStatusLog,
+  SessionTopic,
   Topic,
   Location,
   Audience,
@@ -23,7 +24,7 @@ import {
   TrainerAssignmentStatus,
 } from '../../entities';
 import { ReadinessScore, ReadinessScoringService } from './services/readiness-scoring.service';
-import { CreateSessionDto } from './dto/create-session.dto';
+import { CreateSessionDto, SessionTopicAssignmentDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { CreateContentVersionDto } from './dto/create-content-version.dto';
 import { BuilderAutosaveDto } from './dto/builder-autosave.dto';
@@ -143,6 +144,14 @@ interface FlexibleSessionSection {
   [key: string]: unknown;
 }
 
+interface NormalizedSessionTopicAssignment {
+  topicId: number;
+  sequenceOrder: number;
+  durationMinutes?: number;
+  trainerId?: number;
+  notes?: string;
+}
+
 interface SessionContentVersionExport {
   id: string;
   kind: SessionContentVersion['kind'];
@@ -247,6 +256,8 @@ export class SessionsService {
     private readonly topicsRepository: Repository<Topic>,
     @InjectRepository(Incentive)
     private readonly incentivesRepository: Repository<Incentive>,
+    @InjectRepository(SessionTopic)
+    private readonly sessionTopicsRepository: Repository<SessionTopic>,
     @InjectRepository(TrainerAssignment)
     private readonly trainerAssignmentsRepository: Repository<TrainerAssignment>,
     @InjectRepository(Trainer)
@@ -337,15 +348,19 @@ export class SessionsService {
   async findAll(filters?: {
     status?: SessionStatus;
     topicId?: number;
-    trainerId?: string;
+    trainerId?: number;
   }): Promise<Session[]> {
     const queryBuilder = this.sessionsRepository
       .createQueryBuilder('session')
       .leftJoinAndSelect('session.topics', 'topic')
       .leftJoinAndSelect('session.landingPage', 'landingPage')
       .leftJoinAndSelect('session.incentives', 'incentives')
+      .leftJoinAndSelect('session.trainer', 'primaryTrainer')
       .leftJoinAndSelect('session.trainerAssignments', 'trainerAssignments')
       .leftJoinAndSelect('trainerAssignments.trainer', 'trainer')
+      .leftJoinAndSelect('session.sessionTopics', 'sessionTopic')
+      .leftJoinAndSelect('sessionTopic.trainer', 'sessionTopicTrainer')
+      .leftJoinAndSelect('sessionTopic.topic', 'sessionTopicTopic')
       .orderBy('session.updatedAt', 'DESC');
 
     if (filters?.status) {
@@ -356,8 +371,8 @@ export class SessionsService {
       queryBuilder.andWhere('topic.id = :topicId', { topicId: filters.topicId });
     }
 
-    if (filters?.trainerId) {
-      queryBuilder.andWhere('trainerAssignments.trainerId = :trainerId', { trainerId: filters.trainerId });
+    if (filters?.trainerId !== undefined) {
+      queryBuilder.andWhere('sessionTopic.trainerId = :trainerId', { trainerId: filters.trainerId });
     }
 
     return queryBuilder.getMany();
@@ -366,7 +381,19 @@ export class SessionsService {
   async findOne(id: string): Promise<Session> {
     const session = await this.sessionsRepository.findOne({
       where: { id },
-      relations: ['topics', 'landingPage', 'incentives', 'trainerAssignments', 'contentVersions', 'agendaItems'],
+      relations: [
+        'topics',
+        'landingPage',
+        'incentives',
+        'trainer',
+        'trainerAssignments',
+        'trainerAssignments.trainer',
+        'sessionTopics',
+        'sessionTopics.trainer',
+        'sessionTopics.topic',
+        'contentVersions',
+        'agendaItems',
+      ],
     });
 
     if (!session) {
@@ -377,7 +404,12 @@ export class SessionsService {
   }
 
   async create(dto: CreateSessionDto): Promise<Session> {
-    const topicIds = this.normalizeTopicIds(dto.topicIds, dto.topicId);
+    const sessionTopicAssignments = this.normalizeSessionTopicAssignments(dto.sessionTopics);
+    const topicIds =
+      sessionTopicAssignments.length > 0
+        ? Array.from(new Set(sessionTopicAssignments.map((assignment) => assignment.topicId)))
+        : this.normalizeTopicIds(dto.topicIds, dto.topicId);
+
     const topics = await this.fetchTopicsByIds(topicIds);
 
     const incentives = dto.incentiveIds?.length
@@ -390,7 +422,6 @@ export class SessionsService {
       objective: dto.objective,
       status: dto.status ?? SessionStatus.DRAFT,
       readinessScore: dto.readinessScore ?? 0,
-      topics,
       incentives,
     });
 
@@ -426,62 +457,43 @@ export class SessionsService {
       session.publishedAt = session.publishedAt ?? new Date();
     }
 
-    return this.sessionsRepository.save(session);
+    const saved = await this.sessionsRepository.save(session);
+
+    const assignmentsToApply =
+      sessionTopicAssignments.length > 0
+        ? sessionTopicAssignments
+        : topics.map((topic, index) => ({
+            topicId: topic.id,
+            sequenceOrder: index + 1,
+          }));
+
+    if (assignmentsToApply.length > 0) {
+      await this.applySessionTopicAssignments(saved, assignmentsToApply);
+    }
+
+    return this.findOne(saved.id);
   }
 
   async update(id: string, dto: UpdateSessionDto): Promise<Session> {
     const session = await this.findOne(id);
     const previousStatus = session.status;
+    const sessionTopicAssignments = this.normalizeSessionTopicAssignments(dto.sessionTopics);
 
-    if (dto.topicIds !== undefined) {
+    let topicsForAssignment: Topic[] | null = null;
+
+    if (sessionTopicAssignments.length > 0) {
+      const normalizedIds = Array.from(new Set(sessionTopicAssignments.map((assignment) => assignment.topicId)));
+      topicsForAssignment = await this.fetchTopicsByIds(normalizedIds);
+    } else if (dto.topicIds !== undefined) {
       const normalizedIds = this.normalizeTopicIds(dto.topicIds);
-      session.topics = await this.fetchTopicsByIds(normalizedIds);
+      topicsForAssignment = await this.fetchTopicsByIds(normalizedIds);
     } else if (dto.topicId !== undefined) {
       const normalizedIds = this.normalizeTopicIds(undefined, dto.topicId);
-      session.topics = await this.fetchTopicsByIds(normalizedIds);
+      topicsForAssignment = await this.fetchTopicsByIds(normalizedIds);
     }
 
     if (dto.incentiveIds) {
       session.incentives = await this.incentivesRepository.find({ where: { id: In(dto.incentiveIds) } });
-    }
-
-    if (dto.trainerIds) {
-      try {
-        // Handle trainer assignments
-        if (dto.trainerIds.length === 0) {
-          // Remove all existing trainer assignments
-          await this.trainerAssignmentsRepository.delete({ session: { id } });
-          session.trainerAssignments = [];
-        } else {
-          // Get the trainers
-          const trainers = await this.trainersRepository.find({
-            where: { id: In(dto.trainerIds) }
-          });
-
-          if (trainers.length > 0) {
-            // Remove existing assignments for this session
-            await this.trainerAssignmentsRepository.delete({ session: { id } });
-
-            // Create new assignments
-            const newAssignments = trainers.map((trainer, index) => {
-              const assignment = this.trainerAssignmentsRepository.create({
-                session,
-                trainer,
-                role: index === 0 ? TrainerAssignmentRole.FACILITATOR : TrainerAssignmentRole.ASSISTANT,
-                status: TrainerAssignmentStatus.PENDING,
-                assignedAt: new Date(),
-              });
-              return assignment;
-            });
-
-            session.trainerAssignments = await this.trainerAssignmentsRepository.save(newAssignments);
-          }
-        }
-      } catch (error) {
-        this.logger.error(`Error handling trainer assignments for session ${id}:`, error);
-        // Don't fail the entire update if trainer assignments fail
-        // Just log the error and continue
-      }
     }
 
     if (dto.title !== undefined) session.title = dto.title;
@@ -527,11 +539,25 @@ export class SessionsService {
 
     const saved = await this.sessionsRepository.save(session);
 
+    let assignmentsToApply: NormalizedSessionTopicAssignment[] | null = null;
+    if (sessionTopicAssignments.length > 0) {
+      assignmentsToApply = sessionTopicAssignments;
+    } else if (dto.topicIds !== undefined || dto.topicId !== undefined) {
+      assignmentsToApply = (topicsForAssignment ?? []).map((topic, index) => ({
+        topicId: topic.id,
+        sequenceOrder: index + 1,
+      }));
+    }
+
+    if (assignmentsToApply !== null) {
+      await this.applySessionTopicAssignments(saved, assignmentsToApply);
+    }
+
     if (readiness) {
       await this.recordStatusTransition(saved, previousStatus, readiness);
     }
 
-    return saved;
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
@@ -544,16 +570,8 @@ export class SessionsService {
       return { deleted: 0 };
     }
 
-    const sessions = await this.sessionsRepository.find({
-      where: { id: In(sessionIds) },
-    });
-
-    if (sessions.length === 0) {
-      return { deleted: 0 };
-    }
-
-    await this.sessionsRepository.remove(sessions);
-    return { deleted: sessions.length };
+    const result = await this.sessionsRepository.delete(sessionIds);
+    return { deleted: result.affected || 0 };
   }
 
   async createContentVersion(sessionId: string, payload: CreateContentVersionDto) {
@@ -602,6 +620,173 @@ export class SessionsService {
     }
 
     return orderedTopics;
+  }
+
+  private normalizeSessionTopicAssignments(
+    assignments?: SessionTopicAssignmentDto[] | null,
+  ): NormalizedSessionTopicAssignment[] {
+    if (!Array.isArray(assignments) || assignments.length === 0) {
+      return [];
+    }
+
+    const uniqueByTopic = new Map<number, NormalizedSessionTopicAssignment>();
+
+    for (const assignment of assignments) {
+      if (!assignment || typeof assignment.topicId !== 'number' || Number.isNaN(assignment.topicId)) {
+        continue;
+      }
+
+      const cleanedNotes =
+        typeof assignment.notes === 'string' && assignment.notes.trim().length > 0
+          ? assignment.notes.trim()
+          : undefined;
+
+      const normalized: NormalizedSessionTopicAssignment = {
+        topicId: assignment.topicId,
+        sequenceOrder:
+          typeof assignment.sequenceOrder === 'number' && assignment.sequenceOrder > 0
+            ? Math.floor(assignment.sequenceOrder)
+            : Number.MAX_SAFE_INTEGER,
+        durationMinutes:
+          typeof assignment.durationMinutes === 'number' && assignment.durationMinutes >= 0
+            ? Math.round(assignment.durationMinutes)
+            : undefined,
+        trainerId:
+          typeof assignment.trainerId === 'number' && !Number.isNaN(assignment.trainerId)
+            ? assignment.trainerId
+            : undefined,
+        notes: cleanedNotes,
+      };
+
+      uniqueByTopic.set(normalized.topicId, normalized);
+    }
+
+    const normalizedAssignments = Array.from(uniqueByTopic.values());
+    normalizedAssignments.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+
+    return normalizedAssignments.map((assignment, index) => ({
+      ...assignment,
+      sequenceOrder: index + 1,
+    }));
+  }
+
+  private async applySessionTopicAssignments(
+    session: Session,
+    assignments: NormalizedSessionTopicAssignment[],
+  ): Promise<void> {
+    await this.sessionTopicsRepository
+      .createQueryBuilder()
+      .delete()
+      .where('sessionId = :sessionId', { sessionId: session.id })
+      .execute();
+
+    let primaryTrainerId: number | null = null;
+
+    if (assignments.length === 0) {
+      await this.sessionsRepository.update(session.id, { trainerId: null });
+      session.trainerId = null;
+      session.sessionTopics = [];
+      await this.syncSessionTrainerAssignments(session, assignments);
+      return;
+    }
+
+    const trainerIds = Array.from(
+      new Set(
+        assignments
+          .map((assignment) => assignment.trainerId)
+          .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value)),
+      ),
+    );
+
+    const validTrainerIds = new Set<number>();
+    if (trainerIds.length > 0) {
+      const trainers = await this.trainersRepository.find({ where: { id: In(trainerIds) } });
+      trainers.forEach((trainer) => validTrainerIds.add(trainer.id));
+
+      for (const trainerId of trainerIds) {
+        if (!validTrainerIds.has(trainerId)) {
+          this.logger.warn(`Trainer ${trainerId} not found while assigning to session ${session.id}`);
+        }
+      }
+    }
+
+    const sessionTopicEntities = assignments.map((assignment) =>
+      this.sessionTopicsRepository.create({
+        sessionId: session.id,
+        topicId: assignment.topicId,
+        sequenceOrder: assignment.sequenceOrder,
+        durationMinutes: assignment.durationMinutes ?? null,
+        trainerId:
+          assignment.trainerId !== undefined && validTrainerIds.has(assignment.trainerId)
+            ? assignment.trainerId
+            : null,
+        notes: assignment.notes ?? null,
+      }),
+    );
+
+    const firstValidTrainer = assignments.find(
+      (assignment) => assignment.trainerId !== undefined && validTrainerIds.has(assignment.trainerId),
+    );
+    primaryTrainerId = firstValidTrainer?.trainerId ?? null;
+
+    await this.sessionsRepository.update(session.id, { trainerId: primaryTrainerId });
+    session.trainerId = primaryTrainerId ?? undefined;
+
+    if (sessionTopicEntities.length > 0) {
+      const persistedSessionTopics = await this.sessionTopicsRepository.save(sessionTopicEntities);
+      session.sessionTopics = persistedSessionTopics;
+    } else {
+      session.sessionTopics = [];
+    }
+
+    await this.syncSessionTrainerAssignments(session, assignments);
+  }
+
+  private async syncSessionTrainerAssignments(
+    session: Session,
+    assignments: NormalizedSessionTopicAssignment[],
+  ): Promise<void> {
+    try {
+      const trainerIdsInAssignments = assignments
+        .map((assignment) => assignment.trainerId)
+        .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value));
+
+      if (trainerIdsInAssignments.length === 0) {
+        await this.trainerAssignmentsRepository.delete({ session: { id: session.id } });
+        return;
+      }
+
+      const uniqueTrainerIds = trainerIdsInAssignments.filter((id, index, array) => array.indexOf(id) === index);
+
+      const trainers = await this.trainersRepository.find({ where: { id: In(uniqueTrainerIds) } });
+      const trainersById = new Map(trainers.map((trainer) => [trainer.id, trainer]));
+
+      await this.trainerAssignmentsRepository.delete({ session: { id: session.id } });
+
+      const newAssignments = uniqueTrainerIds
+        .map((trainerId, index) => {
+          const trainer = trainersById.get(trainerId);
+          if (!trainer) {
+            this.logger.warn(`Unable to sync trainer assignment for session ${session.id}: trainer ${trainerId} not found`);
+            return null;
+          }
+
+          return this.trainerAssignmentsRepository.create({
+            session,
+            trainer,
+            role: index === 0 ? TrainerAssignmentRole.FACILITATOR : TrainerAssignmentRole.ASSISTANT,
+            status: TrainerAssignmentStatus.PENDING,
+            assignedAt: new Date(),
+          });
+        })
+        .filter((assignment): assignment is TrainerAssignment => assignment !== null);
+
+      if (newAssignments.length > 0) {
+        await this.trainerAssignmentsRepository.save(newAssignments);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to sync trainer assignments for session ${session.id}:`, error);
+    }
   }
 
   private async findMatchingTopics(sections: TopicAwareSection[]): Promise<TopicReference[]> {
@@ -2213,6 +2398,7 @@ export class SessionsService {
 
   private async associateTopicsWithSession(session: Session, sessionTopics: ImportSessionTopicDto[]): Promise<void> {
     const topicIds: number[] = [];
+    const rawAssignments: SessionTopicAssignmentDto[] = [];
     const seenIds = new Set<number>();
     const errors: string[] = [];
 
@@ -2251,6 +2437,13 @@ export class SessionsService {
         if (!seenIds.has(topic.id)) {
           seenIds.add(topic.id);
           topicIds.push(topic.id);
+          rawAssignments.push({
+            topicId: topic.id,
+            sequenceOrder: sessionTopic.sequenceOrder ?? rawAssignments.length + 1,
+            durationMinutes: sessionTopic.durationMinutes,
+            trainerId: sessionTopic.trainerId,
+            notes: sessionTopic.notes,
+          });
         }
       } catch (error: any) {
         const message = error?.message ?? 'Unknown error';
@@ -2260,14 +2453,28 @@ export class SessionsService {
       }
     }
 
-    // Update the session's topic relationship
+    // Fetch topics for assignment without setting them on the session
+    let fetchedTopics: Topic[] = [];
     try {
-      session.topics = await this.fetchTopicsByIds(topicIds);
+      fetchedTopics = await this.fetchTopicsByIds(topicIds);
     } catch (error: any) {
       const message = error?.message ?? 'Unknown error';
-      errors.push(`Error updating session topic relationship: ${message}`);
-      this.logger.error(`Error updating topic relationship for session "${session.title}": ${message}`);
+      errors.push(`Error fetching topics: ${message}`);
+      this.logger.error(`Error fetching topics for session "${session.title}": ${message}`);
     }
+
+    const normalizedAssignments = this.normalizeSessionTopicAssignments(rawAssignments);
+    const assignmentsToApply =
+      normalizedAssignments.length > 0
+        ? normalizedAssignments
+        : fetchedTopics.length > 0
+          ? fetchedTopics.map((topic, index) => ({
+              topicId: topic.id,
+              sequenceOrder: index + 1,
+            }))
+          : [];
+
+    await this.applySessionTopicAssignments(session, assignmentsToApply);
 
     // Log any errors that occurred during topic association
     if (errors.length > 0) {
@@ -2283,7 +2490,18 @@ export class SessionsService {
 
     const sessions = await this.sessionsRepository.find({
       where: { id: In(sessionIds) },
-      relations: ['contentVersions', 'agendaItems', 'trainerAssignments', 'landingPage', 'incentives'],
+      relations: [
+        'contentVersions',
+        'agendaItems',
+        'trainer',
+        'trainerAssignments',
+        'trainerAssignments.trainer',
+        'sessionTopics',
+        'sessionTopics.trainer',
+        'sessionTopics.topic',
+        'landingPage',
+        'incentives',
+      ],
     });
     console.log('Backend service - found sessions:', sessions.map(s => ({ id: s.id, currentStatus: s.status })));
 
@@ -2343,7 +2561,18 @@ export class SessionsService {
 
     const sessions = await this.sessionsRepository.find({
       where: { id: In(sessionIds) },
-      relations: ['contentVersions', 'agendaItems', 'trainerAssignments', 'landingPage', 'incentives'],
+      relations: [
+        'contentVersions',
+        'agendaItems',
+        'trainer',
+        'trainerAssignments',
+        'trainerAssignments.trainer',
+        'sessionTopics',
+        'sessionTopics.trainer',
+        'sessionTopics.topic',
+        'landingPage',
+        'incentives',
+      ],
     });
     console.log('Backend service - found sessions for publish:', sessions.map(s => ({ id: s.id, status: s.status, readinessScore: s.readinessScore })));
 

@@ -105,6 +105,28 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
     return session.topics.map(topic => topic.name).join(', ');
   };
 
+  const getAssignedTrainersSummary = () => {
+    const sessionTopics = session.sessionTopics ?? [];
+    if (sessionTopics.length === 0) {
+      return 'Not assigned';
+    }
+
+    const uniqueTrainerIds = Array.from(
+      new Set(
+        sessionTopics
+          .map(topic => topic.trainerId)
+          .filter((id): id is number => typeof id === 'number' && !Number.isNaN(id)),
+      ),
+    );
+
+    if (uniqueTrainerIds.length === 0) {
+      return 'Not assigned';
+    }
+
+    const names = uniqueTrainerIds.map(getTrainerName);
+    return names.join(', ');
+  };
+
   const renderAIContent = () => {
     if (!session.aiGeneratedContent) return null;
 
@@ -311,13 +333,13 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
               </div>
             </div>
 
-            {/* Trainer */}
+            {/* Trainers */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Trainer
+                Assigned Trainers
               </label>
               <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-gray-900">
-                {getTrainerName(session.trainerId)}
+                {getAssignedTrainersSummary()}
               </div>
             </div>
           </div>
