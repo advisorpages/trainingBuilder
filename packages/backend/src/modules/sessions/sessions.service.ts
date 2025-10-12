@@ -886,9 +886,10 @@ export class SessionsService {
       }
     } else if (useOpenAI && aiOutline) {
       // Convert OpenAI response to our format
-      sections = aiOutline.sections.map((section: any, index: number) => ({
+      const aiSections = Array.isArray(aiOutline.sections) ? aiOutline.sections : [];
+      sections = aiSections.map((section: any, index: number) => ({
         id: `ai-${now.getTime()}-${index}`,
-        type: this.mapSectionType(section.title, index),
+        type: this.mapSectionType(section.title, index, aiSections.length),
         position: index,
         title: section.title,
         duration: section.duration,
@@ -1099,9 +1100,10 @@ export class SessionsService {
     closing: OutlineSectionContent;
   } {
     const userTopics = payload.topics ?? [];
-    const aiSectionsWithTypes = (aiSections ?? []).map((section, index) => ({
+    const resolvedAISections = Array.isArray(aiSections) ? aiSections : [];
+    const aiSectionsWithTypes = resolvedAISections.map((section, index) => ({
       data: section,
-      type: this.mapSectionType(section.title ?? '', index),
+      type: this.mapSectionType(section.title ?? '', index, resolvedAISections.length),
     }));
 
     const openerCandidate = aiSectionsWithTypes.find(item => item.type === 'opener')?.data;
@@ -1119,14 +1121,39 @@ export class SessionsService {
           ? Math.round(topic.durationMinutes)
           : fallbackTopicDuration;
 
+      const userLearningObjectives = this.extractBulletList(topic.learningOutcomes);
+      const userTrainerTasks = this.extractBulletList(topic.trainerNotes);
+      const userMaterialsNeeded = this.extractBulletList(topic.materialsNeeded);
+      const userDeliveryGuidance = typeof topic.deliveryGuidance === 'string' ? topic.deliveryGuidance.trim() : '';
+      const userCallToAction = typeof topic.callToAction === 'string' ? topic.callToAction.trim() : '';
+
+      let description = this.mergeTopicDescription(aiTopic?.description, topic.description, topic.title, payload);
+
+      const supplementalDetails: string[] = [];
+      if (userDeliveryGuidance) {
+        supplementalDetails.push(`Delivery Tip: ${userDeliveryGuidance}`);
+      }
+      if (userCallToAction) {
+        supplementalDetails.push(`Call to Action: ${userCallToAction}`);
+      }
+      if (supplementalDetails.length) {
+        description = `${description}\n\n${supplementalDetails.join('\n')}`;
+      }
+
       return {
         type: 'topic',
         title: this.selectSectionTitle(aiTopic?.title, topic.title),
-        description: this.mergeTopicDescription(aiTopic?.description, topic.description, topic.title, payload),
+        description,
         duration: Math.max(1, durationMinutes),
-        learningObjectives: this.normalizeStringArray(aiTopic?.learningObjectives),
-        suggestedActivities: this.normalizeStringArray(aiTopic?.suggestedActivities),
-        materialsNeeded: this.normalizeStringArray(aiTopic?.materialsNeeded),
+        learningObjectives: userLearningObjectives.length
+          ? userLearningObjectives
+          : this.normalizeStringArray(aiTopic?.learningObjectives),
+        suggestedActivities: userTrainerTasks.length
+          ? userTrainerTasks
+          : this.normalizeStringArray(aiTopic?.suggestedActivities),
+        materialsNeeded: userMaterialsNeeded.length
+          ? userMaterialsNeeded
+          : this.normalizeStringArray(aiTopic?.materialsNeeded),
       };
     });
 
@@ -1263,14 +1290,32 @@ export class SessionsService {
     return cleaned.length > 0 ? cleaned : undefined;
   }
 
-  private mapSectionType(title: string, index: number): SectionType {
-    const titleLower = title.toLowerCase();
+  private extractBulletList(input?: string | null): string[] {
+    if (!input || !input.trim()) {
+      return [];
+    }
 
-    if (titleLower.includes('welcome') || titleLower.includes('intro') || titleLower.includes('opening') || index === 0) {
+    return input
+      .split(/\r?\n/)
+      .map(line => line.replace(/^[-*•\s]+/, '').trim())
+      .filter(Boolean);
+  }
+
+  private mapSectionType(title: string | undefined, index: number, totalSections?: number): SectionType {
+    const titleLower = (title ?? '').toLowerCase();
+    const effectiveTotal = typeof totalSections === 'number' && totalSections > 0 ? totalSections : undefined;
+
+    if (index === 0 || titleLower.includes('welcome') || titleLower.includes('intro') || titleLower.includes('opening')) {
       return 'opener';
     }
 
-    if (titleLower.includes('closing') || titleLower.includes('wrap') || titleLower.includes('conclusion') || titleLower.includes('commitment')) {
+    const hasClosingKeyword =
+      titleLower.includes('closing') ||
+      titleLower.includes('wrap') ||
+      titleLower.includes('conclusion') ||
+      titleLower.includes('commitment');
+
+    if (hasClosingKeyword && (effectiveTotal === undefined || index === effectiveTotal - 1)) {
       return 'closing';
     }
 
@@ -2928,15 +2973,16 @@ export class SessionsService {
     if (userTopics.length > 0) {
       sections = this.buildFlexibleSectionsFromUserTopics(payload, aiOutline.sections, duration);
     } else {
-      sections = aiOutline.sections.map(
+      const aiSections = Array.isArray(aiOutline.sections) ? aiOutline.sections : [];
+      sections = aiSections.map(
         (section: any, index: number): FlexibleSessionSection => ({
           id: `ai-${Date.now()}-${meta.index}-${index}`,
-          type: this.mapSectionType(section.title, index),
+          type: this.mapSectionType(section.title, index, aiSections.length),
           position: index,
           title: typeof section.title === 'string' ? section.title : `Section ${index + 1}`,
           duration: typeof section.duration === 'number' && Number.isFinite(section.duration)
             ? Math.max(1, Math.round(section.duration))
-            : Math.max(5, Math.round(duration / Math.max(1, aiOutline.sections.length))),
+            : Math.max(5, Math.round(duration / Math.max(1, aiSections.length))),
           description: typeof section.description === 'string' ? section.description : '',
           learningObjectives: Array.isArray(section.learningObjectives) ? section.learningObjectives : [],
           suggestedActivities: Array.isArray(section.suggestedActivities) ? section.suggestedActivities : [],

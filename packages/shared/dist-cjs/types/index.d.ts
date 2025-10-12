@@ -60,7 +60,7 @@ export interface Session {
     audience?: Audience;
     tone?: Tone;
     category?: Category;
-    topics: Topic[];
+    topics?: Topic[];
 }
 export declare enum SessionStatus {
     DRAFT = "draft",
@@ -108,14 +108,12 @@ export interface Location {
 }
 export interface Trainer {
     id: number;
-    firstName: string;
-    lastName: string;
     name: string;
-    email?: string;
+    email: string;
     bio?: string;
-    expertise?: string;
-    specialization?: string;
-    specializations?: string[];
+    phone?: string;
+    expertiseTags?: string[];
+    timezone?: string;
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -141,14 +139,14 @@ export interface Topic {
     id: number;
     name: string;
     description?: string;
-    aiGeneratedContent?: object;
+    aiGeneratedContent?: TopicAIContent | null;
     learningOutcomes?: string;
     trainerNotes?: string;
     materialsNeeded?: string;
     deliveryGuidance?: string;
     isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: Date | string;
+    updatedAt: Date | string;
     sessions?: Session[];
 }
 export declare enum AudienceExperienceLevel {
@@ -327,6 +325,7 @@ export interface TopicAIContent {
             assessmentSuggestions?: string[];
         };
         enhancedDescription: string;
+        callToAction: string;
     };
     userModifications?: {
         modifiedFields: string[];
@@ -342,6 +341,7 @@ export interface TopicEnhancementResponse {
         trainerNotes: string;
         materialsNeeded: string;
         deliveryGuidance: string;
+        callToAction: string;
     };
     aiContent: TopicAIContent;
     prompt?: string;

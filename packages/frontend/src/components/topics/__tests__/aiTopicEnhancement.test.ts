@@ -108,8 +108,13 @@ describe('AI Topic Enhancement', () => {
             'Participants taking sides',
             'Emotional responses',
           ],
+          assessmentSuggestions: [
+            'Peer debrief',
+            'Action plan review',
+          ],
         },
         enhancedDescription: 'Comprehensive dual-purpose description...',
+        callToAction: 'Reserve your seat to practice conflict resolution skills with real scenarios.',
       },
     };
 
@@ -124,27 +129,34 @@ describe('AI Topic Enhancement', () => {
     it('should extract trainer notes correctly', () => {
       const trainerNotes = aiTopicService.extractTrainerNotes(mockAIContent);
 
-      expect(trainerNotes).toContain('Review company HR policies');
-      expect(trainerNotes).toContain('Key Teaching Points:');
-      expect(trainerNotes).toContain('• Active listening techniques');
-      expect(trainerNotes).toContain('• Neutral facilitation methods');
+      expect(trainerNotes).toContain('• Review company HR policies');
+      expect(trainerNotes).toContain('• Role-playing scenarios');
+      expect(trainerNotes).toContain('• Emphasize: Active listening techniques');
+      expect(trainerNotes).toContain('• Watch for: Participants taking sides');
     });
 
     it('should extract materials needed correctly', () => {
       const materials = aiTopicService.extractMaterialsNeeded(mockAIContent);
 
-      expect(materials).toContain('Scenario cards');
-      expect(materials).toContain('Flip chart paper');
-      expect(materials).toContain('Reference handouts');
+      expect(materials).toContain('• Scenario cards');
+      expect(materials).toContain('• Flip chart paper');
+      expect(materials).toContain('• Reference handouts');
     });
 
     it('should extract delivery guidance correctly', () => {
       const guidance = aiTopicService.extractDeliveryGuidance(mockAIContent);
 
       expect(guidance).toContain('Interactive workshop with role-playing');
+      expect(guidance).toContain('Assessment Suggestions:');
+      expect(guidance).toContain('• Peer debrief');
       expect(guidance).toContain('Recommended Activities:');
       expect(guidance).toContain('• Role-playing scenarios');
       expect(guidance).toContain('• Case study analysis');
+    });
+
+    it('should extract call to action correctly', () => {
+      const cta = aiTopicService.extractCallToAction(mockAIContent);
+      expect(cta).toContain('Reserve your seat');
     });
   });
 
@@ -163,7 +175,11 @@ describe('AI Topic Enhancement', () => {
           keyTeachingPoints: ['Point 1', 'Point 2'],
           recommendedActivities: ['Activity 1', 'Activity 2'],
           materialsNeeded: ['Material 1', 'Material 2'],
+          commonChallenges: ['Challenge 1'],
+          assessmentSuggestions: ['Assessment 1'],
         },
+        enhancedDescription: 'Detailed description',
+        callToAction: 'Sign up today',
       });
 
       const isValid = aiTopicService.validateAIResponse(validResponse);

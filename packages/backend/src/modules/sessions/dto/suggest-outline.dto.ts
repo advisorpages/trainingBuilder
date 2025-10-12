@@ -13,6 +13,30 @@ export class TopicDto {
   @IsNumber()
   @Min(1)
   durationMinutes: number;
+
+  @IsOptional()
+  @IsString()
+  learningOutcomes?: string;
+
+  @IsOptional()
+  @IsString()
+  trainerNotes?: string;
+
+  @IsOptional()
+  @IsString()
+  materialsNeeded?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryGuidance?: string;
+
+  @IsOptional()
+  @IsString()
+  callToAction?: string;
+
+  @IsOptional()
+  @IsNumber()
+  topicId?: number;
 }
 
 export enum SuggestedSessionType {
@@ -111,6 +135,7 @@ export interface TopicReference {
   trainerNotes?: string;
   materialsNeeded?: string;
   deliveryGuidance?: string;
+  callToAction?: string;
   matchScore?: number; // How well this topic matches the AI-generated content
 }
 

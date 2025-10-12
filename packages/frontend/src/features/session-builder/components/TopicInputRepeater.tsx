@@ -1,33 +1,43 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/Button';
 import { TopicInput } from './TopicInput';
+import type { TopicInputValue } from './TopicInput';
 import { TopicLibraryModal } from './TopicLibraryModal';
 import { TopicSuggestion } from '../../../services/session-builder.service';
 
-interface Topic {
-  title: string;
-  description?: string;
-  durationMinutes: number;
-}
-
 interface TopicInputRepeaterProps {
-  topics: Topic[];
-  onChange: (topics: Topic[]) => void;
+  topics: TopicInputValue[];
+  onChange: (topics: TopicInputValue[]) => void;
   category?: string;
 }
 
 export const TopicInputRepeater = ({ topics, onChange, category }: TopicInputRepeaterProps) => {
   const [isLibraryOpen, setIsLibraryOpen] = React.useState(false);
 
+  const parseBulletList = (value?: string | null): string[] =>
+    (value || '')
+      .split('\n')
+      .map((item) => item.replace(/^•\s*/, '').trim())
+      .filter(Boolean);
+
+  const toBulletString = (items: string[]): string =>
+    items.length ? items.map((item) => `• ${item}`).join('\n') : '';
+
   const addTopic = () => {
     onChange([...topics, {
       title: '',
       durationMinutes: 15,
-      description: undefined
+      description: undefined,
+      trainerNotes: '',
+      learningOutcomes: '',
+      materialsNeeded: '',
+      deliveryGuidance: '',
+      callToAction: '',
+      topicId: undefined,
     }]);
   };
 
-  const updateTopic = (index: number, updatedTopic: Topic) => {
+  const updateTopic = (index: number, updatedTopic: TopicInputValue) => {
     const newTopics = [...topics];
     newTopics[index] = updatedTopic;
     onChange(newTopics);
@@ -44,19 +54,25 @@ export const TopicInputRepeater = ({ topics, onChange, category }: TopicInputRep
       topic => topic.title.trim().toLowerCase() === normalizedName,
     );
 
-    const descriptionParts = [
-      libraryTopic.description,
-      libraryTopic.learningOutcomes,
-      libraryTopic.trainerNotes,
-    ].filter(Boolean);
-
-    const combinedDescription = descriptionParts.join('\n\n');
     const duration = Math.max(5, Math.round((libraryTopic.defaultDurationMinutes ?? 30) / 5) * 5);
 
-    const topicData: Topic = {
+    const trainerTasksList = parseBulletList(libraryTopic.trainerNotes);
+    const materialsList = parseBulletList(libraryTopic.materialsNeeded);
+
+    const topicData: TopicInputValue = {
       title: libraryTopic.name,
-      description: combinedDescription || undefined,
+      description: libraryTopic.description || undefined,
       durationMinutes: duration,
+      learningOutcomes: libraryTopic.learningOutcomes || '',
+      trainerNotes: trainerTasksList.length
+        ? toBulletString(trainerTasksList)
+        : (libraryTopic.trainerNotes || ''),
+      materialsNeeded: materialsList.length
+        ? toBulletString(materialsList)
+        : (libraryTopic.materialsNeeded || ''),
+      deliveryGuidance: libraryTopic.deliveryGuidance || '',
+      callToAction: libraryTopic.aiGeneratedContent?.enhancedContent?.callToAction || '',
+      topicId: libraryTopic.id,
     };
 
     if (existingIndex >= 0) {

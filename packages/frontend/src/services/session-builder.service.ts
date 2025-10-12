@@ -14,6 +14,12 @@ export interface SessionBuilderInput {
     title: string;
     description?: string;
     durationMinutes: number;
+    learningOutcomes?: string;
+    trainerNotes?: string;
+    materialsNeeded?: string;
+    deliveryGuidance?: string;
+    callToAction?: string;
+    topicId?: number;
   }>;
   date: string;
   startTime: string;
@@ -248,6 +254,12 @@ export interface TopicSuggestion {
   materialsNeeded?: string;
   deliveryGuidance?: string;
   defaultDurationMinutes?: number;
+  aiGeneratedContent?: {
+    enhancedContent?: {
+      callToAction?: string;
+    };
+    [key: string]: any;
+  } | null;
 }
 
 export interface BuilderAutosavePayload {
@@ -687,6 +699,10 @@ export class SessionBuilderService {
       aiGeneratedContent.defaultDurationMinutes = section.duration;
     }
 
+    if (typeof section.position === 'number' && !Number.isNaN(section.position)) {
+      aiGeneratedContent.sectionPosition = section.position;
+    }
+
     if (Array.isArray(section.learningObjectives) && section.learningObjectives.length > 0) {
       aiGeneratedContent.learningObjectives = section.learningObjectives;
     }
@@ -801,10 +817,11 @@ export class SessionBuilderService {
       }
     }
 
-    // THEN: Process topics from outline sections (as before)
-    const topicSections = outline?.sections?.filter((section) => section.type === 'topic') || [];
+    // THEN: Process ALL sections from outline (opener, closing, topic, exercise, etc.)
+    // Each section will be converted to a topic with metadata indicating its section type
+    const allSections = outline?.sections || [];
 
-    for (const section of topicSections) {
+    for (const section of allSections) {
       const payload = this.buildTopicPayload(section, categoryName);
       if (!payload) {
         continue;

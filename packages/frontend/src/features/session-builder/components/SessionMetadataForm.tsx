@@ -73,6 +73,8 @@ const generateTestData = (): SessionMetadata => {
   };
 };
 
+const bulletify = (lines: string[]) => lines.map(line => `• ${line}`).join('\n');
+
 const generateTestDataWithTopics = (): SessionMetadata => {
   const base = generateTestData();
   const today = new Date();
@@ -97,16 +99,114 @@ const generateTestDataWithTopics = (): SessionMetadata => {
         title: 'Investment Basics Refresher',
         description: 'Review core investment concepts, mutual fund structures, fee types, and how funds fit into diversified portfolios.',
         durationMinutes: 30,
+        learningOutcomes: 'Revisit the core terms and fund types before we dive into client conversations.',
+        trainerNotes: bulletify([
+          'Kick off with a quick “explain it to a friend” warm-up.',
+          'Summarize the three categories of mutual funds.',
+          'Highlight one real-life fund example from our current portfolio.',
+        ]),
+        materialsNeeded: bulletify(['Slide deck with definitions', 'Quick reference handout']),
+        deliveryGuidance: 'Use visuals to keep the pace lively and check for understanding every 10 minutes.',
+        callToAction: 'Ask each advisor to note one fund they want to recommend this week.',
       },
       {
         title: 'Applying Mutual Funds to Client Scenarios',
         description: 'Map investor profiles to mutual fund categories, practice suitability conversations, and surface compliance guardrails.',
         durationMinutes: 30,
+        learningOutcomes: 'Practice matching different investor goals to the right fund story.',
+        trainerNotes: bulletify([
+          'Run the “client profile” matching activity in pairs.',
+          'Model how to explain risk with plain-language comparisons.',
+          'Pause after each scenario to surface compliance reminders.',
+        ]),
+        materialsNeeded: bulletify(['Client persona cards', 'Suitability checklist']),
+        deliveryGuidance: 'Keep discussions tight—limit each scenario to five minutes.',
+        callToAction: 'Have each advisor jot down a follow-up question to ask their next client.',
       },
       {
         title: 'Pitching and Closing Playbook',
         description: 'Build confidence handling objections, reinforce next-step commitments, and workshop closing language that drives conversions.',
         durationMinutes: 30,
+        learningOutcomes: 'Give advisors a simple script to close with confidence.',
+        trainerNotes: bulletify([
+          'Role-play a “last-minute objection” with volunteers.',
+          'Capture winning phrases on the board.',
+          'End with a personal commitment share-out.',
+        ]),
+        materialsNeeded: bulletify(['Whiteboard markers', 'Objection flashcards']),
+        deliveryGuidance: 'Keep energy high by rotating speakers quickly.',
+        callToAction: 'Challenge advisors to try the new close on their next prospect call.',
+      },
+    ],
+  };
+};
+
+const generateRecruitingAgentsData = (): SessionMetadata => {
+  const today = new Date();
+  const startTime = new Date(today);
+  startTime.setHours(13, 0, 0, 0);
+  const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
+
+  return {
+    title: 'Recruiting Rockstar Agents',
+    sessionType: 'workshop',
+    category: 'Professional Skills',
+    categoryId: 2,
+    desiredOutcome: 'Leaders can confidently pitch our agency, host discovery chats, and sign two qualified agents within 30 days.',
+    currentProblem: 'Team leads rely on referrals only and feel unprepared to search for new, motivated agents.',
+    specificTopics: 'Share the agency story, spot high-potential candidates, run engaging discovery calls, follow up fast',
+    startDate: today.toISOString().slice(0, 10),
+    startTime: startTime.toISOString(),
+    endTime: endTime.toISOString(),
+    timezone: 'America/New_York',
+    location: 'Main Conference Room',
+    locationId: 1,
+    audienceId: 3,
+    audienceName: 'Sales Team Leaders',
+    toneId: 2,
+    toneName: 'Inspiring',
+    topics: [
+      {
+        title: 'Start With Our Story',
+        description: 'Simple talking points that hook new agents and show why our team wins.',
+        durationMinutes: 25,
+        learningOutcomes: 'Leaders can share a three-minute story that makes candidates curious.',
+        trainerNotes: bulletify([
+          'Play a quick “why I joined” reel from current agents.',
+          'Break down the story formula: hook, proof, invite.',
+          'Have leaders practice the story in pairs with a timer.',
+        ]),
+        materialsNeeded: bulletify(['Story one-pager', 'Timer app']),
+        deliveryGuidance: 'Keep the practice rounds short; aim for two quick rotations.',
+        callToAction: 'Ask each leader to schedule one story call this week.',
+      },
+      {
+        title: 'Find Great Agent Leads',
+        description: 'Hands-on look at sourcing tactics: social media, local events, and partner shout-outs.',
+        durationMinutes: 30,
+        learningOutcomes: 'Leaders leave with a simple weekly plan to reach new prospects.',
+        trainerNotes: bulletify([
+          'Review the three-channel prospecting cheat sheet.',
+          'Walk the group through a live LinkedIn search.',
+          'Build a “10 names in 10 minutes” action list.',
+        ]),
+        materialsNeeded: bulletify(['Prospecting worksheet', 'Sample messaging templates']),
+        deliveryGuidance: 'Encourage leaders to share what’s already working before covering new tactics.',
+        callToAction: 'Leaders pick one new recruiting channel to test this month.',
+      },
+      {
+        title: 'Nail the Discovery Call',
+        description: 'Structure, questions, and confident next steps that convert strong candidates.',
+        durationMinutes: 35,
+        learningOutcomes: 'Leaders can run a 20-minute discovery call that ends with a clear yes or next step.',
+        trainerNotes: bulletify([
+          'Demo a discovery call with an assistant trainer.',
+          'Highlight the must-ask questions on the worksheet.',
+          'Run mini role-plays and give quick feedback.',
+        ]),
+        materialsNeeded: bulletify(['Discovery call script', 'Objection flashcards', 'Checklist handout']),
+        deliveryGuidance: 'Keep the role-plays high energy; cycle pairs quickly to maintain focus.',
+        callToAction: 'Challenge leaders to book three discovery calls and log results in the tracker.',
       },
     ],
   };
@@ -133,6 +233,111 @@ const getFieldValidation = (
     errorMessage: isRequired && isEmpty ? `${field} is required` : '',
   };
 };
+
+const structureTemplates: Array<{
+  id: string;
+  name: string;
+  description: string;
+  topics: SessionTopicDraft[];
+}> = [
+  {
+    id: 'workshop-3-block',
+    name: '3-Block Workshop (90 min)',
+    description: 'Open strong, teach new ideas, then apply them before wrapping.',
+    topics: [
+      {
+        title: 'Kick-off & Focus',
+        description: 'Warm the room, name the session promise, and surface what attendees hope to get.',
+        durationMinutes: 15,
+        learningOutcomes: 'Set the tone and align everyone on the one big win for this session.',
+        trainerNotes: bulletify([
+          'Run a quick icebreaker tied to the session theme.',
+          'Share the session promise and write it where everyone can see.',
+          'Capture one “must solve” question from the group.',
+        ]),
+        materialsNeeded: bulletify(['Timer', 'Whiteboard or slide with promise statement']),
+        deliveryGuidance: 'Keep energy high—model the pace and tone you want for the rest of the workshop.',
+        callToAction: 'Invite everyone to write one personal goal for the next 90 minutes.',
+      },
+      {
+        title: 'Teach & Explore',
+        description: 'Walk through the core concepts with stories, visuals, or demos.',
+        durationMinutes: 40,
+        learningOutcomes: 'Participants can describe the new ideas in plain language and connect them to their day-to-day.',
+        trainerNotes: bulletify([
+          'Explain each concept and tie it to a real story or example.',
+          'Pause every 10 minutes for a “turn and teach” mini-share.',
+          'Highlight the “watch outs” your team has already faced.',
+        ]),
+        materialsNeeded: bulletify(['Slides or visual aids', 'Concept cheat sheet']),
+        deliveryGuidance: 'Keep the talk-to-interaction ratio balanced: aim for 5 minutes of teaching, then a quick engagement.',
+        callToAction: 'Ask each table to pick the idea they want to start using this week.',
+      },
+      {
+        title: 'Apply & Commit',
+        description: 'Give them time to practice and leave with a clear next step.',
+        durationMinutes: 25,
+        learningOutcomes: 'Participants walk away knowing exactly what they will do first.',
+        trainerNotes: bulletify([
+          'Run a quick practice or role-play based on real scenarios.',
+          'Guide a debrief: What worked? What needs tweaking?',
+          'Have everyone write their first action in big letters.',
+        ]),
+        materialsNeeded: bulletify(['Practice scenarios', 'Commitment cards or sticky notes']),
+        deliveryGuidance: 'Float between groups to coach; encourage concrete commitments.',
+        callToAction: 'Close by asking everyone to share their first step with a partner.',
+      },
+    ],
+  },
+  {
+    id: 'power-hour',
+    name: 'Power Hour (60 min)',
+    description: 'Fast-paced format for quick refreshers or focused coaching.',
+    topics: [
+      {
+        title: 'Set the Stage',
+        description: 'Connect to why this hour matters right now.',
+        durationMinutes: 10,
+        learningOutcomes: 'Participants know the goal for the hour and how it connects to today’s priorities.',
+        trainerNotes: bulletify([
+          'Share a quick story or metric that creates urgency.',
+          'Invite the group to name one challenge they want to solve in the next 60 minutes.',
+        ]),
+        materialsNeeded: bulletify(['Flip chart or slide with key stat']),
+        deliveryGuidance: 'Keep it tight—no more than two minutes on introductions.',
+        callToAction: 'Ask everyone to jot a “win if…” statement on a sticky note.',
+      },
+      {
+        title: 'Learn & Discuss',
+        description: 'Surface one big insight and let the room react.',
+        durationMinutes: 25,
+        learningOutcomes: 'Participants can rewrite the insight in their own words and debate its impact.',
+        trainerNotes: bulletify([
+          'Teach the insight in three points.',
+          'Open a guided discussion with two high-energy questions.',
+          'Capture top ideas on a board.',
+        ]),
+        materialsNeeded: bulletify(['Discussion prompts slide', 'Markers / virtual board']),
+        deliveryGuidance: 'Keep the conversation moving—redirect if someone dives too deep.',
+        callToAction: 'Challenge the group to pick the insight they want to defend to a sceptic tomorrow.',
+      },
+      {
+        title: 'Practice & Commit',
+        description: 'Try it on and agree on the very next micro-step.',
+        durationMinutes: 15,
+        learningOutcomes: 'Participants leave knowing exactly what they will try today.',
+        trainerNotes: bulletify([
+          'Run a paired or small-group practice round.',
+          'Share quick feedback prompts (“What landed? What would you tweak?”).',
+          'End with a two-sentence commitment share.',
+        ]),
+        materialsNeeded: bulletify(['Practice worksheet', 'Timer']),
+        deliveryGuidance: 'Keep practice rounds short—aim for two reps per person.',
+        callToAction: 'Ask everyone to text themselves their first action before they leave.',
+      },
+    ],
+  },
+];
 
 export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   metadata,
@@ -177,7 +382,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
             <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
-            Fill Test Data
+            Fill Leadership Test Data
           </Button>
           <Button
             type="button"
@@ -200,7 +405,19 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 d="M6 7h.01M18 7h.01M6 11h.01M18 11h.01M6 15h.01M18 15h.01"
               />
             </svg>
-            Fill Test Data (3 Topics)
+            Fill Sales Enablement Data
+          </Button>
+          <Button
+            type="button"
+            onClick={() => onChange(generateRecruitingAgentsData())}
+            variant="outline"
+            size="sm"
+            className="bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100 hover:border-amber-400"
+          >
+            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            Fill Recruiting Test Data
           </Button>
         </div>
       )}
@@ -209,7 +426,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
       <div className="mb-6">
         <h2 className="text-xl font-bold text-slate-900">Session Setup</h2>
         <p className="text-sm text-slate-600">
-          Configure your session details for a tailored outline
+          Fill in these basics so we can build a clear session plan.
         </p>
       </div>
 
@@ -217,8 +434,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">
-            Session Configuration
-            <span className="text-red-500 ml-1">*</span>
+            Essential session details
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -309,7 +525,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
             {/* Desired Outcome */}
             <div className="space-y-2">
               <label htmlFor="session-desired-outcome" className="text-sm font-medium text-slate-700">
-                Desired Outcome <span className="text-red-500">*</span>
+                What should people be able to do after? <span className="text-red-500">*</span>
               </label>
               <textarea
                 id="session-desired-outcome"
@@ -318,7 +534,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                   fieldErrors.desiredOutcome && 'border-red-500 focus:border-red-500'
                 )}
                 value={metadata.desiredOutcome}
-                placeholder="What should participants be able to do after this session?"
+                placeholder="Example: give clear feedback using the SBI method within 10 minutes."
                 onChange={handleStringChange('desiredOutcome')}
                 rows={3}
               />
@@ -326,63 +542,88 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 <p className="text-xs text-red-600">{fieldErrors.desiredOutcome}</p>
               )}
               <p className="text-xs text-slate-500">
-                Be specific about the skills, behaviors, or knowledge participants will gain
+                One or two sentences that describe the new action or skill.
               </p>
             </div>
 
             {/* Current Problem or Challenge */}
             <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">
-                Current Problem or Challenge
+                What problem are people facing today?
               </label>
               <textarea
                 className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 value={metadata.currentProblem}
-                placeholder="What specific challenge or problem does this session address?"
+                placeholder="Example: managers avoid hard talks because they worry about hurting morale."
                 onChange={handleStringChange('currentProblem')}
                 rows={3}
               />
               <p className="text-xs text-slate-500">
-                Describe the current situation that needs improvement (optional but recommended)
+                Optional, but it helps us suggest better stories and examples.
               </p>
             </div>
 
             {/* Specific Topics to Cover */}
             <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">
-                Specific Topics to Cover
+                List the key points to cover
               </label>
               <textarea
                 className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 value={metadata.specificTopics}
-                placeholder="List key topics, frameworks, or skills to include"
+                placeholder="Example: trust-building, root-cause questions, one-page action plans."
                 onChange={handleStringChange('specificTopics')}
                 rows={2}
               />
               <p className="text-xs text-slate-500">
-                Comma-separated list of topics, frameworks, or specific areas to focus on
+                Separate ideas with commas.
               </p>
             </div>
 
             {/* Structured Topics */}
             <div className="space-y-2 sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">
-                Structured Topics
+                Plan each topic and trainer task
               </label>
+              {structureTemplates.length > 0 && (
+                <div className="bg-slate-50 border border-slate-200 rounded-md p-4 space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Don’t want to start from scratch? Pick a structure to load sample topics and trainer tasks, then adjust anything you like.
+                  </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {structureTemplates.map((template) => (
+                      <div key={template.id} className="bg-white border border-slate-200 rounded-md p-3 space-y-2 shadow-sm">
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-900">{template.name}</h4>
+                          <p className="text-xs text-slate-600">{template.description}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onChange({ topics: template.topics })}
+                        >
+                          Use this structure
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <TopicInputRepeater
                 topics={metadata.topics || []}
                 onChange={(topics) => onChange({ topics })}
                 category={metadata.category}
               />
               <p className="text-xs text-slate-500">
-                Add individual topics with durations (rounded to 5-minute increments)
+                Add every topic, how long it takes, and what the trainer should do.
               </p>
             </div>
 
             {/* Session Tone */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Session Tone
+                How should it sound?
               </label>
               <ToneSelect
                 value={metadata.toneId ?? ''}
@@ -395,14 +636,14 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 }}
               />
               <p className="text-xs text-slate-500">
-                Optional — guide AI copy toward the right voice
+                Optional. Pick a voice to guide the wording.
               </p>
             </div>
 
             {/* Session Location */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Session Location <span className="text-red-500">*</span>
+                Where will you host it? <span className="text-red-500">*</span>
               </label>
               <LocationSelect
                 value={metadata.locationId ?? ''}
@@ -429,19 +670,19 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 <p className="text-xs text-red-600">{fieldErrors.locationId}</p>
               )}
               <p className="text-xs text-slate-500">
-                Choose an approved venue or delivery space
+                Pick an approved room, link, or meeting space.
               </p>
             </div>
 
             {/* Session Title */}
             <div className="space-y-2 sm:col-span-2">
               <label htmlFor="session-title" className="text-sm font-medium text-slate-700">
-                Session Title
+                What will you call this session?
               </label>
               <Input
                 id="session-title"
                 value={metadata.title}
-                placeholder="e.g. Coaching Through Change"
+                placeholder="Example: Coaching Through Change"
                 onChange={handleStringChange('title')}
                 className={cn(
                   fieldErrors.title && 'border-red-500 focus:border-red-500'
@@ -451,7 +692,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 <p className="text-xs text-red-600">{fieldErrors.title}</p>
               )}
               <p className="text-xs text-slate-500">
-                A clear, engaging title that describes your session
+                Keep it short, friendly, and clear.
               </p>
             </div>
           </div>
@@ -461,13 +702,13 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
       {/* Schedule & Logistics */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-semibold">Schedule & Logistics</CardTitle>
+          <CardTitle className="text-base font-semibold">When and where</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Session Date
+                Pick a date
               </label>
               <Input
                 type="date"
@@ -489,7 +730,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Start Time
+                Start time
               </label>
               <Input
                 type="time"
@@ -505,7 +746,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                End Time
+                End time
               </label>
               <Input
                 type="time"
@@ -521,7 +762,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Duration
+                How long is it?
               </label>
               <div className="h-10 flex items-center px-3 text-sm bg-slate-50 border border-slate-200 rounded-md">
                 {metadata.startTime && metadata.endTime && (
@@ -540,7 +781,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                 </svg>
-                <span className="font-medium">Session Duration:</span>
+                <span className="font-medium">Total time:</span>
                 <span>
                   {Math.round((new Date(metadata.endTime).getTime() - new Date(metadata.startTime).getTime()) / 60000)} minutes
                 </span>

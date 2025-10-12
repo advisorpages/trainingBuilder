@@ -307,6 +307,9 @@ export const AITopicEnhancementSection: React.FC<AITopicEnhancementSectionProps>
                     ))}
                   </ul>
                 </div>
+                {generatedContent.enhancedContent.callToAction && (
+                  <p><strong>Call to Action:</strong> {generatedContent.enhancedContent.callToAction}</p>
+                )}
               </div>
             </div>
 
@@ -340,6 +343,26 @@ export const AITopicEnhancementSection: React.FC<AITopicEnhancementSectionProps>
                     ))}
                   </ul>
                 </div>
+                {generatedContent.enhancedContent.trainerSection.commonChallenges.length > 0 && (
+                  <div>
+                    <strong>Common Challenges:</strong>
+                    <ul className="list-disc list-inside ml-4 mt-1">
+                      {generatedContent.enhancedContent.trainerSection.commonChallenges.map((challenge, index) => (
+                        <li key={index}>{challenge}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(generatedContent.enhancedContent.trainerSection.assessmentSuggestions ?? []).length > 0 && (
+                  <div>
+                    <strong>Assessment Suggestions:</strong>
+                    <ul className="list-disc list-inside ml-4 mt-1">
+                      {(generatedContent.enhancedContent.trainerSection.assessmentSuggestions ?? []).map((suggestion, index) => (
+                        <li key={index}>{suggestion}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           </div>

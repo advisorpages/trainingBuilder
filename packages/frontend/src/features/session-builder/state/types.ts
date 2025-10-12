@@ -10,6 +10,12 @@ export interface SessionTopicDraft {
   title: string;
   description?: string;
   durationMinutes: number;
+  learningOutcomes?: string;
+  trainerNotes?: string;
+  materialsNeeded?: string;
+  deliveryGuidance?: string;
+  callToAction?: string;
+  topicId?: number;
 }
 
 export interface SessionMetadata {

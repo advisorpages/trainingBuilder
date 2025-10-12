@@ -10,6 +10,12 @@ export const TopicDetails: React.FC<TopicDetailsProps> = ({
   topic,
   onBack,
 }) => {
+  const parseBulletList = (value?: string | null): string[] =>
+    (value || '')
+      .split('\n')
+      .map(item => item.replace(/^•\s*/, '').trim())
+      .filter(Boolean);
+
   const formatDate = (date: Date | string) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -42,12 +48,50 @@ export const TopicDetails: React.FC<TopicDetailsProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Description
           </label>
-          <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-900 min-h-[100px]">
+          <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-900 min-h-[80px] whitespace-pre-line">
             {topic.description || (
               <span className="text-gray-400 italic">No description provided</span>
             )}
           </div>
         </div>
+
+        {/* Trainer Objective */}
+        {topic.learningOutcomes && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Trainer Objective
+            </label>
+            <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-900 whitespace-pre-line">
+              {topic.learningOutcomes}
+            </div>
+          </div>
+        )}
+
+        {/* Trainer Tasks */}
+        {parseBulletList(topic.trainerNotes).length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Trainer Tasks
+            </label>
+            <ul className="px-4 py-3 border border-gray-200 rounded-md bg-gray-50 text-gray-900 list-disc list-inside space-y-1">
+              {parseBulletList(topic.trainerNotes).map((task, index) => (
+                <li key={index}>{task}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Call to Action */}
+        {topic.aiGeneratedContent?.enhancedContent?.callToAction && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Call to Action
+            </label>
+            <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-900">
+              {topic.aiGeneratedContent.enhancedContent.callToAction}
+            </div>
+          </div>
+        )}
 
         {/* Active Status */}
         <div>

@@ -19,6 +19,14 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState<string>(category ?? '');
+  const parseBulletList = React.useCallback(
+    (value?: string | null): string[] =>
+      (value || '')
+        .split('\n')
+        .map((item) => item.replace(/^•\s*/, '').trim())
+        .filter(Boolean),
+    []
+  );
 
   const fetchTopics = React.useCallback(async (search?: string) => {
     try {
@@ -155,30 +163,44 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
                   {topic.description && (
                     <p className="mt-2 text-xs text-slate-600 whitespace-pre-line">{topic.description}</p>
                   )}
-                  {(topic.learningOutcomes || topic.trainerNotes || topic.materialsNeeded) && (
+                  {(topic.learningOutcomes || topic.trainerNotes || topic.materialsNeeded || topic.aiGeneratedContent?.enhancedContent?.callToAction) && (
                     <div className="mt-2 grid gap-2 text-[11px] text-slate-500 sm:grid-cols-2">
                       {topic.learningOutcomes && (
                         <div>
-                          <span className="font-semibold text-slate-600">Learning outcomes:</span>{' '}
+                          <span className="font-semibold text-slate-600">Trainer objective:</span>{' '}
                           {topic.learningOutcomes}
                         </div>
                       )}
-                      {topic.trainerNotes && (
+                      {parseBulletList(topic.trainerNotes).length > 0 && (
                         <div>
-                          <span className="font-semibold text-slate-600">Trainer notes:</span>{' '}
-                          {topic.trainerNotes}
+                          <span className="font-semibold text-slate-600">Trainer tasks:</span>
+                          <ul className="mt-1 list-disc list-inside space-y-1 text-slate-600">
+                            {parseBulletList(topic.trainerNotes).map((task, index) => (
+                              <li key={index}>{task}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
                       {topic.materialsNeeded && (
                         <div>
-                          <span className="font-semibold text-slate-600">Materials:</span>{' '}
-                          {topic.materialsNeeded}
+                          <span className="font-semibold text-slate-600">Materials:</span>
+                          <ul className="mt-1 list-disc list-inside space-y-1 text-slate-600">
+                            {parseBulletList(topic.materialsNeeded).map((material, index) => (
+                              <li key={index}>{material}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
                       {topic.deliveryGuidance && (
                         <div>
                           <span className="font-semibold text-slate-600">Delivery tips:</span>{' '}
                           {topic.deliveryGuidance}
+                        </div>
+                      )}
+                      {topic.aiGeneratedContent?.enhancedContent?.callToAction && (
+                        <div className="sm:col-span-2">
+                          <span className="font-semibold text-slate-600">Call to action:</span>{' '}
+                          {topic.aiGeneratedContent.enhancedContent.callToAction}
                         </div>
                       )}
                     </div>

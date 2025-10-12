@@ -172,12 +172,13 @@ Generate comprehensive topic content that includes:
 - Clear explanation of what participants will learn and be able to DO after this topic
 - Who this topic is specifically designed for (prerequisites, experience level)
 - Key takeaways and benefits (3-5 bullet points)
+- A single motivating call to action that invites immediate next steps (max 30 words)
 
 ### For Trainers:
 - Recommended delivery format and approach for ${context.deliveryStyle} style
 - Specific preparation guidance (what trainers need to review/prepare beforehand)
-- Key teaching points to emphasize during delivery
-- Recommended activities, exercises, or interactions (3-5 specific suggestions)
+- Key teaching points to emphasize during delivery (write as short action-focused phrases)
+- Recommended activities, exercises, or interactions (3-5 specific suggestions written as trainer tasks beginning with an action verb)
 - Materials and resources needed
 - Common challenges trainers might face and how to address them
 - Assessment or evaluation suggestions to measure learning
@@ -202,7 +203,9 @@ Please structure your response as a JSON object with this exact format:
     "materialsNeeded": ["Material 1", "Material 2"],
     "commonChallenges": ["Challenge 1", "Challenge 2"],
     "assessmentSuggestions": ["Assessment 1", "Assessment 2"]
-  }
+  },
+  "enhancedDescription": "Engaging 1-2 paragraph description for attendees",
+  "callToAction": "Motivating statement inviting the audience to participate"
 }
 \`\`\`
 
@@ -244,7 +247,11 @@ Please structure your response as a JSON object with this exact format:
         'trainerSection.preparationGuidance',
         'trainerSection.keyTeachingPoints',
         'trainerSection.recommendedActivities',
-        'trainerSection.materialsNeeded'
+        'trainerSection.materialsNeeded',
+        'trainerSection.commonChallenges',
+        'trainerSection.assessmentSuggestions',
+        'enhancedDescription',
+        'callToAction'
       ];
 
       for (const field of required) {
@@ -279,14 +286,43 @@ Please structure your response as a JSON object with this exact format:
    */
   extractTrainerNotes(aiContent: TopicAIContent): string {
     const trainerSection = aiContent.enhancedContent.trainerSection;
-    return `${trainerSection.preparationGuidance}\n\nKey Teaching Points:\n${trainerSection.keyTeachingPoints.map(point => `• ${point}`).join('\n')}`;
+    const tasks: string[] = [];
+
+    if (trainerSection.preparationGuidance) {
+      tasks.push(trainerSection.preparationGuidance);
+    }
+
+    const recommendedActivities = trainerSection.recommendedActivities ?? [];
+    const keyTeachingPoints = trainerSection.keyTeachingPoints ?? [];
+    const commonChallenges = trainerSection.commonChallenges ?? [];
+
+    recommendedActivities.forEach(activity => {
+      if (activity) {
+        tasks.push(activity);
+      }
+    });
+
+    keyTeachingPoints.forEach(point => {
+      if (point) {
+        tasks.push(`Emphasize: ${point}`);
+      }
+    });
+
+    commonChallenges.forEach(challenge => {
+      if (challenge) {
+        tasks.push(`Watch for: ${challenge}`);
+      }
+    });
+
+    return tasks.map(task => `• ${task}`).join('\n');
   }
 
   /**
    * Extract materials needed from enhanced content
    */
   extractMaterialsNeeded(aiContent: TopicAIContent): string {
-    return aiContent.enhancedContent.trainerSection.materialsNeeded.join('\n• ');
+    const materials = aiContent.enhancedContent.trainerSection.materialsNeeded ?? [];
+    return materials.length ? materials.map(item => `• ${item}`).join('\n') : '';
   }
 
   /**
@@ -294,7 +330,34 @@ Please structure your response as a JSON object with this exact format:
    */
   extractDeliveryGuidance(aiContent: TopicAIContent): string {
     const trainerSection = aiContent.enhancedContent.trainerSection;
-    return `${trainerSection.deliveryFormat}\n\nRecommended Activities:\n${trainerSection.recommendedActivities.map(activity => `• ${activity}`).join('\n')}`;
+    const guidance: string[] = [];
+    const assessmentSuggestions = trainerSection.assessmentSuggestions ?? [];
+    const recommendedActivities = trainerSection.recommendedActivities ?? [];
+
+    if (trainerSection.deliveryFormat) {
+      guidance.push(trainerSection.deliveryFormat);
+    }
+
+    if (assessmentSuggestions.length) {
+      guidance.push('');
+      guidance.push('Assessment Suggestions:');
+      guidance.push(...assessmentSuggestions.map(item => `• ${item}`));
+    }
+
+    if (recommendedActivities.length) {
+      guidance.push('');
+      guidance.push('Recommended Activities:');
+      guidance.push(...recommendedActivities.map(activity => `• ${activity}`));
+    }
+
+    return guidance.join('\n').trim();
+  }
+
+  /**
+   * Extract call to action from enhanced content
+   */
+  extractCallToAction(aiContent: TopicAIContent): string {
+    return aiContent.enhancedContent.callToAction || '';
   }
 }
 

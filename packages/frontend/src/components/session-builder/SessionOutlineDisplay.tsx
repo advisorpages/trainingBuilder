@@ -80,20 +80,20 @@ export const SessionOutlineDisplay: React.FC<SessionOutlineDisplayProps> = ({
   }> = ({ section }) => (
     <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 mr-3">
-            {getIconForSection(section)}
+          <div className="flex items-center">
+            <div className="flex-shrink-0 mr-3">
+              {getIconForSection(section)}
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">{section.title}</h3>
+              <p className="text-sm text-gray-500">{formatDuration(section.duration)}</p>
+              {section.type && (
+                <span className="inline-block px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded mt-1">
+                  {section.type.charAt(0).toUpperCase() + section.type.slice(1)}
+                </span>
+              )}
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{section.title}</h3>
-            <p className="text-sm text-gray-500">{formatDuration(section.duration)}</p>
-            {section.type && (
-              <span className="inline-block px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded mt-1">
-                {section.type.charAt(0).toUpperCase() + section.type.slice(1)}
-              </span>
-            )}
-          </div>
-        </div>
         <button
           onClick={onEdit}
           className="text-blue-600 hover:text-blue-800 text-sm font-medium"
@@ -103,13 +103,34 @@ export const SessionOutlineDisplay: React.FC<SessionOutlineDisplayProps> = ({
       </div>
 
       <div className="space-y-3">
-        {/* Description */}
-        <p className="text-gray-700">{section.description}</p>
+        {/* Trainer Brief */}
+        {section.description && (
+          <div>
+            <h4 className="font-medium text-gray-900 mb-2">Trainer Brief:</h4>
+            <p className="text-gray-700 whitespace-pre-line">{section.description}</p>
+          </div>
+        )}
+
+        {/* Trainer Tasks */}
+        {section.trainerNotes && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+            <h4 className="font-medium text-yellow-900 mb-2">Trainer Tasks:</h4>
+            <ul className="text-yellow-800 text-sm list-disc list-inside space-y-1">
+              {section.trainerNotes
+                .split('\n')
+                .map(note => note.replace(/^•\s*/, '').trim())
+                .filter(Boolean)
+                .map((note, index) => (
+                  <li key={index}>{note}</li>
+                ))}
+            </ul>
+          </div>
+        )}
 
         {/* Learning Objectives */}
         {section.learningObjectives && section.learningObjectives.length > 0 && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Learning Objectives:</h4>
+            <h4 className="font-medium text-gray-900 mb-2">Key Points to Emphasize:</h4>
             <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
               {section.learningObjectives.map((objective, index) => (
                 <li key={index}>{objective}</li>
@@ -206,51 +227,39 @@ export const SessionOutlineDisplay: React.FC<SessionOutlineDisplayProps> = ({
         {/* Suggested Activities */}
         {section.suggestedActivities && section.suggestedActivities.length > 0 && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Suggested Activities:</h4>
-            <div className="flex flex-wrap gap-2">
+            <h4 className="font-medium text-gray-900 mb-2">How to Run It:</h4>
+            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
               {section.suggestedActivities.map((activity, index) => (
-                <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                  {activity}
-                </span>
+                <li key={index}>{activity}</li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
 
         {/* Materials Needed */}
         {section.materialsNeeded && section.materialsNeeded.length > 0 && (
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">Materials Needed:</h4>
-            <div className="flex flex-wrap gap-2">
+            <h4 className="font-medium text-gray-900 mb-2">Bring / Prep:</h4>
+            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
               {section.materialsNeeded.map((material, index) => (
-                <span key={index} className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded">
-                  {material}
-                </span>
+                <li key={index}>{material}</li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
 
         {/* Learning Outcomes */}
         {section.learningOutcomes && (
           <div className="bg-green-50 border border-green-200 rounded-md p-3">
-            <h4 className="font-medium text-green-900 mb-2">Learning Outcomes:</h4>
+            <h4 className="font-medium text-green-900 mb-2">Participant Outcome:</h4>
             <p className="text-green-800 text-sm whitespace-pre-line">{section.learningOutcomes}</p>
-          </div>
-        )}
-
-        {/* Trainer Notes */}
-        {section.trainerNotes && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-            <h4 className="font-medium text-yellow-900 mb-2">Trainer Notes:</h4>
-            <p className="text-yellow-800 text-sm whitespace-pre-line">{section.trainerNotes}</p>
           </div>
         )}
 
         {/* Delivery Guidance */}
         {section.deliveryGuidance && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <h4 className="font-medium text-blue-900 mb-2">Delivery Guidance:</h4>
+            <h4 className="font-medium text-blue-900 mb-2">Facilitation Tips:</h4>
             <p className="text-blue-800 text-sm whitespace-pre-line">{section.deliveryGuidance}</p>
           </div>
         )}
@@ -265,27 +274,31 @@ export const SessionOutlineDisplay: React.FC<SessionOutlineDisplayProps> = ({
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {outline.suggestedSessionTitle}
+              Trainer Plan: {outline.suggestedSessionTitle || 'Session Outline'}
             </h2>
-            <p className="text-gray-700 mb-4">{outline.suggestedDescription}</p>
+            {outline.suggestedDescription && (
+              <p className="text-gray-700 mb-4">
+                <strong>Trainer Brief:</strong> {outline.suggestedDescription}
+              </p>
+            )}
             <div className="flex flex-wrap gap-4 text-sm">
               <span className="flex items-center">
                 <svg className="h-4 w-4 text-gray-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                 </svg>
-                <strong>Total:</strong> {formatDuration(outline.totalDuration)}
+                <strong>Session Time:</strong> {formatDuration(outline.totalDuration)}
               </span>
               <span className="flex items-center">
                 <svg className="h-4 w-4 text-gray-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <strong>Level:</strong> {outline.difficulty.charAt(0).toUpperCase() + outline.difficulty.slice(1)}
+                <strong>Skill Level:</strong> {outline.difficulty.charAt(0).toUpperCase() + outline.difficulty.slice(1)}
               </span>
               <span className="flex items-center">
                 <svg className="h-4 w-4 text-gray-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
                 </svg>
-                <strong>Size:</strong> {outline.recommendedAudienceSize}
+                <strong>Group Size Guide:</strong> {outline.recommendedAudienceSize}
               </span>
             </div>
           </div>

@@ -29,6 +29,11 @@ export const TopicList: React.FC<TopicListProps> = ({
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [openDropdown, setOpenDropdown] = useState<number | null>(null);
   const [togglingStatus, setTogglingStatus] = useState<Set<number>>(new Set());
+  const parseBulletList = (value?: string | null): string[] =>
+    (value || '')
+      .split('\n')
+      .map(item => item.replace(/^•\s*/, '').trim())
+      .filter(Boolean);
 
   const fetchTopics = async (params?: TopicQueryParams) => {
     try {
@@ -491,13 +496,42 @@ export const TopicList: React.FC<TopicListProps> = ({
                 {expandedRows.has(topic.id) && (
                   <tr>
                     <td colSpan={7} className="px-6 py-4 bg-gray-50">
-                      <div className="space-y-2">
-                        <div>
-                          <span className="text-sm font-medium text-gray-700">Description:</span>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {topic.description || 'No description provided'}
-                          </p>
+                      <div className="space-y-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <span className="text-sm font-medium text-gray-700">Overview:</span>
+                            <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">
+                              {topic.description || 'No description provided'}
+                            </p>
+                          </div>
+                          {topic.aiGeneratedContent?.enhancedContent?.callToAction && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-700">Call to Action:</span>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {topic.aiGeneratedContent.enhancedContent.callToAction}
+                              </p>
+                            </div>
+                          )}
+                          {topic.learningOutcomes && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-700">Trainer Objective:</span>
+                              <p className="text-sm text-gray-600 mt-1 whitespace-pre-line">
+                                {topic.learningOutcomes}
+                              </p>
+                            </div>
+                          )}
+                          {parseBulletList(topic.trainerNotes).length > 0 && (
+                            <div>
+                              <span className="text-sm font-medium text-gray-700">Trainer Tasks:</span>
+                              <ul className="mt-1 space-y-1 text-sm text-gray-600 list-disc list-inside">
+                                {parseBulletList(topic.trainerNotes).map((task, index) => (
+                                  <li key={index}>{task}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
+
                         {topic.sessions && (
                           <div>
                             <span className="text-sm font-medium text-gray-700">Usage:</span>
@@ -506,7 +540,8 @@ export const TopicList: React.FC<TopicListProps> = ({
                             </p>
                           </div>
                         )}
-                        <div className="flex space-x-4 text-sm text-gray-500">
+
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-500">
                           <span>Created: {new Date(topic.createdAt).toLocaleString()}</span>
                           <span>Updated: {new Date(topic.updatedAt).toLocaleString()}</span>
                         </div>

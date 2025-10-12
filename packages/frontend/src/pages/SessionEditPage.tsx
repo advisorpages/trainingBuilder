@@ -3,15 +3,16 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Session, SessionStatus, Trainer, Incentive } from '@leadership-training/shared';
 import { sessionService } from '../services/session.service';
 import { topicService } from '../services/topic.service';
-import { locationService } from '../services/location.service';
-import { audienceService } from '../services/audience.service';
-import { toneService } from '../services/tone.service';
 import { trainerService } from '../services/trainer.service';
 import { incentiveService } from '../services/incentive.service';
+import { LocationSelect } from '../components/ui/LocationSelect';
+import { AudienceSelect } from '../components/ui/AudienceSelect';
+import { ToneSelect } from '../components/ui/ToneSelect';
+import { TrainerSelect } from '../components/ui/TrainerSelect';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { BuilderLayout } from '../layouts/BuilderLayout';
-import { Topic, Location, Audience, Tone } from '@leadership-training/shared';
+import { Topic } from '@leadership-training/shared';
 import { EnhancedTopicSelection } from '../components/sessions/EnhancedTopicSelection';
 import { SessionTopicDetail } from '../components/sessions/EnhancedTopicCard';
 
@@ -55,9 +56,6 @@ const SessionEditPage: React.FC = () => {
 
   // Dropdown options
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [audiences, setAudiences] = useState<Audience[]>([]);
-  const [tones, setTones] = useState<Tone[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [incentives, setIncentives] = useState<Incentive[]>([]);
 
@@ -117,19 +115,13 @@ const SessionEditPage: React.FC = () => {
   useEffect(() => {
     const loadDropdownOptions = async () => {
       try {
-        const [topicsData, locationsData, audiencesData, tonesData, trainersData, incentivesData] = await Promise.all([
+        const [topicsData, trainersData, incentivesData] = await Promise.all([
           topicService.getActiveTopics(),
-          locationService.getActiveLocations(),
-          audienceService.getActiveAudiences(),
-          toneService.getActiveTones(),
           trainerService.getActiveTrainers(),
           incentiveService.getIncentives(),
         ]);
 
         setTopics(topicsData);
-        setLocations(locationsData);
-        setAudiences(audiencesData);
-        setTones(tonesData);
         setTrainers(trainersData);
         setIncentives(incentivesData);
       } catch (error) {
@@ -150,9 +142,9 @@ const SessionEditPage: React.FC = () => {
       };
 
       const originalTopicIds = sessionWithRelations.topics
-        ? sessionWithRelations.topics.map(topic => topic.id).sort((a, b) => a - b)
+        ? sessionWithRelations.topics.map(topic => topic.id)
         : [];
-      const currentTopicIds = [...(formData.topicIds || [])].sort((a, b) => a - b);
+      const currentTopicIds = [...(formData.topicIds || [])];
 
       const originalIncentiveIds = sessionWithRelations.incentives
         ? sessionWithRelations.incentives.map(inc => inc.id).sort()
@@ -197,6 +189,12 @@ const SessionEditPage: React.FC = () => {
   const sortedTopics = useMemo(() => {
     const topicsCopy = [...topics];
     topicsCopy.sort((a, b) => {
+      // Sort by sectionPosition if available (preserves opener, topics, closing order)
+      const aPos = (a as any).aiGeneratedContent?.sectionPosition ?? 999;
+      const bPos = (b as any).aiGeneratedContent?.sectionPosition ?? 999;
+      if (aPos !== bPos) return aPos - bPos;
+
+      // Fallback to updatedAt for topics without position
       const aUpdated = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
       const bUpdated = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
       return bUpdated - aUpdated;
@@ -460,57 +458,40 @@ const SessionEditPage: React.FC = () => {
                       <label htmlFor="locationId" className="block text-sm font-medium text-slate-700 mb-2">
                         Location
                       </label>
-                      <select
-                        id="locationId"
+                      <LocationSelect
                         value={formData.locationId || ''}
-                        onChange={(e) => handleInputChange('locationId', e.target.value ? Number(e.target.value) : undefined)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">Select a location</option>
-                        {locations.map(location => (
-                          <option key={location.id} value={location.id}>
-                            {location.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(location) => {
+                          handleInputChange('locationId', location?.id ?? undefined);
+                        }}
+                        placeholder="Select a location"
+                        required={false}
+                      />
                     </div>
 
                     <div>
                       <label htmlFor="audienceId" className="block text-sm font-medium text-slate-700 mb-2">
                         Target Audience
                       </label>
-                      <select
-                        id="audienceId"
+                      <AudienceSelect
                         value={formData.audienceId || ''}
-                        onChange={(e) => handleInputChange('audienceId', e.target.value ? Number(e.target.value) : undefined)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">Select an audience</option>
-                        {audiences.map(audience => (
-                          <option key={audience.id} value={audience.id}>
-                            {audience.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(audience) => {
+                          handleInputChange('audienceId', audience?.id ?? undefined);
+                        }}
+                        placeholder="Select an audience"
+                      />
                     </div>
 
                     <div>
                       <label htmlFor="toneId" className="block text-sm font-medium text-slate-700 mb-2">
                         Session Tone
                       </label>
-                      <select
-                        id="toneId"
+                      <ToneSelect
                         value={formData.toneId || ''}
-                        onChange={(e) => handleInputChange('toneId', e.target.value ? Number(e.target.value) : undefined)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="">Select a tone</option>
-                        {tones.map(tone => (
-                          <option key={tone.id} value={tone.id}>
-                            {tone.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(tone) => {
+                          handleInputChange('toneId', tone?.id ?? undefined);
+                        }}
+                        placeholder="Select a tone"
+                      />
                     </div>
                   </div>
                 </div>
@@ -567,35 +548,18 @@ const SessionEditPage: React.FC = () => {
                     <label htmlFor="addTrainer" className="block text-sm font-medium text-slate-700 mb-2">
                       Add Trainer
                     </label>
-                    <select
-                      id="addTrainer"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      onChange={(e) => {
-                        const trainerId = Number(e.target.value);
-                        if (trainerId && !formData.trainerIds?.includes(trainerId)) {
-                          const newTrainerIds = [...(formData.trainerIds || []), trainerId];
+                    <TrainerSelect
+                      value=""
+                      onChange={(trainer) => {
+                        if (trainer && !formData.trainerIds?.includes(trainer.id)) {
+                          const newTrainerIds = [...(formData.trainerIds || []), trainer.id];
                           handleInputChange('trainerIds', newTrainerIds);
-
-                          const trainer = trainers.find(t => t.id === trainerId);
-                          if (trainer) {
-                            setCurrentTrainers(prev => [...prev, trainer]);
-                          }
+                          setCurrentTrainers(prev => [...prev, trainer]);
                         }
-                        e.target.value = '';
                       }}
-                    >
-                      <option value="">Select a trainer to add</option>
-                      {trainers
-                        .filter(trainer => !formData.trainerIds?.includes(trainer.id))
-                        .map(trainer => (
-                          <option key={trainer.id} value={trainer.id}>
-                            {trainer.name}
-                            {trainer.expertiseTags && trainer.expertiseTags.length > 0 &&
-                              ` (${trainer.expertiseTags.join(', ')})`
-                            }
-                          </option>
-                        ))}
-                    </select>
+                      placeholder="Select a trainer to add"
+                      excludeIds={formData.trainerIds || []}
+                    />
                   </div>
                 </div>
 

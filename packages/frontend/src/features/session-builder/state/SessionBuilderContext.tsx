@@ -135,6 +135,7 @@ function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
     desiredOutcome: input.desiredOutcome,
     currentProblem: input.currentProblem ?? '',
     specificTopics: input.specificTopics ?? '',
+    topics: input.topics ? [...input.topics] : [],
     startDate: input.date,
     startTime,
     endTime,
@@ -754,7 +755,7 @@ export const SessionBuilderProvider: React.FC<{
       setVariantsStatus('error');
       setVariantsError(message);
       publish({
-        
+        variant: 'warning',
         title: 'More details needed',
         description: message,
       });

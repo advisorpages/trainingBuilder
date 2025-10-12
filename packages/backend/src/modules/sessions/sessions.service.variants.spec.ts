@@ -5,6 +5,8 @@ import {
   Session,
   Topic,
   Incentive,
+  TrainerAssignment,
+  Trainer,
   SessionContentVersion,
   SessionStatusLog,
   SessionBuilderDraft,
@@ -20,6 +22,7 @@ import { AIInteractionType } from '../../entities/ai-interaction.entity';
 import { VariantConfigService } from '../../services/variant-config.service';
 import { AiPromptSettingsService } from '../../services/ai-prompt-settings.service';
 import { SuggestOutlineDto, SuggestOutlineResponse, SuggestedSessionType } from './dto/suggest-outline.dto';
+import { TopicsService } from '../topics/topics.service';
 
 type MockRepo<T> = Partial<Repository<T>> & {
   manager?: EntityManager;
@@ -117,6 +120,8 @@ interface ServiceBundle {
   mocks: {
     sessionRepo: MockRepo<Session>;
     topicsRepo: MockRepo<Topic>;
+    trainerAssignmentsRepo: MockRepo<TrainerAssignment>;
+    trainersRepo: MockRepo<Trainer>;
     locationsRepo: MockRepo<Location>;
     ragService: { queryRAGWithRetry: jest.Mock };
     openAIService: { generateSessionOutline: jest.Mock };
@@ -128,6 +133,7 @@ interface ServiceBundle {
       getVariantDescription: jest.Mock;
       getVariantInstruction: jest.Mock;
     };
+    topicsService: { importTopics: jest.Mock };
   };
 }
 
@@ -138,6 +144,8 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
   const topicsRepo = createRepositoryMock<Topic>();
 
   const incentivesRepo = createRepositoryMock<Incentive>();
+  const trainerAssignmentsRepo = createRepositoryMock<TrainerAssignment>();
+  const trainersRepo = createRepositoryMock<Trainer>();
   const contentRepo = createRepositoryMock<SessionContentVersion>();
   const statusLogsRepo = createRepositoryMock<SessionStatusLog>();
   const draftsRepo = createRepositoryMock<SessionBuilderDraft>();
@@ -177,6 +185,9 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     getVariantDescription: jest.fn().mockResolvedValue('Structured outline emphasizing clarity.'),
     getVariantInstruction: jest.fn().mockResolvedValue('Follow a {{duration}}-minute precision structure.'),
   };
+  const topicsService = {
+    importTopics: jest.fn().mockResolvedValue({ created: 0, updated: 0, errors: [] }),
+  };
 
   const configService = createConfigService(configOverrides);
 
@@ -184,6 +195,8 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     sessionRepo as unknown as Repository<Session>,
     topicsRepo as unknown as Repository<Topic>,
     incentivesRepo as unknown as Repository<Incentive>,
+    trainerAssignmentsRepo as unknown as Repository<TrainerAssignment>,
+    trainersRepo as unknown as Repository<Trainer>,
     contentRepo as unknown as Repository<SessionContentVersion>,
     statusLogsRepo as unknown as Repository<SessionStatusLog>,
     draftsRepo as unknown as Repository<SessionBuilderDraft>,
@@ -197,6 +210,7 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
     analyticsTelemetry as unknown as AnalyticsTelemetryService,
     promptSettingsService as unknown as AiPromptSettingsService,
     variantConfigService as unknown as VariantConfigService,
+    topicsService as unknown as TopicsService,
   );
 
   return {
@@ -211,6 +225,9 @@ const createService = (configOverrides: Record<string, any> = {}): ServiceBundle
       analyticsTelemetry,
       promptSettingsService,
       variantConfigService,
+      topicsService,
+      trainerAssignmentsRepo,
+      trainersRepo,
     },
   };
 };

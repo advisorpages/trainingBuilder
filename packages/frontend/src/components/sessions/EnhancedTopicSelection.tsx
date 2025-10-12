@@ -27,18 +27,22 @@ export const EnhancedTopicSelection: React.FC<EnhancedTopicSelectionProps> = ({
   // Initialize selected topics (only once)
 useEffect(() => {
   if (initialSelectedTopics.length > 0 && selectedTopicDetails.length === 0) {
-    const initialDetails = initialSelectedTopics.map((topicId, index) => ({
-      topicId,
-      sequenceOrder: index + 1,
-      durationMinutes: 30, // default duration
-      assignedTrainerId: undefined,
-      notes: ''
-    }));
+    const initialDetails = initialSelectedTopics.map((topicId, index) => {
+      const topic = topics.find(t => t.id === topicId);
+      const savedPosition = (topic as any)?.aiGeneratedContent?.sectionPosition ?? (index + 1);
+      return {
+        topicId,
+        sequenceOrder: savedPosition,
+        durationMinutes: 30, // default duration
+        assignedTrainerId: undefined,
+        notes: ''
+      };
+    });
     setSelectedTopicDetails(initialDetails);
   }
   // We only want this to run once on mount when selection is empty.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [initialSelectedTopics, selectedTopicDetails.length]);
+}, [initialSelectedTopics, selectedTopicDetails.length, topics]);
 
 // Calculate total duration whenever selection changes
 useEffect(() => {

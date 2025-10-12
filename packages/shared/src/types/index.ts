@@ -162,7 +162,7 @@ export interface Topic {
   name: string;
   description?: string;
   // AI Enhancement Fields
-  aiGeneratedContent?: object;
+  aiGeneratedContent?: TopicAIContent | null;
   learningOutcomes?: string;
   trainerNotes?: string;
   materialsNeeded?: string;
@@ -377,6 +377,7 @@ export interface TopicAIContent {
     };
 
     enhancedDescription: string;
+    callToAction: string;
   };
 
   userModifications?: {
@@ -394,6 +395,7 @@ export interface TopicEnhancementResponse {
     trainerNotes: string;
     materialsNeeded: string;
     deliveryGuidance: string;
+    callToAction: string;
   };
   aiContent: TopicAIContent;
   prompt?: string; // For manual mode
