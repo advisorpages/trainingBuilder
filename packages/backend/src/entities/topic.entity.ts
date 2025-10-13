@@ -1,6 +1,7 @@
-import { Column, Entity, ManyToMany, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToMany, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Session } from './session.entity';
 import { SessionTopic } from './session-topic.entity';
+import { Category } from './category.entity';
 
 @Entity({ name: 'topics' })
 export class Topic {
@@ -15,6 +16,9 @@ export class Topic {
 
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
+
+  @Column({ type: 'int', name: 'category_id', nullable: true })
+  categoryId?: number;
 
   @Column({ name: 'created_at', type: 'timestamptz', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
@@ -36,6 +40,10 @@ export class Topic {
 
   @Column({ type: 'text', nullable: true })
   deliveryGuidance?: string;
+
+  @ManyToOne(() => Category, (category) => category.topics, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'category_id' })
+  category?: Category;
 
   @ManyToMany(() => Session, (session) => session.topics)
   sessions: Session[];

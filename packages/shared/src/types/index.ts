@@ -173,6 +173,7 @@ export interface Topic {
   id: number;
   name: string;
   description?: string;
+  categoryId?: number;
   // AI Enhancement Fields
   aiGeneratedContent?: TopicAIContent | null;
   learningOutcomes?: string;
@@ -183,6 +184,7 @@ export interface Topic {
   createdAt: Date | string;
   updatedAt: Date | string;
   sessions?: Session[];
+  category?: Category;
 }
 
 // Attribute types
@@ -336,6 +338,13 @@ export interface TopicEnhancementInput {
     sessionTitle?: string;
     sessionDescription?: string;
     existingTopics?: string[];
+  };
+  currentContent?: {
+    description?: string;
+    learningOutcomes?: string;
+    trainerNotes?: string;
+    materialsNeeded?: string;
+    deliveryGuidance?: string;
   };
 }
 

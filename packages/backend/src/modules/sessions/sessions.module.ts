@@ -52,7 +52,7 @@ import {
     TopicsModule,
   ],
   controllers: [SessionsController],
-  providers: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService, TopicsService],
+  providers: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService],
   exports: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService],
 })
 export class SessionsModule {}

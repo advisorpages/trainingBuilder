@@ -21,6 +21,16 @@ export declare enum UserRole {
     CONTENT_DEVELOPER = "Content Developer",
     TRAINER = "Trainer"
 }
+export interface SessionTopicLink {
+    sessionId: string;
+    topicId: number;
+    sequenceOrder: number;
+    durationMinutes?: number | null;
+    trainerId?: number | null;
+    notes?: string | null;
+    topic?: Topic;
+    trainer?: Trainer;
+}
 export interface Session {
     id: string;
     title: string;
@@ -56,11 +66,12 @@ export interface Session {
     updatedAt: Date | string;
     author: User;
     location?: Location;
-    trainer?: Trainer;
     audience?: Audience;
     tone?: Tone;
     category?: Category;
     topics?: Topic[];
+    sessionTopics?: SessionTopicLink[];
+    trainer?: Trainer;
 }
 export declare enum SessionStatus {
     DRAFT = "draft",
@@ -139,6 +150,7 @@ export interface Topic {
     id: number;
     name: string;
     description?: string;
+    categoryId?: number;
     aiGeneratedContent?: TopicAIContent | null;
     learningOutcomes?: string;
     trainerNotes?: string;
@@ -148,6 +160,7 @@ export interface Topic {
     createdAt: Date | string;
     updatedAt: Date | string;
     sessions?: Session[];
+    category?: Category;
 }
 export declare enum AudienceExperienceLevel {
     BEGINNER = "beginner",
@@ -278,6 +291,13 @@ export interface TopicEnhancementInput {
         sessionTitle?: string;
         sessionDescription?: string;
         existingTopics?: string[];
+    };
+    currentContent?: {
+        description?: string;
+        learningOutcomes?: string;
+        trainerNotes?: string;
+        materialsNeeded?: string;
+        deliveryGuidance?: string;
     };
 }
 export interface TopicAIContent {

@@ -46,9 +46,9 @@ export const useTopicCreation = (options: UseTopicCreationOptions = {}): UseTopi
       setError(null);
 
       const [audiencesRes, tonesRes, categoriesRes] = await Promise.all([
-        api.get<Audience[]>('/audiences'),
-        api.get<Tone[]>('/tones'),
-        api.get<Category[]>('/categories')
+        api.get<Audience[]>('/admin/audiences/active'),
+        api.get<Tone[]>('/admin/tones/active'),
+        api.get<Category[]>('/admin/categories/active')
       ]);
 
       setAudiences(audiencesRes.data);

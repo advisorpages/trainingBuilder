@@ -3,12 +3,12 @@ import { Audience, Tone, Category, Topic } from '@leadership-training/shared';
 
 class AttributesService {
   async getAudiences(): Promise<Audience[]> {
-    const response = await api.get<Audience[]>('/audiences');
+    const response = await api.get<Audience[]>('/admin/audiences/active');
     return response.data;
   }
 
   async getTones(): Promise<Tone[]> {
-    const response = await api.get<Tone[]>('/tones');
+    const response = await api.get<Tone[]>('/admin/tones/active');
     return response.data;
   }
 
@@ -23,17 +23,17 @@ class AttributesService {
   }
 
   async getAudience(id: number): Promise<Audience> {
-    const response = await api.get<Audience>(`/audiences/${id}`);
+    const response = await api.get<Audience>(`/admin/audiences/${id}`);
     return response.data;
   }
 
   async getTone(id: number): Promise<Tone> {
-    const response = await api.get<Tone>(`/tones/${id}`);
+    const response = await api.get<Tone>(`/admin/tones/${id}`);
     return response.data;
   }
 
   async getCategory(id: number): Promise<Category> {
-    const response = await api.get<Category>(`/categories/${id}`);
+    const response = await api.get<Category>(`/admin/categories/${id}`);
     return response.data;
   }
 

@@ -389,6 +389,169 @@ export class OpenAIService {
     }
   }
 
+  async generateJsonCompletion(params: {
+    systemPrompt: string;
+    userPrompt: string;
+    interactionType: AIInteractionType;
+    inputVariables: Record<string, any>;
+    category?: string;
+    audienceId?: number;
+    toneId?: number;
+    metadata?: Record<string, any>;
+    allVariablesPresent?: boolean;
+    missingVariables?: string[];
+  }): Promise<{ content: any; rawText: string; modelUsed: string; tokensUsed?: number }> {
+    if (!this.apiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    const {
+      systemPrompt,
+      userPrompt,
+      interactionType,
+      inputVariables,
+      category,
+      audienceId,
+      toneId,
+      metadata,
+      allVariablesPresent = true,
+      missingVariables,
+    } = params;
+
+    const startTime = Date.now();
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      try {
+        const response = await fetch(`${this.baseURL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            temperature: this.temperature,
+            max_tokens: this.maxTokens,
+            response_format: {
+              type: 'json_object',
+            },
+          }),
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          const error = new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorText}`);
+
+          if (response.status >= 500 && attempt < this.maxRetries) {
+            this.logger.warn(
+              `Attempt ${attempt} failed with server error for ${interactionType}, retrying...`,
+              error,
+            );
+            lastError = error;
+            continue;
+          }
+
+          throw error;
+        }
+
+        const data = await response.json();
+        const rawContent = data.choices?.[0]?.message?.content;
+
+        if (!rawContent) {
+          throw new Error('OpenAI response missing content.');
+        }
+
+        let parsed: any;
+        try {
+          parsed = JSON.parse(rawContent);
+        } catch (parseError) {
+          throw new Error(`OpenAI response was not valid JSON: ${rawContent}`);
+        }
+
+        const tokensUsed: number | undefined =
+          typeof data?.usage?.total_tokens === 'number'
+            ? data.usage.total_tokens
+            : typeof data?.usage?.prompt_tokens === 'number' && typeof data?.usage?.completion_tokens === 'number'
+            ? data.usage.prompt_tokens + data.usage.completion_tokens
+            : undefined;
+
+        const processingTime = Date.now() - startTime;
+
+        await this.logInteraction({
+          interactionType,
+          status: AIInteractionStatus.SUCCESS,
+          renderedPrompt: userPrompt,
+          inputVariables,
+          aiResponse: rawContent,
+          structuredOutput: parsed,
+          processingTimeMs: processingTime,
+          tokensUsed,
+          modelUsed: data.model ?? this.model,
+          category,
+          audienceId,
+          toneId,
+          allVariablesPresent,
+          missingVariables,
+          metadata: {
+            ...(metadata ?? {}),
+            systemPrompt,
+          },
+        });
+
+        return {
+          content: parsed,
+          rawText: rawContent,
+          modelUsed: data.model ?? this.model,
+          tokensUsed,
+        };
+      } catch (error) {
+        clearTimeout(timeoutId);
+        lastError = error instanceof Error ? error : new Error(String(error));
+        this.logger.warn(
+          `Attempt ${attempt} failed for ${interactionType}: ${lastError.message}`,
+        );
+
+        if (attempt >= this.maxRetries) {
+          const processingTime = Date.now() - startTime;
+          await this.logInteraction({
+            interactionType,
+            status: AIInteractionStatus.FAILURE,
+            renderedPrompt: userPrompt,
+            inputVariables,
+            errorMessage: lastError.message,
+            errorDetails: lastError.stack ? { stack: lastError.stack } : undefined,
+            processingTimeMs: processingTime,
+            modelUsed: this.model,
+            category,
+            audienceId,
+            toneId,
+            allVariablesPresent,
+            missingVariables,
+            metadata: {
+              ...(metadata ?? {}),
+              systemPrompt,
+            },
+          });
+
+          throw lastError;
+        }
+      }
+    }
+
+    throw lastError ?? new Error('Unknown OpenAI error');
+  }
+
   private async logInteraction(data: {
     interactionType: AIInteractionType;
     status: AIInteractionStatus;

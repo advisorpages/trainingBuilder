@@ -4,6 +4,7 @@ import { Topic, TopicAIContent } from '@leadership-training/shared';
 export interface CreateTopicRequest {
   name: string;
   description?: string;
+  categoryId?: number;
   // AI Enhancement Fields
   aiGeneratedContent?: TopicAIContent;
   learningOutcomes?: string;
@@ -96,6 +97,23 @@ class TopicService {
     await api.delete(`${this.baseUrl}/${id}`);
   }
 
+  async bulkDeleteTopics(ids: number[]): Promise<{ success: number[]; failed: number[] }> {
+    const results = { success: [] as number[], failed: [] as number[] };
+
+    // Delete topics one by one to handle individual failures gracefully
+    for (const id of ids) {
+      try {
+        await api.delete(`${this.baseUrl}/${id}`);
+        results.success.push(id);
+      } catch (error) {
+        console.error(`Failed to delete topic ${id}:`, error);
+        results.failed.push(id);
+      }
+    }
+
+    return results;
+  }
+
   async checkUsage(id: number): Promise<UsageCheckResponse> {
     const response = await api.get<UsageCheckResponse>(`${this.baseUrl}/${id}/usage-check`);
     return response.data;
@@ -119,6 +137,64 @@ class TopicService {
   async updateTopicAI(id: number, aiContent: TopicAIContent): Promise<Topic> {
     const response = await api.put<Topic>(`${this.baseUrl}/${id}/ai-content`, { aiContent });
     return response.data;
+  }
+
+  // New methods for improved topics page layout
+  async getRecentTopics(
+    limit: number = 5,
+    options?: { includeInactive?: boolean }
+  ): Promise<Topic[]> {
+    const response = await api.get<Topic[]>(this.baseUrl);
+    let topics = response.data;
+
+    if (!options?.includeInactive) {
+      topics = topics.filter(topic => topic.isActive);
+    }
+
+    // Sort by createdAt descending (most recent first)
+    topics.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return topics.slice(0, limit);
+  }
+
+  async getTopicsGroupedByCategory(
+    options?: { includeInactive?: boolean }
+  ): Promise<Record<string, Topic[]>> {
+    const response = await api.get<Topic[]>(this.baseUrl);
+    let topics = response.data;
+
+    if (!options?.includeInactive) {
+      topics = topics.filter(topic => topic.isActive);
+    }
+
+    // Group by category
+    const groupedTopics: Record<string, Topic[]> = {};
+
+    topics.forEach(topic => {
+      const categoryName = topic.category?.name || 'Uncategorized';
+      if (!groupedTopics[categoryName]) {
+        groupedTopics[categoryName] = [];
+      }
+      groupedTopics[categoryName].push(topic);
+    });
+
+    // Sort topics within each category by createdAt descending
+    Object.keys(groupedTopics).forEach(categoryName => {
+      groupedTopics[categoryName].sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
+
+    const sortedEntries = Object.entries(groupedTopics).sort(([, topicsA], [, topicsB]) => {
+      const latestA = topicsA.length > 0 ? new Date(topicsA[0].createdAt).getTime() : 0;
+      const latestB = topicsB.length > 0 ? new Date(topicsB[0].createdAt).getTime() : 0;
+      return latestB - latestA;
+    });
+
+    return sortedEntries.reduce<Record<string, Topic[]>>((acc, [categoryName, grouped]) => {
+      acc[categoryName] = grouped;
+      return acc;
+    }, {});
   }
 }
 

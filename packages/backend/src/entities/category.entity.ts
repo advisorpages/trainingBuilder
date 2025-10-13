@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { Session } from './session.entity';
+import { Topic } from './topic.entity';
 
 @Entity('categories')
 export class Category {
@@ -23,4 +24,7 @@ export class Category {
 
   @OneToMany(() => Session, session => session.category)
   sessions?: Session[];
+
+  @OneToMany(() => Topic, topic => topic.category)
+  topics?: Topic[];
 }

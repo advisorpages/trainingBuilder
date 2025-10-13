@@ -1,4 +1,5 @@
-import { IsOptional, IsString, IsObject } from 'class-validator';
+import { IsOptional, IsString, IsObject, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateTopicDto {
   @IsString()
@@ -7,6 +8,11 @@ export class CreateTopicDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  categoryId?: number;
 
   @IsOptional()
   @IsString()

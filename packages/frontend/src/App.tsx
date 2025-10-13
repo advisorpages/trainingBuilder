@@ -9,7 +9,7 @@ import PublicSessionPage from './pages/PublicSessionPage'
 import LoginPage from './pages/LoginPage'
 import ManageSessionsPage from './pages/ManageSessionsPage'
 import { ManageTrainersPage } from './pages/ManageTrainersPage'
-import { TopicsManagePage } from './pages/TopicsManagePage'
+import { ManageTopicsPage } from './pages/ManageTopicsPage'
 import TrainerDashboardPage from './pages/TrainerDashboardPage'
 import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
 import { SessionBuilderPage } from './pages/SessionBuilderPage'
@@ -111,7 +111,7 @@ function App() {
             path="/topics"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <TopicsManagePage />
+                <ManageTopicsPage />
               </ProtectedRoute>
             }
           />
@@ -135,7 +135,7 @@ function App() {
             path="/admin/topics"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
-                <TopicsManagePage />
+                <ManageTopicsPage />
               </ProtectedRoute>
             }
           />

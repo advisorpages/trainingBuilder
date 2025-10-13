@@ -1,9 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
-import { TopicsService } from './topics.service';
+import { TopicsService, UsageCheckResponse } from './topics.service';
 import { CreateTopicDto } from './dto/create-topic.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { ImportTopicsDto } from './dto/import-topics.dto';
 import { Response } from 'express';
+import { TopicEnhancementRequestDto } from './dto/enhance-topic.dto';
 
 @Controller('topics')
 export class TopicsController {
@@ -34,6 +35,11 @@ export class TopicsController {
     return exportData;
   }
 
+  @Get(':id/usage-check')
+  async checkUsage(@Param('id') id: string): Promise<UsageCheckResponse> {
+    return this.topicsService.checkUsage(id);
+  }
+
   @Get(':id')
   async detail(@Param('id') id: string) {
     return this.topicsService.findOne(id);
@@ -42,6 +48,11 @@ export class TopicsController {
   @Post()
   async create(@Body() dto: CreateTopicDto) {
     return this.topicsService.create(dto);
+  }
+
+  @Post('enhance')
+  async enhance(@Body() dto: TopicEnhancementRequestDto) {
+    return this.topicsService.enhanceTopic(dto);
   }
 
   @Patch(':id')
@@ -57,5 +68,10 @@ export class TopicsController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.topicsService.remove(id);
+  }
+
+  @Post(':id/polish')
+  async polishTopic(@Param('id') id: string) {
+    return this.topicsService.polishTopic(id);
   }
 }

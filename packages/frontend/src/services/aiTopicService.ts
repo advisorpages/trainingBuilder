@@ -113,9 +113,9 @@ class AITopicService {
     try {
       // Fetch audience, tone, and category details in parallel
       const [audienceResponse, toneResponse, categoryResponse] = await Promise.all([
-        this.api.get(`/audiences/${input.audienceId}`),
-        this.api.get(`/tones/${input.toneId}`),
-        this.api.get(`/categories/${input.categoryId}`)
+        this.api.get(`/admin/audiences/${input.audienceId}`),
+        this.api.get(`/admin/tones/${input.toneId}`),
+        this.api.get(`/admin/categories/${input.categoryId}`)
       ]);
 
       const audience: Audience = audienceResponse.data;
