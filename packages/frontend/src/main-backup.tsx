@@ -172,7 +172,7 @@ const SimplePage = () => {
 
 // Simple Login component with working auth
 const SimpleLogin = () => {
-  const [email, setEmail] = React.useState('broker1@company.com')
+  const [email, setEmail] = React.useState('sarah.content@company.com')
   const [password, setPassword] = React.useState('Password123!')
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState('')
@@ -314,7 +314,6 @@ const SimpleLogin = () => {
           <p style={{ margin: '0 0 0.5rem 0', fontWeight: 500 }}>Test Accounts:</p>
           <p style={{ margin: '0.25rem 0' }}>📧 Content Developer: sarah.content@company.com</p>
           <p style={{ margin: '0.25rem 0' }}>👨‍🏫 Trainer: john.trainer@company.com</p>
-          <p style={{ margin: '0.25rem 0' }}>🏢 Broker: broker1@company.com</p>
           <p style={{ margin: '0.25rem 0' }}>🔑 Password for all: Password123!</p>
         </div>
 

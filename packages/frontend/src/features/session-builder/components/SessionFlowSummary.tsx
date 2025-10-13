@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Button } from '@/components/ui/Button';
 import { SessionTopicDetail } from '@/components/sessions/EnhancedTopicCard';
@@ -65,6 +65,22 @@ export const SessionFlowSummary: React.FC<SessionFlowSummaryProps> = ({
     }));
 
     onReorder(reorderedDetails);
+  };
+
+  const renderMetaChip = (label: string, variant: 'default' | 'danger' = 'default') => {
+    const variantClasses =
+      variant === 'danger'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-slate-100 text-slate-700';
+
+    return (
+      <span
+        key={`${variant}-${label}`}
+        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${variantClasses}`}
+      >
+        {label}
+      </span>
+    );
   };
 
   return (
@@ -156,95 +172,103 @@ export const SessionFlowSummary: React.FC<SessionFlowSummaryProps> = ({
                     )}
 
                     {/* Topic Card */}
-                    <div className="relative z-10 flex items-start gap-4">
-                      {/* Drag Handle & Step Number */}
-                      <div className="flex flex-col items-center gap-1">
-                        {onReorder && (
-                          <div
-                            {...provided.dragHandleProps}
-                            className="flex items-center justify-center w-6 h-6 text-slate-400 hover:text-slate-600 cursor-grab active:cursor-grabbing"
-                            title="Drag to reorder"
-                          >
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z"/>
-                            </svg>
-                          </div>
-                        )}
-                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-semibold">
-                          {index + 1}
-                        </div>
-                      </div>
-
-                      {/* Topic Content */}
-                      <div className={`flex-1 bg-white rounded-lg p-4 border transition-all ${
-                        snapshot.isDragging
-                          ? 'border-blue-300 shadow-lg scale-105'
-                          : 'border-slate-200 hover:shadow-md'
-                      } ${!topic ? 'border-red-200 bg-red-50' : ''}`}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-medium text-slate-900">
-                              {topic ? topic.name : `Topic #${topicDetail.topicId} (Loading...)`}
-                            </h4>
-                            {!topic && (
-                              <p className="text-sm text-red-600 mt-1">
-                                ⚠️ Topic details are loading. If this persists, try refreshing the page.
-                              </p>
-                            )}
-                            {topic?.description && (
-                              <p className="text-sm text-slate-500 mt-1">
-                                {topic.description}
-                              </p>
-                            )}
-                            <div className="flex flex-wrap gap-3 mt-2 text-sm text-slate-600">
-                              <span>Duration: {formatDuration(topicDetail.durationMinutes || 30)}</span>
-                              {trainer && (
-                                <>
-                                  <span>•</span>
-                                  <span>Trainer: {trainer.name}</span>
-                                </>
-                              )}
-                              {topicDetail.assignedTrainerId && !trainer && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-red-600">Trainer ID {topicDetail.assignedTrainerId} (Not found)</span>
-                                </>
-                              )}
+                    <div className={`relative z-10 bg-white rounded-lg border transition-all ${
+                      snapshot.isDragging
+                        ? 'border-blue-300 shadow-lg scale-105'
+                        : 'border-slate-200 hover:shadow-md'
+                    } ${!topic ? 'border-red-200 bg-red-50' : ''}`}>
+                      <div className="grid gap-4 md:grid-cols-[auto,1fr] p-4 md:p-5">
+                        {/* Drag Handle & Step Rail */}
+                        <div className="flex flex-col items-start gap-3 md:items-center">
+                          {onReorder && (
+                            <div
+                              {...provided.dragHandleProps}
+                              className="flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:text-slate-700 cursor-grab active:cursor-grabbing"
+                              title="Drag to reorder"
+                            >
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z"/>
+                              </svg>
                             </div>
+                          )}
+                          <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-semibold">
+                            {index + 1}
+                          </div>
+                        </div>
+
+                        {/* Topic Content */}
+                        <div className="flex-1 space-y-4">
+                          <div className="flex flex-col gap-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="flex-1 space-y-2">
+                                <h4 className="font-medium text-slate-900">
+                                  {topic ? topic.name : `Topic #${topicDetail.topicId} (Loading...)`}
+                                </h4>
+                                {!topic && (
+                                  <p className="text-sm text-red-600">
+                                    ⚠️ Topic details are loading. If this persists, try refreshing the page.
+                                  </p>
+                                )}
+                                {topic && (
+                                  <>
+                                    <p className="text-sm text-slate-600">
+                                      {topic.aiGeneratedContent?.enhancedContent?.enhancedDescription ||
+                                        topic.description ||
+                                        'No description provided yet.'}
+                                    </p>
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                      {renderMetaChip(`Duration: ${formatDuration(topicDetail.durationMinutes || 30)}`)}
+                                      {trainer && renderMetaChip(`Trainer: ${trainer.name}`)}
+                                      {topicDetail.assignedTrainerId && !trainer && renderMetaChip('Trainer missing', 'danger')}
+                                      {topic?.aiGeneratedContent?.enhancedContent?.trainerSection?.recommendedActivities?.length
+                                        ? renderMetaChip(
+                                            `${topic.aiGeneratedContent.enhancedContent.trainerSection.recommendedActivities.length} recommended task${topic.aiGeneratedContent.enhancedContent.trainerSection.recommendedActivities.length > 1 ? 's' : ''}`,
+                                          )
+                                        : null}
+                                      {topicDetail.notes && renderMetaChip('Custom notes added')}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Topic Actions */}
+                              <div className="flex gap-2">
+                                {onEditTopic && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onEditTopic(topicDetail.topicId)}
+                                    className="p-1 text-slate-400 hover:text-slate-600"
+                                    title="Edit topic"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                    </svg>
+                                  </button>
+                                )}
+                                {onRemoveTopic && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onRemoveTopic(topicDetail.topicId)}
+                                    className="p-1 text-slate-400 hover:text-red-600"
+                                    title="Remove topic"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
                             {topicDetail.notes && (
-                              <p className="text-sm text-slate-500 mt-2 italic">
-                                Notes: {topicDetail.notes}
-                              </p>
+                              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                                <span className="font-medium text-slate-700">Facilitator Notes:</span>{' '}
+                                {topicDetail.notes}
+                              </div>
                             )}
                           </div>
 
-                          {/* Topic Actions */}
-                          <div className="flex gap-2 ml-4">
-                            {onEditTopic && (
-                              <button
-                                type="button"
-                                onClick={() => onEditTopic(topicDetail.topicId)}
-                                className="p-1 text-slate-400 hover:text-slate-600"
-                                title="Edit topic"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                </svg>
-                              </button>
-                            )}
-                            {onRemoveTopic && (
-                              <button
-                                type="button"
-                                onClick={() => onRemoveTopic(topicDetail.topicId)}
-                                className="p-1 text-slate-400 hover:text-red-600"
-                                title="Remove topic"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                </svg>
-                              </button>
-                            )}
-                          </div>
+                          {topic && <TopicDetailSections topic={topic} />}
                         </div>
                       </div>
                     </div>
@@ -283,6 +307,111 @@ export const SessionFlowSummary: React.FC<SessionFlowSummaryProps> = ({
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+interface TopicDetailSectionsProps {
+  topic: Topic;
+}
+
+const splitToList = (value?: string | string[] | null): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map(item => item.trim()).filter(Boolean);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  const parts = trimmed
+    .split(/\r?\n/)
+    .map(part => part.replace(/^[•\-\*\s]+/, '').trim())
+    .filter(Boolean);
+  return parts.length ? parts : [trimmed];
+};
+
+export const TopicDetailSections: React.FC<TopicDetailSectionsProps> = ({ topic }) => {
+  const learningOutcomesList = useMemo(() => {
+    const manual = splitToList(topic.learningOutcomes);
+    const aiKeyTakeaways = topic.aiGeneratedContent?.enhancedContent?.attendeeSection?.keyTakeaways ?? [];
+    return manual.length ? manual : aiKeyTakeaways;
+  }, [topic]);
+
+  const learningNarrative = topic.aiGeneratedContent?.enhancedContent?.attendeeSection?.whatYoullLearn;
+
+  const recommendedActivities = topic.aiGeneratedContent?.enhancedContent?.trainerSection?.recommendedActivities ?? [];
+
+  const trainerGuidanceList = useMemo(() => {
+    const manualNotes = splitToList(topic.trainerNotes);
+    const deliveryGuidance = splitToList(topic.deliveryGuidance);
+    const aiTeachingPoints = topic.aiGeneratedContent?.enhancedContent?.trainerSection?.keyTeachingPoints ?? [];
+    const aiChallenges = topic.aiGeneratedContent?.enhancedContent?.trainerSection?.commonChallenges ?? [];
+    return Array.from(new Set([...manualNotes, ...deliveryGuidance, ...aiTeachingPoints, ...aiChallenges])).filter(Boolean);
+  }, [topic]);
+
+  const materialsList = useMemo(() => {
+    const manualMaterials = splitToList(topic.materialsNeeded);
+    const aiMaterials = topic.aiGeneratedContent?.enhancedContent?.trainerSection?.materialsNeeded ?? [];
+    const prepGuidance = splitToList(topic.aiGeneratedContent?.enhancedContent?.trainerSection?.preparationGuidance);
+    return Array.from(new Set([...manualMaterials, ...aiMaterials, ...prepGuidance])).filter(Boolean);
+  }, [topic]);
+
+  const callToActionList = splitToList(topic.aiGeneratedContent?.enhancedContent?.callToAction);
+
+  const sections = useMemo(() => [
+    {
+      title: 'Learning Outcomes',
+      description: learningNarrative,
+      items: learningOutcomesList,
+    },
+    {
+      title: 'Key Tasks',
+      items: recommendedActivities,
+    },
+    {
+      title: 'Trainer Guidance',
+      items: trainerGuidanceList,
+    },
+    {
+      title: 'Materials & Preparation',
+      items: materialsList,
+    },
+    {
+      title: 'Call To Action',
+      items: callToActionList,
+    },
+  ].filter(section => (section.items && section.items.length > 0) || section.description), [
+    learningNarrative,
+    learningOutcomesList,
+    recommendedActivities,
+    trainerGuidanceList,
+    materialsList,
+    callToActionList,
+  ]);
+
+  if (sections.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 grid gap-3 md:grid-cols-2">
+      {sections.map(section => (
+        <div key={section.title} className="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <h5 className="text-sm font-semibold text-slate-800">{section.title}</h5>
+          {section.description && (
+            <p className="mt-2 text-sm text-slate-600">{section.description}</p>
+          )}
+          {section.items && section.items.length > 0 && (
+            <ul className="mt-2 space-y-1 text-sm text-slate-600">
+              {section.items.map(item => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="mt-1 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
     </div>
   );
 };

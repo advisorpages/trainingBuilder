@@ -94,9 +94,9 @@ function App() {
               </ProtectedRoute>
             }
           />
-          {/* Redirect to admin dashboard with tabs */}
-          <Route path="/admin/locations" element={<Navigate to="/admin/dashboard?tab=locations" replace />} />
-          <Route path="/admin/trainers" element={<Navigate to="/admin/dashboard?tab=trainers" replace />} />
+          {/* Redirect to main navigation pages */}
+          <Route path="/admin/locations" element={<Navigate to="/locations" replace />} />
+          <Route path="/admin/trainers" element={<Navigate to="/trainers" replace />} />
           <Route
             path="/admin/settings"
             element={
@@ -112,6 +112,22 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <TopicsManagePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/locations"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <ManageLocationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/trainers"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <ManageTrainersPage />
               </ProtectedRoute>
             }
           />

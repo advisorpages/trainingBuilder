@@ -5,6 +5,7 @@ import { TrainerList } from '../components/trainers/TrainerList';
 import { TrainerForm } from '../components/trainers/TrainerForm';
 import { DeleteTrainerModal } from '../components/trainers/DeleteTrainerModal';
 import { useAuth } from '../contexts/AuthContext';
+import { BuilderLayout } from '../layouts/BuilderLayout';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -96,8 +97,11 @@ export const ManageTrainersPage: React.FC = () => {
 
   if (!canManageTrainers) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <BuilderLayout
+        title="Access Restricted"
+        subtitle="Trainer management requires elevated permissions"
+      >
+        <div className="max-w-4xl mx-auto">
           <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
@@ -114,12 +118,15 @@ export const ManageTrainersPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </BuilderLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <BuilderLayout
+      title="Manage Trainers"
+      subtitle="Create and manage trainer profiles for your training sessions"
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
@@ -244,6 +251,6 @@ export const ManageTrainersPage: React.FC = () => {
           />
         )}
       </div>
-    </div>
+    </BuilderLayout>
   );
 };

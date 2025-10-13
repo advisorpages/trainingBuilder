@@ -5,11 +5,10 @@ import { promptsService, Prompt, PromptCategory } from '../services/prompts.serv
 import { adminService, SystemHealth, SystemConfig, LogEntry } from '../services/admin.service';
 import { AnalyticsTabContent } from '../components/admin/AnalyticsTabContent';
 import { CategoriesTabContent } from '../components/admin/CategoriesTabContent';
-import { LocationsTabContent } from '../components/admin/LocationsTabContent';
-import { TrainersTabContent } from '../components/admin/TrainersTabContent';
 import { AudiencesTabContent } from '../components/admin/AudiencesTabContent';
 import { TonesTabContent } from '../components/admin/TonesTabContent';
 import { AIInsightsTabContent } from '../components/admin/AIInsightsTabContent';
+import SessionAITunerPage from './SessionAITunerPage';
 import { VariantsTabContent } from '../components/admin/VariantsTabContent';
 import { ImportExportTabContent } from '../components/admin/ImportExportTabContent';
 import { RagSettingsTabContent } from '../components/admin/RagSettingsTabContent';
@@ -52,7 +51,7 @@ const CORE_PROMPTS = [
   }
 ];
 
-type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'locations' | 'trainers' | 'audiences' | 'tones' | 'ai-insights' | 'variants' | 'rag-settings' | 'import-export';
+type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'audiences' | 'tones' | 'ai-insights' | 'variants' | 'rag-settings' | 'import-export' | 'ai-tuner';
 
 // Placeholder descriptions
 const PLACEHOLDER_DESCRIPTIONS: Record<string, string> = {
@@ -588,13 +587,12 @@ export const AdminDashboardPage: React.FC = () => {
       <div className="max-w-7xl mx-auto">
         {/* Tab Content */}
         {activeTab === 'prompts' && renderPromptsTab()}
+        {activeTab === 'ai-tuner' && <SessionAITunerPage />}
         {activeTab === 'variants' && <VariantsTabContent />}
         {activeTab === 'rag-settings' && <RagSettingsTabContent />}
         {activeTab === 'analytics' && <AnalyticsTabContent />}
         {activeTab === 'ai-insights' && <AIInsightsTabContent />}
         {activeTab === 'categories' && <CategoriesTabContent />}
-        {activeTab === 'locations' && <LocationsTabContent />}
-        {activeTab === 'trainers' && <TrainersTabContent />}
         {activeTab === 'audiences' && <AudiencesTabContent />}
         {activeTab === 'tones' && <TonesTabContent />}
         {activeTab === 'import-export' && <ImportExportTabContent />}

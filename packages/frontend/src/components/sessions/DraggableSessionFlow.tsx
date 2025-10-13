@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Topic, Trainer } from '@leadership-training/shared';
 import { SessionTopicDetail } from './EnhancedTopicCard';
+import { TopicDetailSections } from '@/features/session-builder/components/SessionFlowSummary';
 
 interface DraggableSessionFlowProps {
   selectedTopicDetails: SessionTopicDetail[];
@@ -44,22 +45,40 @@ export const DraggableSessionFlow: React.FC<DraggableSessionFlowProps> = ({
   };
 
   // Sort by current sequence order
-  const sortedDetails = selectedTopicDetails
-    .sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+  const sortedDetails = useMemo(
+    () => [...selectedTopicDetails].sort((a, b) => a.sequenceOrder - b.sequenceOrder),
+    [selectedTopicDetails]
+  );
+
+  const renderMetaChip = (label: string, variant: 'default' | 'danger' = 'default') => {
+    const variantClasses =
+      variant === 'danger'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-slate-100 text-slate-700';
+
+    return (
+      <span
+        key={`${variant}-${label}`}
+        className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${variantClasses}`}
+      >
+        {label}
+      </span>
+    );
+  };
 
   if (selectedTopicDetails.length === 0) {
     return null;
   }
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-medium text-gray-900">Session Flow Summary</h4>
-        <div className="flex items-center text-xs text-gray-500">
-          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+    <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h4 className="text-base font-semibold text-slate-900">Session Flow Summary</h4>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M7 2a1 1 0 00-.707 1.707L7 4.414v3.758a1 1 0 01-.293.707l-4 4C2.077 13.509 2 14.097 2 14.5c0 .828.672 1.5 1.5 1.5s1.5-.672 1.5-1.5c0-.403-.077-.991-.707-1.621l-1.793-1.793 1.793-1.793c.63-.63.707-1.218.707-1.621V4.414l.707-.707A1 1 0 007 2zM17 6a1 1 0 00-1 1v3.758l-.293-.707-4-4C11.077 5.421 10.489 5.344 10.086 5.344c-.828 0-1.5.672-1.5 1.5s.672 1.5 1.5 1.5c.403 0 .991-.077 1.621-.707l1.793-1.793 1.793 1.793c.63.63 1.218.707 1.621.707V11a1 1 0 002 0V7a1 1 0 00-1-1z"/>
           </svg>
-          Drag to reorder
+          Drag topics to adjust sequence
         </div>
       </div>
 
@@ -69,8 +88,8 @@ export const DraggableSessionFlow: React.FC<DraggableSessionFlowProps> = ({
             <div
               {...provided.droppableProps}
               ref={provided.innerRef}
-              className={`space-y-2 transition-colors ${
-                snapshot.isDraggingOver ? 'bg-blue-50' : ''
+              className={`space-y-4 transition-colors ${
+                snapshot.isDraggingOver ? 'rounded-lg bg-blue-50/50 p-2' : ''
               }`}
             >
               {sortedDetails.map((detail, index) => {
@@ -85,66 +104,78 @@ export const DraggableSessionFlow: React.FC<DraggableSessionFlowProps> = ({
                     draggableId={detail.topicId.toString()}
                     index={index}
                   >
-                    {(provided, snapshot) => (
+                    {(providedDraggable, snapshotDraggable) => (
                       <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        className={`flex items-center text-sm p-3 rounded-md border transition-all ${
-                          snapshot.isDragging
-                            ? 'bg-white border-blue-300 shadow-lg'
-                            : 'bg-white border-gray-200 hover:border-gray-300'
-                        }`}
+                        ref={providedDraggable.innerRef}
+                        {...providedDraggable.draggableProps}
+                        className={`relative rounded-lg border bg-white transition-all ${
+                          snapshotDraggable.isDragging
+                            ? 'border-blue-300 shadow-lg'
+                            : 'border-slate-200 hover:shadow-md'
+                        } ${!topic ? 'border-red-200 bg-red-50' : ''}`}
                       >
-                        {/* Drag Handle */}
-                        <div
-                          {...provided.dragHandleProps}
-                          className="flex items-center justify-center w-8 h-8 mr-3 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z"/>
-                          </svg>
-                        </div>
-
-                        {/* Sequence Number */}
-                        <span className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium mr-3 flex-shrink-0">
-                          {index + 1}
-                        </span>
-
-                        {/* Topic Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2 text-sm">
-                            <span className="font-medium text-gray-900 truncate">
-                              {topic?.name || `Topic ${detail.topicId}`}
-                            </span>
-                            <span className="text-gray-400">•</span>
-                            <span className="text-gray-600 whitespace-nowrap">
-                              {formatDuration(detail.durationMinutes)}
-                            </span>
-                            {trainer && (
-                              <>
-                                <span className="text-gray-400">•</span>
-                                <span className="text-gray-600 truncate">
-                                  {trainer.name}
-                                </span>
-                              </>
-                            )}
-                          </div>
-
-                          {detail.notes && (
-                            <div className="mt-1 text-xs text-gray-500 truncate">
-                              {detail.notes}
+                        <div className="grid gap-4 md:grid-cols-[auto,1fr] p-4 md:p-5">
+                          <div className="flex flex-col items-start gap-3 md:items-center">
+                            <div
+                              {...providedDraggable.dragHandleProps}
+                              className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:text-slate-700 cursor-grab active:cursor-grabbing"
+                              title="Drag to reorder"
+                            >
+                              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z" />
+                              </svg>
                             </div>
-                          )}
-                        </div>
-
-                        {/* Drag Indicator */}
-                        {snapshot.isDragging && (
-                          <div className="ml-2 text-blue-500">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                            </svg>
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+                              {index + 1}
+                            </div>
                           </div>
-                        )}
+
+                          <div className="flex-1 space-y-4">
+                            <div className="flex flex-col gap-3">
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="flex-1 space-y-2">
+                                  <h5 className="font-medium text-slate-900">
+                                    {topic?.name || `Topic #${detail.topicId}`}
+                                  </h5>
+                                  {!topic && (
+                                    <p className="text-sm text-red-600">
+                                      ⚠️ Topic details are loading. If this persists, refresh the page.
+                                    </p>
+                                  )}
+                                  {topic && (
+                                    <>
+                                      <p className="text-sm text-slate-600">
+                                        {topic.aiGeneratedContent?.enhancedContent?.enhancedDescription ||
+                                          topic.description ||
+                                          'No description provided yet.'}
+                                      </p>
+                                      <div className="flex flex-wrap gap-2 pt-1">
+                                        {renderMetaChip(`Duration: ${formatDuration(detail.durationMinutes)}`)}
+                                        {trainer && renderMetaChip(`Trainer: ${trainer.name}`)}
+                                        {detail.assignedTrainerId && !trainer && renderMetaChip('Trainer missing', 'danger')}
+                                        {topic?.aiGeneratedContent?.enhancedContent?.trainerSection?.recommendedActivities?.length
+                                          ? renderMetaChip(
+                                              `${topic.aiGeneratedContent.enhancedContent.trainerSection.recommendedActivities.length} recommended task${topic.aiGeneratedContent.enhancedContent.trainerSection.recommendedActivities.length > 1 ? 's' : ''}`,
+                                            )
+                                          : null}
+                                        {detail.notes && renderMetaChip('Custom notes added')}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {detail.notes && (
+                                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                                  <span className="font-medium text-slate-700">Facilitator Notes:</span>{' '}
+                                  {detail.notes}
+                                </div>
+                              )}
+                            </div>
+
+                            {topic && <TopicDetailSections topic={topic} />}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </Draggable>

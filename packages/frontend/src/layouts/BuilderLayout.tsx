@@ -38,20 +38,6 @@ const allNavItems: NavItem[] = [
     icon: '🏠',
   },
   {
-    label: 'Session Builder',
-    description: 'Craft AI-assisted training sessions',
-    to: '/sessions/builder/new',
-    roles: ['content_developer', 'broker'],
-    icon: '🎯',
-  },
-  {
-    label: 'Session AI Tuner',
-    description: 'Audit generations and fine-tune AI prompts',
-    to: '/admin/ai-tuner',
-    roles: ['content_developer', 'broker'],
-    icon: '🧪',
-  },
-  {
     label: 'Sessions',
     description: 'Manage existing sessions and drafts',
     to: '/sessions',
@@ -64,6 +50,20 @@ const allNavItems: NavItem[] = [
     to: '/topics',
     roles: ['content_developer', 'broker'],
     icon: '🏷️',
+  },
+  {
+    label: 'Locations',
+    description: 'Manage training venues and locations',
+    to: '/locations',
+    roles: ['content_developer', 'broker'],
+    icon: '🏢',
+  },
+  {
+    label: 'Trainers',
+    description: 'Manage trainer profiles and assignments',
+    to: '/trainers',
+    roles: ['content_developer', 'broker'],
+    icon: '👨‍🏫',
   },
   {
     label: 'Incentives',
@@ -156,21 +156,6 @@ export const BuilderLayout: React.FC<BuilderLayoutProps> = ({
           </p>
         </div>
 
-        {/* User Info */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
-              {userInitial}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900 truncate">{userDisplayName}</p>
-              {userEmail && (
-                <p className="text-xs text-slate-500 truncate">{userEmail}</p>
-              )}
-              <p className="text-xs text-slate-500 truncate">{getRoleDisplayName(effectiveRole)}</p>
-            </div>
-          </div>
-        </div>
 
         {/* Navigation */}
         <nav className="flex-1">

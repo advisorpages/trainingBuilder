@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 const LoginPage = () => {
   console.log('=== LOGIN PAGE LOADING ===')
 
-  const [email, setEmail] = useState('broker1@company.com')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('Password123!')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -122,7 +122,6 @@ const LoginPage = () => {
         <p><strong>Test Accounts:</strong></p>
         <p>📧 Content Developer: sarah.content@company.com</p>
         <p>👨‍🏫 Trainer: john.trainer@company.com</p>
-        <p>🏢 Broker: broker1@company.com</p>
         <p>🔑 Password for all: <code>Password123!</code></p>
       </div>
     </div>
