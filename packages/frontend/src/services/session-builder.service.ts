@@ -1,3 +1,4 @@
+
 import { api } from './api.service';
 import type { LocationType, MeetingPlatform, Session } from '@leadership-training/shared';
 
@@ -14,12 +15,6 @@ export interface SessionBuilderInput {
     title: string;
     description?: string;
     durationMinutes: number;
-    learningOutcomes?: string;
-    trainerNotes?: string;
-    materialsNeeded?: string;
-    deliveryGuidance?: string;
-    callToAction?: string;
-    topicId?: number;
   }>;
   date: string;
   startTime: string;
@@ -254,12 +249,6 @@ export interface TopicSuggestion {
   materialsNeeded?: string;
   deliveryGuidance?: string;
   defaultDurationMinutes?: number;
-  aiGeneratedContent?: {
-    enhancedContent?: {
-      callToAction?: string;
-    };
-    [key: string]: any;
-  } | null;
 }
 
 export interface BuilderAutosavePayload {
@@ -401,7 +390,6 @@ export class SessionBuilderService {
       const topicIds = await this.ensureTopicsFromOutline(
         request.outline,
         request.input.categoryName ?? request.input.category,
-        request.input,
       );
 
       const sessionData = this.transformOutlineToSession(
@@ -423,19 +411,23 @@ export class SessionBuilderService {
 
   async getPastTopics(categorySearch?: string, limit = 20): Promise<TopicSuggestion[]> {
     try {
-      // Call the actual backend endpoint at /topics (which returns an array directly)
+      console.log('🔍 getPastTopics called with:', { categorySearch, limit });
+      console.log('🌐 API base URL:', (import.meta as any).env?.VITE_API_URL || '/api');
       const response = await api.get<Array<any>>('/topics');
+      console.log('📡 API response received:', response.data);
+      console.log('📡 Response status:', response.status);
+      console.log('📡 Response headers:', response.headers);
       const topics = Array.isArray(response.data) ? response.data : [];
+      console.log('📊 Topics array length:', topics.length);
+      console.log('📋 First topic (if any):', topics[0]);
 
       const filtered = topics.filter((topic: any) => {
-        // Filter only active topics
-        if (topic.isActive === false) return false;
-
-        // Apply category search if provided
         if (!categorySearch) return true;
         const haystack = `${topic.name} ${topic.description ?? ''} ${topic.category?.name ?? ''} ${topic.aiGeneratedContent?.categoryName ?? ''}`.toLowerCase();
         return haystack.includes(categorySearch.toLowerCase());
       });
+
+      console.log('🔍 Filtered topics length:', filtered.length);
 
       const transformed = filtered
         .slice(0, limit)
@@ -447,7 +439,7 @@ export class SessionBuilderService {
             name: topic.name,
             description: topic.description || '',
             category: categoryName,
-            isUsed: topic.sessionCount > 0 || (Array.isArray(topic.sessions) && topic.sessions.length > 0),
+            isUsed: Array.isArray(topic.sessions) && topic.sessions.length > 0,
             lastUsedDate: topic.sessions?.[0]?.createdAt,
             learningOutcomes: topic.learningOutcomes || aiMeta.learningOutcomes || '',
             trainerNotes: topic.trainerNotes || aiMeta.trainerNotes || '',
@@ -457,16 +449,18 @@ export class SessionBuilderService {
           };
         });
 
+      console.log('✅ Transformed topics:', transformed);
       return transformed;
     } catch (error: any) {
-      console.error('Failed to load past topics:', error);
+      console.error('❌ Error in getPastTopics:', error);
+      console.error('❌ Error response:', error.response);
       throw new Error(error.response?.data?.message || 'Failed to load past topics');
     }
   }
 
   async getTopicDetails(topicId: number): Promise<any> {
     try {
-      const response = await api.get(`/topics/${topicId}`);
+      const response = await api.get(`/admin/topics/${topicId}`);
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to load topic details');
@@ -699,10 +693,6 @@ export class SessionBuilderService {
       aiGeneratedContent.defaultDurationMinutes = section.duration;
     }
 
-    if (typeof section.position === 'number' && !Number.isNaN(section.position)) {
-      aiGeneratedContent.sectionPosition = section.position;
-    }
-
     if (Array.isArray(section.learningObjectives) && section.learningObjectives.length > 0) {
       aiGeneratedContent.learningObjectives = section.learningObjectives;
     }
@@ -731,9 +721,8 @@ export class SessionBuilderService {
   private async ensureTopicsFromOutline(
     outline: SessionOutline,
     categoryName?: string,
-    metadata?: SessionBuilderInput,
   ): Promise<number[]> {
-    if (!outline?.sections?.length && !metadata?.topics?.length) {
+    if (!outline?.sections?.length) {
       return [];
     }
 
@@ -741,87 +730,9 @@ export class SessionBuilderService {
     const topicIds: number[] = [];
     const seenTopicIds = new Set<number>();
 
-    // FIRST: Process topics from metadata (added via "Add from Library" in step 1)
-    if (metadata?.topics && Array.isArray(metadata.topics)) {
-      for (const metadataTopic of metadata.topics) {
-        if (!metadataTopic.title?.trim()) {
-          continue;
-        }
+    const topicSections = outline.sections.filter((section) => section.type === 'topic');
 
-        const topicName = metadataTopic.title.trim();
-        const normalizedName = topicName.toLowerCase();
-
-        // Check if topic already exists
-        let topicId = lookup.get(normalizedName);
-
-        if (!topicId) {
-          // Create new topic
-          const payload: TopicPersistencePayload = {
-            name: topicName,
-          };
-
-          if (metadataTopic.description?.trim()) {
-            payload.description = metadataTopic.description.trim();
-          }
-
-          const aiGeneratedContent: Record<string, unknown> = {
-            source: 'session-builder-metadata',
-            capturedAt: new Date().toISOString(),
-          };
-
-          if (categoryName) {
-            aiGeneratedContent.categoryName = categoryName;
-          }
-
-          if (typeof metadataTopic.durationMinutes === 'number' && !Number.isNaN(metadataTopic.durationMinutes)) {
-            aiGeneratedContent.defaultDurationMinutes = metadataTopic.durationMinutes;
-          }
-
-          payload.aiGeneratedContent = aiGeneratedContent;
-
-          try {
-            const response = await api.post('/topics', payload);
-            const topic = response.data as { id?: number | string } | undefined;
-            if (topic?.id !== undefined && topic?.id !== null) {
-              const parsed = Number(topic.id);
-              if (!Number.isNaN(parsed)) {
-                topicId = parsed;
-                lookup.set(normalizedName, topicId);
-              }
-            }
-          } catch (error) {
-            console.warn(`Failed to create topic "${topicName}" from metadata`, error);
-            continue;
-          }
-        } else {
-          // Update existing topic if we have new information
-          try {
-            const updatePayload: Partial<TopicPersistencePayload> = {};
-
-            if (metadataTopic.description?.trim()) {
-              updatePayload.description = metadataTopic.description.trim();
-            }
-
-            if (Object.keys(updatePayload).length > 0) {
-              await api.patch(`/topics/${topicId}`, updatePayload);
-            }
-          } catch (error) {
-            console.warn(`Failed to update topic "${topicName}" (ID: ${topicId})`, error);
-          }
-        }
-
-        if (topicId && !Number.isNaN(topicId) && !seenTopicIds.has(topicId)) {
-          seenTopicIds.add(topicId);
-          topicIds.push(topicId);
-        }
-      }
-    }
-
-    // THEN: Process ALL sections from outline (opener, closing, topic, exercise, etc.)
-    // Each section will be converted to a topic with metadata indicating its section type
-    const allSections = outline?.sections || [];
-
-    for (const section of allSections) {
+    for (const section of topicSections) {
       const payload = this.buildTopicPayload(section, categoryName);
       if (!payload) {
         continue;

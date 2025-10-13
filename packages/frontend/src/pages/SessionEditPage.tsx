@@ -12,8 +12,10 @@ import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { BuilderLayout } from '../layouts/BuilderLayout';
 import { Topic } from '@leadership-training/shared';
-import { EnhancedTopicSelection } from '../components/sessions/EnhancedTopicSelection';
 import { SessionTopicDetail } from '../components/sessions/EnhancedTopicCard';
+import { SessionFlowSummary } from '../features/session-builder/components/SessionFlowSummary';
+import { TopicSelectionModal } from '../features/session-builder/components/TopicSelectionModal';
+import { EditTopicDetailsModal } from '../features/session-builder/components/EditTopicDetailsModal';
 
 interface FormData {
   title: string;
@@ -53,6 +55,8 @@ const SessionEditPage: React.FC = () => {
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
+  const [editingTopicId, setEditingTopicId] = useState<number | null>(null);
 
   // Dropdown options
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -74,6 +78,7 @@ const SessionEditPage: React.FC = () => {
       try {
         setLoading(true);
         const sessionData = await sessionService.getSession(sessionId);
+        console.log('[SessionEditPage] Loaded session data:', sessionData);
         setSession(sessionData);
         const sessionWithRelations = sessionData as Session & {
           incentives?: Incentive[];
@@ -90,6 +95,41 @@ const SessionEditPage: React.FC = () => {
         topics?: Topic[];
       };
 
+        console.log('[SessionEditPage] Session topics from API:', sessionWithRelations.sessionTopics);
+        console.log('[SessionEditPage] Direct topics from API:', sessionWithRelations.topics);
+
+        // Extract topics from sessionTopics relation
+        const topicsFromSessionTopics: Topic[] = (sessionWithRelations.sessionTopics || [])
+          .map(st => st.topic)
+          .filter((topic): topic is Topic => topic !== undefined && topic !== null);
+
+        // Combine with direct topics relation and deduplicate by ID
+        const allTopicsMap = new Map<number, Topic>();
+
+        // Add topics from direct relation
+        (sessionWithRelations.topics || []).forEach(topic => {
+          allTopicsMap.set(topic.id, topic);
+        });
+
+        // Add topics from sessionTopics relation (will override if duplicate)
+        topicsFromSessionTopics.forEach(topic => {
+          allTopicsMap.set(topic.id, topic);
+        });
+
+        const allTopics = Array.from(allTopicsMap.values());
+        console.log('[SessionEditPage] Combined topics for display:', allTopics);
+
+        // Update topics state immediately with topics from session
+        if (allTopics.length > 0) {
+          setTopics(prev => {
+            const existingIds = new Set(prev.map(topic => topic.id));
+            const newTopics = allTopics.filter(topic => !existingIds.has(topic.id));
+            const combined = newTopics.length > 0 ? [...prev, ...newTopics] : prev;
+            console.log('[SessionEditPage] Updated topics state:', combined);
+            return combined;
+          });
+        }
+
         const sessionTopicDetails: SessionTopicDetail[] = (sessionWithRelations.sessionTopics || []).map((sessionTopic, index) => ({
           topicId: sessionTopic.topicId,
           sequenceOrder: sessionTopic.sequenceOrder ?? index + 1,
@@ -100,13 +140,15 @@ const SessionEditPage: React.FC = () => {
 
         const fallbackTopicDetails: SessionTopicDetail[] = sessionTopicDetails.length > 0
           ? sessionTopicDetails
-          : (sessionWithRelations.topics || []).map((topic, index) => ({
+          : allTopics.map((topic, index) => ({
               topicId: topic.id,
               sequenceOrder: index + 1,
               durationMinutes: 30,
               assignedTrainerId: undefined,
               notes: '',
             }));
+
+        console.log('[SessionEditPage] Final sessionTopicDetails:', fallbackTopicDetails);
 
         setFormData({
           title: sessionData.title || '',
@@ -126,7 +168,8 @@ const SessionEditPage: React.FC = () => {
 
         setCurrentIncentives(sessionWithRelations.incentives || []);
       } catch (error) {
-        console.error('Failed to load session:', error);
+        console.error('[SessionEditPage] Failed to load session:', error);
+        setLoadError('Failed to load session data. Please try refreshing the page.');
         navigate('/sessions');
       } finally {
         setLoading(false);
@@ -140,26 +183,44 @@ const SessionEditPage: React.FC = () => {
   useEffect(() => {
     const loadDropdownOptions = async () => {
       try {
+        console.log('[SessionEditPage] Loading dropdown options...');
         const [topicsData, trainersData, incentivesData] = await Promise.all([
           topicService.getActiveTopics(),
           trainerService.getActiveTrainers(),
           incentiveService.getIncentives(),
         ]);
 
+        console.log('[SessionEditPage] Loaded topics:', topicsData.length, 'topics');
         console.log('[SessionEditPage] Loaded trainers:', trainersData);
         console.log('[SessionEditPage] Trainers count:', trainersData.length);
+        console.log('[SessionEditPage] Loaded incentives:', incentivesData.length, 'incentives');
 
-        setTopics(topicsData);
+        // Only update topics state if we haven't already loaded topics from the session
+        // This prevents overwriting topics that were loaded from sessionTopics relation
+        setTopics(prevTopics => {
+          // Merge with existing topics, keeping session topics priority
+          const existingIds = new Set(prevTopics.map(t => t.id));
+          const newTopics = topicsData.filter(t => !existingIds.has(t.id));
+          const merged = prevTopics.length > 0 ? [...prevTopics, ...newTopics] : topicsData;
+          console.log('[SessionEditPage] Merged topics state:', merged.length, 'total topics');
+          return merged;
+        });
+
         setTrainers(trainersData);
         setIncentives(incentivesData);
 
         if (trainersData.length === 0) {
           console.warn('[SessionEditPage] No active trainers found!');
-          setLoadError('No active trainers available. Please ensure trainers are added and marked as active.');
+          setLoadError('No active trainers available. Please add trainers in the admin section and mark them as active.');
+        } else {
+          // Clear any previous trainer-related errors
+          setLoadError(null);
         }
       } catch (error) {
         console.error('[SessionEditPage] Failed to load dropdown options:', error);
-        setLoadError('Failed to load trainers. Please refresh the page or contact support.');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[SessionEditPage] Error details:', errorMessage);
+        setLoadError(`Failed to load options: ${errorMessage}. Please refresh the page.`);
       }
     };
 
@@ -230,12 +291,33 @@ const SessionEditPage: React.FC = () => {
     }
   }, [formData, session]);
 
+  // Note: Topics from session are now loaded directly in the loadSession effect above
+  // This effect is kept for any future edge cases where topics might be updated independently
   useEffect(() => {
-    const sessionTopics = session?.topics ?? [];
-    if (sessionTopics.length > 0) {
+    if (!session) return;
+
+    const sessionWithRelations = session as Session & {
+      sessionTopics?: Array<{
+        topic?: Topic;
+      }>;
+      topics?: Topic[];
+    };
+
+    // Extract all topics from session
+    const sessionTopicsFromJoin = (sessionWithRelations.sessionTopics || [])
+      .map(st => st.topic)
+      .filter((topic): topic is Topic => topic !== undefined && topic !== null);
+
+    const directTopics = sessionWithRelations.topics ?? [];
+    const allSessionTopics = [...directTopics, ...sessionTopicsFromJoin];
+
+    if (allSessionTopics.length > 0) {
       setTopics(prev => {
         const existingIds = new Set(prev.map(topic => topic.id));
-        const additionalTopics = sessionTopics.filter(topic => !existingIds.has(topic.id));
+        const additionalTopics = allSessionTopics.filter(topic => !existingIds.has(topic.id));
+        if (additionalTopics.length > 0) {
+          console.log('[SessionEditPage] Adding additional topics to state:', additionalTopics);
+        }
         return additionalTopics.length > 0 ? [...prev, ...additionalTopics] : prev;
       });
     }
@@ -257,6 +339,12 @@ const SessionEditPage: React.FC = () => {
     return topicsCopy;
   }, [topics]);
 
+  // Filter out already-selected topics for the modal
+  const availableTopicsForSelection = useMemo(() => {
+    const selectedTopicIds = new Set(formData.sessionTopics.map(st => st.topicId));
+    return sortedTopics.filter(topic => !selectedTopicIds.has(topic.id));
+  }, [sortedTopics, formData.sessionTopics]);
+
   const handleTopicSelectionChange = useCallback((details: SessionTopicDetail[]) => {
     const sortedDetails = [...details].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
 
@@ -265,6 +353,50 @@ const SessionEditPage: React.FC = () => {
       topicIds: sortedDetails.map(detail => detail.topicId),
       sessionTopics: sortedDetails,
     }));
+  }, []);
+
+  const handleRemoveTopic = useCallback((topicId: number) => {
+    setFormData(prev => {
+      const updatedTopics = prev.sessionTopics.filter(t => t.topicId !== topicId);
+      // Recalculate sequence orders
+      const reorderedTopics = updatedTopics.map((t, index) => ({
+        ...t,
+        sequenceOrder: index + 1,
+      }));
+
+      return {
+        ...prev,
+        sessionTopics: reorderedTopics,
+        topicIds: reorderedTopics.map(t => t.topicId),
+      };
+    });
+  }, []);
+
+  const handleReorderTopics = useCallback((reorderedTopics: SessionTopicDetail[]) => {
+    setFormData(prev => ({
+      ...prev,
+      sessionTopics: reorderedTopics,
+      topicIds: reorderedTopics.map(t => t.topicId),
+    }));
+  }, []);
+
+  const handleEditTopicDetails = useCallback((topicId: number) => {
+    setEditingTopicId(topicId);
+  }, []);
+
+  const handleSaveTopicDetails = useCallback((updatedDetail: SessionTopicDetail) => {
+    setFormData(prev => ({
+      ...prev,
+      sessionTopics: prev.sessionTopics.map(t =>
+        t.topicId === updatedDetail.topicId ? updatedDetail : t
+      ),
+    }));
+    setEditingTopicId(null);
+  }, []);
+
+  const handleTopicCreated = useCallback((newTopic: Topic) => {
+    // Add the newly created topic to the topics list
+    setTopics(prev => [...prev, newTopic]);
   }, []);
 
   const validateForm = (): boolean => {
@@ -470,7 +602,7 @@ const SessionEditPage: React.FC = () => {
                 <div className="h-px bg-slate-200 flex-1"></div>
               </div>
 
-              {/* Warning message for trainer loading issues */}
+              {/* Warning message for trainer/topic loading issues */}
               {loadError && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <div className="flex items-start">
@@ -478,18 +610,29 @@ const SessionEditPage: React.FC = () => {
                       <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                     <div className="flex-1">
-                      <h3 className="text-sm font-medium text-yellow-800 mb-1">Trainer Loading Issue</h3>
+                      <h3 className="text-sm font-medium text-yellow-800 mb-1">Loading Issue</h3>
                       <p className="text-sm text-yellow-700">{loadError}</p>
+                      {trainers.length === 0 && (
+                        <div className="mt-2 text-xs text-yellow-600">
+                          <strong>Tip:</strong> You can still add topics without trainers. Trainer assignments are optional.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
 
-              <EnhancedTopicSelection
-                topics={sortedTopics}
+              {/* New Session Flow Summary - CENTERPIECE */}
+              <SessionFlowSummary
+                sessionTitle={formData.title}
+                sessionTopics={formData.sessionTopics}
+                totalDuration={formData.sessionTopics.reduce((total, topic) => total + (topic.durationMinutes || 30), 0)}
+                topics={topics}
                 trainers={trainers}
-                initialTopicDetails={formData.sessionTopics}
-                onSelectionChange={handleTopicSelectionChange}
+                onAddTopic={() => setIsTopicModalOpen(true)}
+                onEditTopic={handleEditTopicDetails}
+                onRemoveTopic={handleRemoveTopic}
+                onReorder={handleReorderTopics}
               />
             </div>
 
@@ -717,6 +860,38 @@ const SessionEditPage: React.FC = () => {
           </form>
         </Card>
       </div>
+
+      {/* Topic Selection Modal */}
+      <TopicSelectionModal
+        isOpen={isTopicModalOpen}
+        onClose={() => setIsTopicModalOpen(false)}
+        onSelectTopic={(topic) => {
+          // Convert Topic to SessionTopicDetail format
+          const newTopicDetail: SessionTopicDetail = {
+            topicId: topic.id,
+            sequenceOrder: formData.sessionTopics.length + 1,
+            durationMinutes: 30, // Default duration
+            assignedTrainerId: undefined,
+            notes: '',
+          };
+
+          const updatedTopics = [...formData.sessionTopics, newTopicDetail];
+          handleTopicSelectionChange(updatedTopics);
+          setIsTopicModalOpen(false);
+        }}
+        availableTopics={availableTopicsForSelection}
+        onTopicCreated={handleTopicCreated}
+      />
+
+      {/* Edit Topic Details Modal */}
+      <EditTopicDetailsModal
+        isOpen={editingTopicId !== null}
+        topicDetail={formData.sessionTopics.find(t => t.topicId === editingTopicId) || null}
+        topic={topics.find(t => t.id === editingTopicId)}
+        trainers={trainers}
+        onSave={handleSaveTopicDetails}
+        onClose={() => setEditingTopicId(null)}
+      />
     </BuilderLayout>
   );
 };
