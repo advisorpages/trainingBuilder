@@ -13,6 +13,7 @@ import { ManageTopicsPage } from './pages/ManageTopicsPage'
 import TrainerDashboardPage from './pages/TrainerDashboardPage'
 import TrainerSessionDetailPage from './pages/TrainerSessionDetailPage'
 import { SessionBuilderPage } from './pages/SessionBuilderPage'
+import ClassicSessionBuilderPage from './pages/ClassicSessionBuilderPage'
 import SessionEditPage from './pages/SessionEditPage'
 import DashboardPage from './pages/DashboardPage'
 import SessionWorksheetPage from './pages/SessionWorksheetPage'
@@ -55,10 +56,22 @@ function App() {
             element={<Navigate to="/sessions/builder/new" replace />}
           />
           <Route
+            path="/sessions/builder/classic"
+            element={<Navigate to="/sessions/builder/classic/new" replace />}
+          />
+          <Route
             path="/sessions/builder/:sessionId"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <SessionBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sessions/builder/classic/:sessionId"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <ClassicSessionBuilderPage />
               </ProtectedRoute>
             }
           />

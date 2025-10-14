@@ -249,6 +249,16 @@ class SessionService {
   ): any | null {
     return session.sessionOutlineData || null;
   }
+
+  // Update session topics order
+  async updateSessionTopics(sessionId: string, sessionTopics: SessionTopicAssignmentPayload[]): Promise<Session> {
+    try {
+      const response = await api.patch<Session>(`${this.base}/${sessionId}`, { sessionTopics });
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update session topics');
+    }
+  }
 }
 
 export const sessionService = new SessionService();

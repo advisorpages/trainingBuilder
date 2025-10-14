@@ -22,6 +22,7 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState<string>('');
+  const [activeSearchTerm, setActiveSearchTerm] = React.useState<string>('');
   const [selectedCategory, setSelectedCategory] = React.useState<string>('');
   const parseBulletList = React.useCallback(
     (value?: string | null): string[] =>
@@ -71,16 +72,26 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
       return;
     }
 
-    console.log('📖 TopicLibraryModal opening, fetching all topics...');
-    // Show all topics by default - don't pre-filter by category
-    void fetchTopics();
+    const initialCategory = category ?? '';
+    setSearchTerm('');
+    setActiveSearchTerm('');
+    setSelectedCategory(initialCategory);
+
+    console.log('📖 TopicLibraryModal opening, fetching topics...', { initialCategory });
+    void fetchTopics(initialCategory || undefined, activeSearchTerm || undefined);
 
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, fetchTopics, onClose]);
+  }, [open, category, activeSearchTerm, fetchTopics, onClose]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    console.log('🔄 Category changed, refetching topics', { selectedCategory, activeSearchTerm });
+    void fetchTopics(selectedCategory || undefined, activeSearchTerm || undefined);
+  }, [selectedCategory, activeSearchTerm, open, fetchTopics]);
 
   if (!open) {
     console.log('🚪 TopicLibraryModal: modal closed, not rendering');
@@ -91,18 +102,21 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const trimmedSearch = searchTerm.trim();
     console.log('🔍 TopicLibraryModal: search submitted with:', {
       category: selectedCategory,
-      search: searchTerm.trim()
+      search: trimmedSearch
     });
+    setActiveSearchTerm(trimmedSearch);
     void fetchTopics(
       selectedCategory || undefined,
-      searchTerm.trim() || undefined
+      trimmedSearch || undefined
     );
   };
 
   const handleReset = () => {
     setSearchTerm('');
+    setActiveSearchTerm('');
     setSelectedCategory('');
     void fetchTopics();
   };
@@ -178,7 +192,7 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
         )}
 
         {/* Active filters indicator */}
-        {!loading && (selectedCategory || searchTerm) && (
+        {!loading && (selectedCategory || activeSearchTerm) && (
           <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="font-medium">Active filters:</span>
             {selectedCategory && (
@@ -188,7 +202,7 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
                   type="button"
                   onClick={() => {
                     setSelectedCategory('');
-                    void fetchTopics(undefined, searchTerm.trim() || undefined);
+                    void fetchTopics(undefined, activeSearchTerm || undefined);
                   }}
                   className="hover:text-blue-900"
                   aria-label="Remove category filter"
@@ -197,13 +211,14 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
                 </button>
               </span>
             )}
-            {searchTerm && (
+            {activeSearchTerm && (
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-blue-700">
-                Search: {searchTerm}
+                Search: {activeSearchTerm}
                 <button
                   type="button"
                   onClick={() => {
                     setSearchTerm('');
+                    setActiveSearchTerm('');
                     void fetchTopics(selectedCategory || undefined, undefined);
                   }}
                   className="hover:text-blue-900"
@@ -225,7 +240,7 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
             <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-8 text-center">
               <p className="text-sm text-slate-600 font-medium mb-1">No topics found</p>
               <p className="text-xs text-slate-500">
-                {selectedCategory || searchTerm
+                {selectedCategory || activeSearchTerm
                   ? 'Try adjusting your filters or clearing them to see all topics.'
                   : 'Publish sessions to grow your library.'}
               </p>

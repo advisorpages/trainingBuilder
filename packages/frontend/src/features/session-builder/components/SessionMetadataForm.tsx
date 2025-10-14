@@ -11,6 +11,7 @@ import { ToneSelect } from '@/components/ui/ToneSelect';
 interface SessionMetadataFormProps {
   metadata: SessionMetadata;
   onChange: (updates: Partial<SessionMetadata>) => void;
+  mode?: 'guided' | 'classic';
 }
 
 const sessionTypes: SessionMetadata['sessionType'][] = [
@@ -342,7 +343,9 @@ const structureTemplates: Array<{
 export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   metadata,
   onChange,
+  mode = 'guided',
 }) => {
+  const isClassic = mode === 'classic';
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
 
   // Log topics whenever metadata changes
@@ -681,56 +684,62 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
             </svg>
             <CardTitle className="text-base font-semibold text-amber-900">
-              Assemble Your Topics (Optional)
+              {isClassic ? 'Assemble Your Topics' : 'Assemble Your Topics (Optional)'}
             </CardTitle>
           </div>
           <p className="text-sm text-slate-700 mt-1">
-            You can skip this section and let AI generate topics for you, OR select topics from your library or create custom ones
+            {isClassic
+              ? 'Select the topics you will cover in this session. Choose items from your library or add new custom topics.'
+              : 'You can skip this section and let AI generate topics for you, OR select topics from your library or create custom ones'}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Optional Callout */}
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-                <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-blue-900">Not sure what to include?</h4>
-                <p className="text-xs text-blue-800 mt-1">
-                  This entire section is optional. Skip it and continue to the next step if you want AI to suggest topics based on your objective. You can always come back and add specific topics later.
-                </p>
+          {!isClassic && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5">
+                  <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-blue-900">Not sure what to include?</h4>
+                  <p className="text-xs text-blue-800 mt-1">
+                    This entire section is optional. Skip it and continue to the next step if you want AI to suggest topics based on your objective. You can always come back and add specific topics later.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Simple Topic List */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">
-              Quick topic list (optional)
-            </label>
-            <textarea
-              className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              value={metadata.specificTopics}
-              placeholder="Example: trust-building, root-cause questions, one-page action plans"
-              onChange={handleStringChange('specificTopics')}
-              rows={2}
-            />
-            <p className="text-xs text-slate-500">
-              Comma-separated list for a quick overview
-            </p>
-          </div>
+          {!isClassic && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                Quick topic list (optional)
+              </label>
+              <textarea
+                className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                value={metadata.specificTopics}
+                placeholder="Example: trust-building, root-cause questions, one-page action plans"
+                onChange={handleStringChange('specificTopics')}
+                rows={2}
+              />
+              <p className="text-xs text-slate-500">
+                Comma-separated list for a quick overview
+              </p>
+            </div>
+          )}
 
           {/* Detailed Topics Section */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-700">
-              Add detailed topics (optional)
+              {isClassic ? 'Add detailed topics' : 'Add detailed topics (optional)'}
             </label>
 
             {/* Structure Templates */}
-            {structureTemplates.length > 0 && (
+            {!isClassic && structureTemplates.length > 0 && (
               <div className="bg-white border border-slate-200 rounded-md p-4 space-y-3">
                 <p className="text-sm text-slate-600">
                   Want a head start? Pick a structure to load sample topics and trainer tasks, then customize anything you like.
@@ -761,6 +770,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               topics={metadata.topics || []}
               onChange={(topics) => onChange({ topics })}
               category={metadata.category}
+              mode={mode}
             />
             <p className="text-xs text-slate-500">
               Include learning outcomes, trainer notes, materials, and delivery guidance for each topic

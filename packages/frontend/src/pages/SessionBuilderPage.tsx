@@ -535,7 +535,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
 
   const getStepTitle = () => {
     switch (currentStep) {
-      case 'setup': return 'Session Details';
+      case 'setup': return 'Guided Session Builder ';
       case 'generate': return 'Create Outline';
       case 'review': return 'Review & Edit';
       case 'finalize': return 'Publish Session';
@@ -545,7 +545,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
 
   const getStepSubtitle = () => {
     switch (currentStep) {
-      case 'setup': return 'Define your session information and learning goals';
+      case 'setup': return 'Instantly generate a complete session outline based on your chosen topic and objectives.';
       case 'generate': return 'Generate AI-powered outlines and select your favorite';
       case 'review': return 'Review and refine your session content';
       case 'finalize': return 'Your session is ready to publish';

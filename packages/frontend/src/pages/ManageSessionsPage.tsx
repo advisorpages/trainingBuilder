@@ -540,8 +540,12 @@ export const ManageSessionsPage: React.FC = () => {
     navigate(`/sessions/edit/${sessionId}`);
   };
 
-  const handleNewSession = () => {
+  const handleNewGuidedSession = () => {
     navigate('/sessions/builder/new');
+  };
+
+  const handleNewClassicSession = () => {
+    navigate('/sessions/builder/classic/new');
   };
 
   const handleBackToHome = () => {
@@ -600,12 +604,15 @@ export const ManageSessionsPage: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={handleBackToHome}>
               Back to Home
             </Button>
-            <Button onClick={handleNewSession}>
-              New Session
+            <Button onClick={handleNewGuidedSession}>
+              Guided Builder
+            </Button>
+            <Button variant="outline" onClick={handleNewClassicSession}>
+              Classic Builder
             </Button>
           </div>
         </div>
@@ -657,7 +664,10 @@ export const ManageSessionsPage: React.FC = () => {
         {(sessions || []).length === 0 && (
           <div className="text-center py-12">
             <div className="text-slate-500 mb-4">No sessions found</div>
-            <Button onClick={handleNewSession}>Create Your First Session</Button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={handleNewGuidedSession}>Create Guided Session</Button>
+              <Button variant="outline" onClick={handleNewClassicSession}>Create Classic Session</Button>
+            </div>
           </div>
         )}
       </div>

@@ -25,7 +25,7 @@ export class AddVariantSelectionToAIInteractionType1738850000000 implements Migr
     `);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     // PostgreSQL doesn't support removing enum values directly
     // Reverting would require:
     // 1. Creating a new enum without the value

@@ -4,7 +4,6 @@ import { DataSource } from 'typeorm';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { TestDatabaseSeeder, testDbUtils } from '../src/test/database-seeder';
-import { TestDataFactory } from '../src/test/test-data.factory';
 import { createTestDatabase } from '../src/config/test-database.config';
 
 describe('Epic 4: Trainer Dashboard Integration Tests', () => {

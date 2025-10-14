@@ -65,7 +65,7 @@ export class AdminController {
   }
 
   @Put('config')
-  async updateSystemConfig(@Body() config: Partial<SystemConfig>): Promise<SystemConfig> {
+  async updateSystemConfig(@Body() _config: Partial<SystemConfig>): Promise<SystemConfig> {
     // In a real implementation, you'd update actual configuration
     // For now, return the current config
     return this.getSystemConfig();

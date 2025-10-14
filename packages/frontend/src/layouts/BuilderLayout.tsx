@@ -38,6 +38,20 @@ const allNavItems: NavItem[] = [
     icon: '🏠',
   },
   {
+    label: 'Guided Session Builder',
+    description: 'AI-assisted session creation',
+    to: '/sessions/builder/new',
+    roles: ['content_developer', 'broker'],
+    icon: '🤖',
+  },
+  {
+    label: 'Classic Session Builder',
+    description: 'Manual session creation',
+    to: '/sessions/builder/classic/new',
+    roles: ['content_developer', 'broker'],
+    icon: '🛠️',
+  },
+  {
     label: 'Sessions',
     description: 'Manage existing sessions and drafts',
     to: '/sessions',

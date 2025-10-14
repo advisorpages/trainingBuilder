@@ -374,7 +374,7 @@ export class OpenAIService {
           }
 
           this.logger.warn(`Attempt ${attempt} failed, retrying...`, error);
-          lastError = error;
+          // Error handled by throw below if all retries fail
         }
       }
 

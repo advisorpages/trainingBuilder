@@ -3,7 +3,6 @@ import { BaseEntity } from './base.entity';
 import { Session } from './session.entity';
 import { SessionContentVersion } from './session-content-version.entity';
 import { SessionStatusLog } from './session-status-log.entity';
-import { Topic } from './topic.entity';
 import { Incentive } from './incentive.entity';
 
 export enum UserRole {

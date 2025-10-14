@@ -282,7 +282,7 @@ export class AiPromptSettingsService {
     let candidate = base || `settings-${Date.now()}`;
     let suffix = 1;
 
-    while (true) {
+    while (suffix <= 100) {
       const existing = await this.promptSettingsRepository.findOne({
         where: { slug: candidate },
       });

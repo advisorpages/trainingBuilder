@@ -15,6 +15,7 @@ interface TopicInputValue {
 interface TopicInputProps {
   value: TopicInputValue;
   onChange: (value: TopicInputValue) => void;
+  onEdit: () => void;
 }
 
 const parseBulletList = (value?: string | null): string[] =>
@@ -26,152 +27,128 @@ const parseBulletList = (value?: string | null): string[] =>
 const toBulletString = (items: string[]): string =>
   items.length ? items.map((item) => `• ${item}`).join('\n') : '';
 
-export const TopicInput = ({ value, onChange }: TopicInputProps) => {
-  const [trainerTasksInput, setTrainerTasksInput] = React.useState('');
-
-  React.useEffect(() => {
-    const tasks = parseBulletList(value.trainerNotes);
-    setTrainerTasksInput(tasks.join('\n'));
-  }, [value.trainerNotes]);
-
-  const handleDurationChange = (minutes: number) => {
-    onChange({ ...value, durationMinutes: Math.max(5, Math.round(minutes / 5) * 5) });
-  };
-
-  const handleTrainerTasksChange = (rawValue: string) => {
-    setTrainerTasksInput(rawValue);
-    const tasks = rawValue
-      .split('\n')
-      .map((line) => line.replace(/^•\s*/, '').trim())
-      .filter(Boolean);
-
-    onChange({
-      ...value,
-      trainerNotes: toBulletString(tasks),
-    });
-  };
+export const TopicInput = ({ value, onEdit }: TopicInputProps) => {
+  const [isExpanded, setIsExpanded] = React.useState(false);
 
   const trainerTasks = parseBulletList(value.trainerNotes);
   const materials = parseBulletList(value.materialsNeeded);
-  const materialsText = materials.join('\n');
 
   return (
-    <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid gap-4 md:grid-cols-[2fr,1fr]">
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-700">
-            Name this topic
-          </label>
-          <input
-            type="text"
-            className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={value.title}
-            onChange={(e) => onChange({ ...value, title: e.target.value })}
-            placeholder="Example: Leading Through Change"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-slate-700">
-            How many minutes?
-          </label>
-          <input
-            type="number"
-            className="h-10 w-32 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={value.durationMinutes}
-            min={5}
-            step={5}
-            onChange={(e) => handleDurationChange(Number(e.target.value))}
-          />
-          <p className="text-xs text-slate-500">
-            We round to the nearest 5 minutes.
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-700">
-          What will participants hear? (optional)
-        </label>
-        <textarea
-          className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-          value={value.description || ''}
-          onChange={(e) => onChange({ ...value, description: e.target.value })}
-          placeholder="Write a short teaser or summary for the group."
-        />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-slate-700">
-              What should the trainer do? <span className="text-red-500">*</span>
-            </label>
-            <span className="text-xs text-slate-500">
-              {trainerTasks.length} task{trainerTasks.length === 1 ? '' : 's'}
-            </span>
+    <div className="space-y-3 rounded-lg border border-slate-200 bg-white shadow-sm hover:shadow-md transition-shadow">
+      {/* Read-Only View */}
+      <div className="p-4">
+        {/* Header with Title, Duration, and Edit Button */}
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="flex-1">
+            <h4 className="text-base font-semibold text-slate-900 mb-1">
+              {value.title || <span className="text-slate-400 italic">Untitled Topic</span>}
+            </h4>
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+              </svg>
+              <span className="font-medium">{value.durationMinutes} minutes</span>
+            </div>
           </div>
-          <textarea
-            className="min-h-[140px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-            value={trainerTasksInput}
-            onChange={(e) => handleTrainerTasksChange(e.target.value)}
-            placeholder="One task per line. Example: Lead a quick story swap."
-          />
-          <p className="text-xs text-slate-500">
-            Each line becomes a bullet. Start with action words like "Guide" or "Model".
-          </p>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit
+          </button>
         </div>
 
-        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
-          <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-slate-500">
-              Trainer goal
-            </label>
-            <textarea
-              className="min-h-[80px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              value={value.learningOutcomes ?? ''}
-              onChange={(e) => onChange({ ...value, learningOutcomes: e.target.value })}
-              placeholder="Example: Make sure everyone can name the three coaching steps."
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-slate-500">
-              Call to action for the group
-            </label>
-            <input
-              type="text"
-              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={value.callToAction ?? ''}
-              onChange={(e) => onChange({ ...value, callToAction: e.target.value })}
-              placeholder="Example: Invite everyone to pick one action for this week."
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs font-semibold uppercase text-slate-500">
-              What supplies are needed?
-            </label>
-            <textarea
-              className="min-h-[100px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              value={materialsText}
-              onChange={(e) => {
-                const items = e.target.value
-                  .split('\n')
-                  .map((line) => line.replace(/^•\s*/, '').trim())
-                  .filter(Boolean);
-                onChange({
-                  ...value,
-                  materialsNeeded: toBulletString(items),
-                });
-              }}
-              placeholder="One item per line. Example: Flip chart, sticky notes."
-            />
-            <p className="text-xs text-slate-500">
-              Each line becomes a bullet in the trainer view.
+        {/* Description */}
+        {value.description && (
+          <div className="mb-3">
+            <p className="text-sm text-slate-700 leading-relaxed">
+              {value.description}
             </p>
           </div>
-        </div>
+        )}
+
+        {/* Expand/Collapse Button */}
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+        >
+          <svg
+            className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+          {isExpanded ? 'Hide' : 'Show'} trainer details
+        </button>
       </div>
+
+      {/* Expanded View - Read-Only Trainer Details */}
+      {isExpanded && (
+        <div className="px-4 pb-4 space-y-4 border-t border-slate-200 pt-4 bg-slate-50">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Trainer Tasks */}
+            {trainerTasks.length > 0 && (
+              <div className="space-y-2">
+                <h5 className="text-sm font-semibold text-slate-700">
+                  Trainer Tasks ({trainerTasks.length})
+                </h5>
+                <ul className="space-y-1.5">
+                  {trainerTasks.map((task, index) => (
+                    <li key={index} className="flex items-start gap-2 text-sm text-slate-700">
+                      <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                      <span>{task}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Additional Details */}
+            <div className="space-y-3">
+              {value.learningOutcomes && (
+                <div>
+                  <h5 className="text-xs font-semibold uppercase text-slate-500 mb-1">
+                    Trainer Goal
+                  </h5>
+                  <p className="text-sm text-slate-700">{value.learningOutcomes}</p>
+                </div>
+              )}
+
+              {value.callToAction && (
+                <div>
+                  <h5 className="text-xs font-semibold uppercase text-slate-500 mb-1">
+                    Call to Action
+                  </h5>
+                  <p className="text-sm text-slate-700">{value.callToAction}</p>
+                </div>
+              )}
+
+              {materials.length > 0 && (
+                <div>
+                  <h5 className="text-xs font-semibold uppercase text-slate-500 mb-1">
+                    Materials Needed
+                  </h5>
+                  <ul className="space-y-1">
+                    {materials.map((material, index) => (
+                      <li key={index} className="flex items-start gap-2 text-sm text-slate-700">
+                        <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                        <span>{material}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

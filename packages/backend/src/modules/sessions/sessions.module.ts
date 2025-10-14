@@ -11,7 +11,6 @@ import { AIInteractionsService } from '../../services/ai-interactions.service';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { VariantConfigsModule } from '../variant-configs/variant-configs.module';
 import { TopicsModule } from '../topics/topics.module';
-import { TopicsService } from '../topics/topics.service';
 import { AIInteraction } from '../../entities/ai-interaction.entity';
 import {
   Session,

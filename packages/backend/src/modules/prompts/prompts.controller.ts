@@ -6,7 +6,6 @@ import {
   Delete,
   Param,
   Body,
-  Query,
 } from '@nestjs/common';
 import { PromptRegistryService } from '../../services/prompt-registry.service';
 import { PromptCategory } from '../../entities/prompt.entity';

@@ -8,7 +8,6 @@ import {
   Param,
   Query,
   ParseIntPipe,
-  ValidationPipe,
 } from '@nestjs/common';
 import {
   TrainersService,

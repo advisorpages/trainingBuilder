@@ -1,6 +1,6 @@
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { entities, Session, Topic, User, UserRole, Trainer, Incentive, LandingPage, SessionStatus } from '../entities';
+import { entities, User, UserRole } from '../entities';
 
 async function runSeeder() {
   const dataSource = new DataSource({

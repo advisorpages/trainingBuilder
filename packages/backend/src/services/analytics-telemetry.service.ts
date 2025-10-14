@@ -110,7 +110,7 @@ export class AnalyticsTelemetryService {
 
     const sessionOpenEvents = relevantEvents.filter(e => e.eventType === 'builder_opened');
     const publishEvents = relevantEvents.filter(e => e.eventType === 'session_published');
-    const editEvents = relevantEvents.filter(e => e.eventType === 'content_edited');
+    const _editEvents = relevantEvents.filter(e => e.eventType === 'content_edited');
     const aiEvents = relevantEvents.filter(e => e.eventType.startsWith('ai_'));
 
     // Group sessions with AI usage

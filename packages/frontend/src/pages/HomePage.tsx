@@ -21,6 +21,13 @@ const HomePage: React.FC = () => {
       roles: [UserRole.CONTENT_DEVELOPER]
     },
     {
+      icon: '🛠️',
+      title: 'Classic Session Builder',
+      description: 'Manually craft sessions from your topic library',
+      link: '/sessions/builder/classic/new',
+      roles: [UserRole.CONTENT_DEVELOPER]
+    },
+    {
       icon: '📊',
       title: 'Analytics Dashboard',
       description: 'Track performance and engagement metrics',
@@ -86,17 +93,39 @@ const HomePage: React.FC = () => {
                 : 'Streamline your training operations with our comprehensive management tools.'
               }
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button asChild size="lg">
-                <Link to={isContentDeveloper ? '/sessions/builder/new' : '/dashboard'}>
-                  {isContentDeveloper ? '🚀 Create New Session' : '📊 View Dashboard'}
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg">
-                <Link to="/analytics">
-                  📈 View Analytics
-                </Link>
-              </Button>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
+              {isContentDeveloper ? (
+                <>
+                  <Button asChild size="lg">
+                    <Link to="/sessions/builder/new">
+                      🤖 Guided Session Builder
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link to="/sessions/builder/classic/new">
+                      🛠️ Classic Session Builder
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link to="/analytics">
+                      📈 View Analytics
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button asChild size="lg">
+                    <Link to="/dashboard">
+                      📊 View Dashboard
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg">
+                    <Link to="/analytics">
+                      📈 View Analytics
+                    </Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

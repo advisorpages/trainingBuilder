@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Session, Trainer, Location, Audience, Tone, Category, Topic } from '@leadership-training/shared';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { trainerService } from '../../services/trainer.service';
 import { locationService } from '../../services/location.service';
 import { attributesService } from '../../services/attributes.service';
 import { topicService } from '../../services/topic.service';
+import { sessionService } from '../../services/session.service';
 
 interface SessionDetailsProps {
   session: Session;
@@ -22,6 +24,7 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
   const [categories, setCategories] = useState<Category[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isReordering, setIsReordering] = useState(false);
 
   useEffect(() => {
     const loadReferenceData = async () => {
@@ -100,9 +103,52 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
     return category?.name || 'Not found';
   };
 
-  const getTopicNames = () => {
-    if (!session.topics || session.topics.length === 0) return 'No topics selected';
-    return session.topics.map(topic => topic.name).join(', ');
+  const formatDuration = (minutes?: number | null) => {
+    if (!minutes || minutes === 0) return 'Not set';
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    if (remainingMinutes === 0) return `${hours}h`;
+    return `${hours}h ${remainingMinutes}m`;
+  };
+
+  const getOrderedSessionTopics = () => {
+    if (!session.sessionTopics || session.sessionTopics.length === 0) {
+      return [];
+    }
+    return [...session.sessionTopics].sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+  };
+
+  const handleTopicReorder = async (result: DropResult) => {
+    if (!result.destination) {
+      return;
+    }
+
+    const orderedTopics = getOrderedSessionTopics();
+    const items = Array.from(orderedTopics);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+
+    // Update sequence orders
+    const updatedSessionTopics = items.map((item, index) => ({
+      topicId: item.topicId,
+      sequenceOrder: index + 1,
+      durationMinutes: item.durationMinutes,
+      trainerId: item.trainerId,
+      notes: item.notes,
+    }));
+
+    try {
+      setIsReordering(true);
+      await sessionService.updateSessionTopics(session.id, updatedSessionTopics);
+      // Refresh the page or update local state
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to reorder topics:', error);
+      alert('Failed to update topic order. Please try again.');
+    } finally {
+      setIsReordering(false);
+    }
   };
 
   const getAssignedTrainersSummary = () => {
@@ -383,15 +429,143 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
 
         {/* Topics Section */}
         <div>
-          <h3 className="text-md font-medium text-gray-900 mb-4">Session Topics</h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Selected Topics
-            </label>
-            <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-gray-900">
-              {getTopicNames()}
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-md font-medium text-gray-900">Session Topics</h3>
+            {getOrderedSessionTopics().length > 0 && (
+              <span className="text-xs text-gray-500 flex items-center gap-1">
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z" />
+                </svg>
+                Drag to reorder
+              </span>
+            )}
           </div>
+
+          {getOrderedSessionTopics().length === 0 ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-6 text-center">
+              <p className="text-gray-500 italic">No topics assigned to this session</p>
+            </div>
+          ) : (
+            <DragDropContext onDragEnd={handleTopicReorder}>
+              <Droppable droppableId="session-topics">
+                {(provided, snapshot) => (
+                  <div
+                    {...provided.droppableProps}
+                    ref={provided.innerRef}
+                    className={`space-y-3 transition-colors ${
+                      snapshot.isDraggingOver ? 'rounded-lg bg-blue-50/50 p-2' : ''
+                    }`}
+                  >
+                    {getOrderedSessionTopics().map((sessionTopic, index) => {
+                      const topic = topics.find(t => t.id === sessionTopic.topicId);
+                      const trainer = sessionTopic.trainerId
+                        ? trainers.find(t => t.id === sessionTopic.trainerId)
+                        : null;
+
+                      return (
+                        <Draggable
+                          key={sessionTopic.topicId}
+                          draggableId={sessionTopic.topicId.toString()}
+                          index={index}
+                          isDragDisabled={isReordering}
+                        >
+                          {(providedDraggable, snapshotDraggable) => (
+                            <div
+                              ref={providedDraggable.innerRef}
+                              {...providedDraggable.draggableProps}
+                              className={`bg-white border rounded-lg transition-all ${
+                                snapshotDraggable.isDragging
+                                  ? 'border-blue-300 shadow-lg'
+                                  : 'border-gray-200 hover:shadow-md'
+                              }`}
+                            >
+                              <div className="p-4">
+                                <div className="flex items-start gap-4">
+                                  {/* Drag Handle and Sequence Number */}
+                                  <div className="flex flex-col items-center gap-2">
+                                    <div
+                                      {...providedDraggable.dragHandleProps}
+                                      className={`flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors ${
+                                        isReordering ? 'cursor-not-allowed opacity-50' : 'cursor-grab active:cursor-grabbing'
+                                      }`}
+                                      title={isReordering ? 'Saving...' : 'Drag to reorder'}
+                                    >
+                                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z" />
+                                      </svg>
+                                    </div>
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+                                      {index + 1}
+                                    </div>
+                                  </div>
+
+                                  {/* Topic Content */}
+                                  <div className="flex-1 space-y-3">
+                                    <div>
+                                      <h5 className="font-medium text-gray-900 text-base mb-1">
+                                        {topic?.name || `Topic #${sessionTopic.topicId}`}
+                                      </h5>
+                                      {topic && (
+                                        <p className="text-sm text-gray-600">
+                                          {topic.aiGeneratedContent?.enhancedContent?.enhancedDescription ||
+                                            topic.description ||
+                                            'No description available'}
+                                        </p>
+                                      )}
+                                      {!topic && (
+                                        <p className="text-sm text-red-600">
+                                          Topic details not found
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    {/* Metadata Badges */}
+                                    <div className="flex flex-wrap gap-2">
+                                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        Duration: {formatDuration(sessionTopic.durationMinutes)}
+                                      </span>
+                                      {trainer && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                          Trainer: {trainer.name}
+                                        </span>
+                                      )}
+                                      {sessionTopic.trainerId && !trainer && (
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                          Trainer not found
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Custom Notes */}
+                                    {sessionTopic.notes && (
+                                      <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                                        <span className="font-medium">Notes:</span> {sessionTopic.notes}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          )}
+
+          {isReordering && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-sm text-blue-600">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Saving new order...
+            </div>
+          )}
         </div>
 
         {/* AI Generated Content Section */}

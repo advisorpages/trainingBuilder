@@ -738,7 +738,7 @@ Respond with JSON that matches this exact schema:
 
     if (typeof value === 'string') {
       return value
-        .split(/\r?\n|[\u2022•\-]+/g)
+        .split(/\r?\n|[•-]+/g)
         .map((item) => this.sanitizeText(item))
         .filter((item) => item.length > 0);
     }
@@ -752,7 +752,7 @@ Respond with JSON that matches this exact schema:
     }
 
     let text = String(value).replace(/\r?\n+/g, ' ').trim();
-    text = text.replace(/^[\s•\-\*\d\.\)\(]+/, '').trim();
+    text = text.replace(/^[\s•\-*\d.)(]+/, '').trim();
     return text;
   }
 
@@ -857,7 +857,7 @@ Respond with JSON that matches this exact schema:
     return summary;
   }
 
-  private async upsertTopic(topicDto: ImportTopicItemDto): Promise<'created' | 'updated'> {
+  private async upsertTopic(_topicDto: ImportTopicItemDto): Promise<'created' | 'updated'> {
     let existing: Topic | null = null;
 
     if (topicDto.id) {

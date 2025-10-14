@@ -50,7 +50,7 @@ export class DiskHealthIndicator extends HealthIndicator {
     formattedUsed: string;
     formattedAvailable: string;
   }> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve, _reject) => {
       fs.statfs(path, (err, stats) => {
         if (err) {
           // Fallback for systems without statvfs

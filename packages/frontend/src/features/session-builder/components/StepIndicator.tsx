@@ -3,14 +3,17 @@ import { cn } from '../../../lib/utils';
 
 export type BuilderStep = 'setup' | 'generate' | 'review' | 'finalize';
 
+export type BuilderStepConfig = { key: BuilderStep; label: string; description: string };
+
 interface StepIndicatorProps {
   currentStep: BuilderStep;
   completedSteps: BuilderStep[];
   onStepClick?: (step: BuilderStep) => void;
   className?: string;
+  steps?: BuilderStepConfig[];
 }
 
-const steps: { key: BuilderStep; label: string; description: string }[] = [
+const defaultSteps: BuilderStepConfig[] = [
   {
     key: 'setup',
     label: 'Details',
@@ -37,9 +40,11 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
   currentStep,
   completedSteps,
   onStepClick,
-  className
+  className,
+  steps,
 }) => {
-  const getCurrentStepIndex = () => steps.findIndex(step => step.key === currentStep);
+  const stepsToRender = steps ?? defaultSteps;
+  const getCurrentStepIndex = () => stepsToRender.findIndex(step => step.key === currentStep);
   const currentStepIndex = getCurrentStepIndex();
 
   const getStepStatus = (stepKey: BuilderStep, index: number) => {
@@ -59,7 +64,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
       {/* Desktop/Tablet Step Indicator */}
       <nav aria-label="Session builder progress" className="hidden sm:block">
         <ol className="flex items-center justify-between w-full">
-          {steps.map((step, index) => {
+          {stepsToRender.map((step, index) => {
             const status = getStepStatus(step.key, index);
             const isClickable = onStepClick && (status === 'completed' || status === 'active');
 
@@ -130,7 +135,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
                     </div>
 
                     {/* Connector Line */}
-                    {index < steps.length - 1 && (
+                    {index < stepsToRender.length - 1 && (
                       <div
                         className={cn(
                           'h-0.5 w-full max-w-[60px] md:max-w-[80px] transition-colors flex-shrink-0',
@@ -158,15 +163,15 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
             </div>
             <div>
               <div className="text-base font-bold text-blue-600">
-                {steps[currentStepIndex].label}
+                {stepsToRender[currentStepIndex].label}
               </div>
               <div className="text-xs text-slate-600 font-medium">
-                {steps[currentStepIndex].description}
+                {stepsToRender[currentStepIndex].description}
               </div>
             </div>
           </div>
           <div className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded">
-            {Math.round(((currentStepIndex + 1) / steps.length) * 100)}%
+            {Math.round(((currentStepIndex + 1) / stepsToRender.length) * 100)}%
           </div>
         </div>
 
@@ -174,13 +179,13 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         <div className="h-2.5 w-full rounded-full bg-slate-200 overflow-hidden shadow-inner">
           <div
             className="h-full bg-blue-600 transition-all duration-500 ease-out shadow-sm"
-            style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
+            style={{ width: `${((currentStepIndex + 1) / stepsToRender.length) * 100}%` }}
           />
         </div>
 
         {/* Step Dots with Labels */}
         <div className="flex items-center justify-between gap-1 mt-4">
-          {steps.map((step, index) => {
+          {stepsToRender.map((step, index) => {
             const status = getStepStatus(step.key, index);
             const isClickable = onStepClick && (status === 'completed' || status === 'active');
 
@@ -240,17 +245,17 @@ export const useBuilderSteps = (initialStep: BuilderStep = 'setup') => {
   };
 
   const nextStep = () => {
-    const currentIndex = steps.findIndex(s => s.key === currentStep);
-    if (currentIndex < steps.length - 1) {
+    const currentIndex = defaultSteps.findIndex(s => s.key === currentStep);
+    if (currentIndex < defaultSteps.length - 1) {
       completeStep(currentStep);
-      setCurrentStep(steps[currentIndex + 1].key);
+      setCurrentStep(defaultSteps[currentIndex + 1].key);
     }
   };
 
   const prevStep = () => {
-    const currentIndex = steps.findIndex(s => s.key === currentStep);
+    const currentIndex = defaultSteps.findIndex(s => s.key === currentStep);
     if (currentIndex > 0) {
-      setCurrentStep(steps[currentIndex - 1].key);
+      setCurrentStep(defaultSteps[currentIndex - 1].key);
     }
   };
 

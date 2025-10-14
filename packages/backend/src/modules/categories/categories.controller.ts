@@ -8,7 +8,6 @@ import {
   Delete,
   Query,
   ParseIntPipe,
-  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
