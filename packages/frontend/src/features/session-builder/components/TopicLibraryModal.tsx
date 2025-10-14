@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { Button } from '../../../ui';
 import { sessionBuilderService, TopicSuggestion } from '../../../services/session-builder.service';
+import { attributesService } from '../../../services/attributes.service';
+import type { Category } from '@leadership-training/shared';
 
 interface TopicLibraryModalProps {
   open: boolean;
@@ -16,9 +18,11 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
   category,
 }) => {
   const [topics, setTopics] = React.useState<TopicSuggestion[]>([]);
+  const [categories, setCategories] = React.useState<Category[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = React.useState<string>(category ?? '');
+  const [searchTerm, setSearchTerm] = React.useState<string>('');
+  const [selectedCategory, setSelectedCategory] = React.useState<string>('');
   const parseBulletList = React.useCallback(
     (value?: string | null): string[] =>
       (value || '')
@@ -28,12 +32,16 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
     []
   );
 
-  const fetchTopics = React.useCallback(async (search?: string) => {
+  const fetchTopics = React.useCallback(async (categoryFilter?: string, textSearch?: string) => {
     try {
-      console.log('🚀 TopicLibraryModal: fetchTopics called with search:', search);
+      console.log('🚀 TopicLibraryModal: fetchTopics called with:', { categoryFilter, textSearch });
       setLoading(true);
       setError(null);
-      const suggestions = await sessionBuilderService.getPastTopics(search);
+      const suggestions = await sessionBuilderService.getPastTopics({
+        categoryFilter,
+        textSearch,
+        limit: 50, // Increase limit since we're showing all topics
+      });
       console.log('📋 TopicLibraryModal: received suggestions:', suggestions);
       setTopics(suggestions);
     } catch (err) {
@@ -44,23 +52,35 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
     }
   }, []);
 
+  // Load categories on mount
+  React.useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const categoriesData = await attributesService.getCategories();
+        setCategories(categoriesData);
+      } catch (err) {
+        console.error('Failed to load categories:', err);
+      }
+    };
+    void loadCategories();
+  }, []);
+
   React.useEffect(() => {
     console.log('🚪 TopicLibraryModal useEffect triggered:', { open, category });
     if (!open) {
       return;
     }
 
-    console.log('📖 TopicLibraryModal opening, fetching topics...');
-    // Prefill search with session category on first open
-    setSearchTerm((prev) => (prev || category || '').trim());
-    void fetchTopics(category);
+    console.log('📖 TopicLibraryModal opening, fetching all topics...');
+    // Show all topics by default - don't pre-filter by category
+    void fetchTopics();
 
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, category, fetchTopics, onClose]);
+  }, [open, fetchTopics, onClose]);
 
   if (!open) {
     console.log('🚪 TopicLibraryModal: modal closed, not rendering');
@@ -71,8 +91,20 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    console.log('🔍 TopicLibraryModal: search submitted with term:', searchTerm.trim());
-    void fetchTopics(searchTerm.trim() || undefined);
+    console.log('🔍 TopicLibraryModal: search submitted with:', {
+      category: selectedCategory,
+      search: searchTerm.trim()
+    });
+    void fetchTopics(
+      selectedCategory || undefined,
+      searchTerm.trim() || undefined
+    );
+  };
+
+  const handleReset = () => {
+    setSearchTerm('');
+    setSelectedCategory('');
+    void fetchTopics();
   };
 
   return (
@@ -94,28 +126,47 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by keyword or category"
-            className="h-10 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex-1">
+              <label htmlFor="topic-search" className="sr-only">Search topics</label>
+              <input
+                id="topic-search"
+                type="text"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by topic name or description"
+                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="sm:w-48">
+              <label htmlFor="category-filter" className="sr-only">Filter by category</label>
+              <select
+                id="category-filter"
+                value={selectedCategory}
+                onChange={(event) => setSelectedCategory(event.target.value)}
+                className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={loading}>
-              {loading ? 'Searching…' : 'Search'}
+              {loading ? 'Searching…' : 'Apply Filters'}
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setSearchTerm(category ?? '');
-                void fetchTopics(category);
-              }}
+              onClick={handleReset}
             >
-              Reset
+              Clear All
             </Button>
           </div>
         </form>
@@ -126,14 +177,58 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
           </div>
         )}
 
+        {/* Active filters indicator */}
+        {!loading && (selectedCategory || searchTerm) && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <span className="font-medium">Active filters:</span>
+            {selectedCategory && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-blue-700">
+                Category: {selectedCategory}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory('');
+                    void fetchTopics(undefined, searchTerm.trim() || undefined);
+                  }}
+                  className="hover:text-blue-900"
+                  aria-label="Remove category filter"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+            {searchTerm && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-blue-700">
+                Search: {searchTerm}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    void fetchTopics(selectedCategory || undefined, undefined);
+                  }}
+                  className="hover:text-blue-900"
+                  aria-label="Remove search filter"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="mt-5 max-h-96 space-y-3 overflow-y-auto pr-1">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-sm text-slate-500">
               Loading topics…
             </div>
           ) : topics.length === 0 ? (
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-              No topics found yet. Publish sessions to grow your library.
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-8 text-center">
+              <p className="text-sm text-slate-600 font-medium mb-1">No topics found</p>
+              <p className="text-xs text-slate-500">
+                {selectedCategory || searchTerm
+                  ? 'Try adjusting your filters or clearing them to see all topics.'
+                  : 'Publish sessions to grow your library.'}
+              </p>
             </div>
           ) : (
             topics.map((topic) => {

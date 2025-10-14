@@ -56,6 +56,7 @@ export interface TopicExportRecord {
   id: number;
   name: string;
   description?: string | null;
+  categoryId?: number | null;
   learningOutcomes?: string | null;
   trainerNotes?: string | null;
   materialsNeeded?: string | null;
@@ -778,6 +779,7 @@ Respond with JSON that matches this exact schema:
       id: topic.id,
       name: topic.name,
       description: topic.description,
+      categoryId: topic.categoryId,
       learningOutcomes: topic.learningOutcomes,
       trainerNotes: topic.trainerNotes,
       materialsNeeded: topic.materialsNeeded,
@@ -795,6 +797,7 @@ Respond with JSON that matches this exact schema:
       { key: 'id' },
       { key: 'name' },
       { key: 'description' },
+      { key: 'categoryId' },
       { key: 'learningOutcomes' },
       { key: 'trainerNotes' },
       { key: 'materialsNeeded' },
@@ -870,6 +873,7 @@ Respond with JSON that matches this exact schema:
     if (existing) {
       existing.name = topicDto.name;
       existing.description = topicDto.description ?? existing.description ?? null;
+      existing.categoryId = topicDto.categoryId ?? existing.categoryId ?? null;
       existing.learningOutcomes = topicDto.learningOutcomes ?? existing.learningOutcomes ?? null;
       existing.trainerNotes = topicDto.trainerNotes ?? existing.trainerNotes ?? null;
       existing.materialsNeeded = topicDto.materialsNeeded ?? existing.materialsNeeded ?? null;
@@ -887,6 +891,7 @@ Respond with JSON that matches this exact schema:
     const topic = this.topicRepository.create({
       name: topicDto.name,
       description: topicDto.description,
+      categoryId: topicDto.categoryId,
       learningOutcomes: topicDto.learningOutcomes,
       trainerNotes: topicDto.trainerNotes,
       materialsNeeded: topicDto.materialsNeeded,

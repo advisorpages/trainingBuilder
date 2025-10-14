@@ -8,6 +8,7 @@ import { attributesService } from '../../services/attributes.service';
 interface TopicListProps {
   onEdit: (topic: Topic) => void;
   onDelete: (topic: Topic) => void;
+  onBulkDelete?: (topicIds: number[]) => void;
   onStatusChange?: (topic: Topic, isActive: boolean) => Promise<void>;
   onAddNew?: () => void;
   refreshTrigger?: number;
@@ -18,6 +19,7 @@ type GroupedTopics = Record<string, Topic[]>;
 export const TopicList: React.FC<TopicListProps> = ({
   onEdit,
   onDelete,
+  onBulkDelete,
   onStatusChange,
   onAddNew,
   refreshTrigger = 0
@@ -30,6 +32,7 @@ export const TopicList: React.FC<TopicListProps> = ({
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [selectedTopicIds, setSelectedTopicIds] = useState<Set<number>>(new Set());
 
   const loadTopics = useCallback(async () => {
     try {
@@ -142,6 +145,37 @@ export const TopicList: React.FC<TopicListProps> = ({
     void loadTopics();
   };
 
+  const allTopicIds = useMemo(() => {
+    return filteredGroups.flatMap(([, topics]) => topics.map(t => t.id));
+  }, [filteredGroups]);
+
+  const handleToggleSelection = (topicId: number) => {
+    setSelectedTopicIds(prev => {
+      const next = new Set(prev);
+      if (next.has(topicId)) {
+        next.delete(topicId);
+      } else {
+        next.add(topicId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTopicIds.size === allTopicIds.length) {
+      setSelectedTopicIds(new Set());
+    } else {
+      setSelectedTopicIds(new Set(allTopicIds));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (onBulkDelete && selectedTopicIds.size > 0) {
+      onBulkDelete(Array.from(selectedTopicIds));
+      setSelectedTopicIds(new Set());
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
@@ -172,6 +206,28 @@ export const TopicList: React.FC<TopicListProps> = ({
           </form>
 
           <div className="flex flex-wrap items-center gap-3 md:justify-end">
+            {allTopicIds.length > 0 && (
+              <label className="flex items-center space-x-2 text-sm text-gray-700 font-medium">
+                <input
+                  type="checkbox"
+                  checked={selectedTopicIds.size === allTopicIds.length && allTopicIds.length > 0}
+                  onChange={handleSelectAll}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>Select All</span>
+              </label>
+            )}
+
+            {selectedTopicIds.size > 0 && (
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                Delete Selected ({selectedTopicIds.size})
+              </button>
+            )}
+
             <label className="flex items-center space-x-2 text-sm text-gray-600">
               <input
                 type="checkbox"
@@ -257,6 +313,8 @@ export const TopicList: React.FC<TopicListProps> = ({
               onEdit={onEdit}
               onDelete={onDelete}
               onStatusChange={onStatusChange}
+              selectedTopicIds={selectedTopicIds}
+              onToggleSelection={handleToggleSelection}
             />
           ))
         )}

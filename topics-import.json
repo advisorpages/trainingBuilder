@@ -1,0 +1,54 @@
+{
+  "topics": [
+    {
+      "name": "Building Confidence Through Daily Wins",
+      "description": "This session helps agents recognize that confidence is built through action, not outcomes. Participants learn that consistent habits such as making calls, showing up for meetings, and celebrating progress create momentum and belief. The trainer guides participants in identifying their highest-impact daily actions, tracking progress, and developing routines that build belief before major results appear.",
+      "categoryId": 19,
+      "learningOutcomes": "Identify daily habits that drive confidence\nApply reflection systems to reinforce progress\nCoach others to stay motivated through consistency\nRecognize the emotional value of small wins",
+      "trainerNotes": "Bring personal examples of daily progress habits\nReinforce progress over perfection\nEncourage team sharing and recognition moments",
+      "materialsNeeded": "Daily tracker sheets\nFlipchart or slides\nReflection cards",
+      "deliveryGuidance": "Step 1: Share a personal success story (5 min)\nStep 2: Teach Momentum Loop model (10 min)\nStep 3: Partner activity - daily wins reflection (10 min)\nStep 4: Group commitment share-out (5 min)",
+      "isActive": true
+    },
+    {
+      "name": "Resilience in the Field",
+      "description": "This session helps agents develop emotional resilience when facing rejection, slow weeks, or difficult clients. Participants learn how to reframe negative experiences, manage self-talk, and stay emotionally grounded. Trainers guide the group in understanding that setbacks are signals, not stop signs, and that emotional recovery speed determines long-term success.",
+      "categoryId": 19,
+      "learningOutcomes": "Recognize emotional triggers during rejection\nUse reframing to maintain composure\nBuild habits that strengthen mental resilience\nDevelop positive self-talk routines",
+      "trainerNotes": "Identify three common rejection examples\nNormalize emotional ups and downs\nEmphasize recovery speed as a leadership trait",
+      "materialsNeeded": "Journals\nMotivational quote cards\nTimer for reflection segments",
+      "deliveryGuidance": "Step 1: Icebreaker - worst rejection ever (5 min)\nStep 2: Teach 3-step mental reset method (10 min)\nStep 3: Guided journaling and small-group share (10 min)\nStep 4: Group reflection and encouragement (5 min)",
+      "isActive": true
+    },
+    {
+      "name": "Tap Rooting Basics",
+      "description": "Tap rooting is the foundation of duplication and depth. This session teaches how to move beyond a single contact to develop a steady stream of referrals and new recruits. Participants learn how to map relationships, build trust, and follow up methodically to grow through warm-market introductions.",
+      "categoryId": 20,
+      "learningOutcomes": "Explain the purpose of tap rooting\nCreate personal contact maps for depth\nStart warm-market conversations naturally\nImplement follow-up habits that duplicate success",
+      "trainerNotes": "Draw a sample tap-root tree before class\nEncourage participants to begin three family or friend maps\nReinforce consistency and follow-up frequency",
+      "materialsNeeded": "Contact-mapping worksheet\nMarkers and whiteboard\nScript samples",
+      "deliveryGuidance": "Step 1: Explain tap-root concept visually (5 min)\nStep 2: Demonstrate mapping live (10 min)\nStep 3: Participants build their own maps (10 min)\nStep 4: Share insights and next steps (5 min)",
+      "isActive": true
+    },
+    {
+      "name": "Power Prospecting Conversations",
+      "description": "This topic equips agents with confidence and authenticity in prospecting. Participants learn to start natural conversations, identify curiosity cues, and transition to appointments gracefully. The session emphasizes posture, tone, and emotional connection as key elements of professional prospecting.",
+      "categoryId": 20,
+      "learningOutcomes": "Start confident, authentic prospecting conversations\nUse curiosity-based openers effectively\nTransition smoothly from small talk to scheduling\nApply posture and presence in every interaction",
+      "trainerNotes": "Compile three proven opening scripts\nModel tone, pacing, and body language\nReinforce conversation flow over rigid scripts",
+      "materialsNeeded": "Prospecting script handouts\nRole-play templates",
+      "deliveryGuidance": "Step 1: Share two or three live examples (5 min)\nStep 2: Teach curiosity-based questioning (10 min)\nStep 3: Partner role-plays (10 min)\nStep 4: Group feedback and wrap-up (5 min)",
+      "isActive": true
+    },
+    {
+      "name": "Understanding Client Needs",
+      "description": "This training focuses on mastering the discovery process. Advisors learn to uncover not just financial facts but also the motivations and emotions driving client decisions. Through role-play and discussion, participants practice empathy-based questioning and how to align recommendations with real goals.",
+      "categoryId": 21,
+      "learningOutcomes": "Use open-ended questions to uncover needs\nIdentify emotional and financial motivations\nSummarize findings clearly before presenting\nBuild trust through active listening",
+      "trainerNotes": "Prepare a sample client scenario\nDemonstrate how to probe with empathy\nReinforce summarizing and validating client goals",
+      "materialsNeeded": "FNA worksheet\nRole-play cards\nSample client case",
+      "deliveryGuidance": "Step 1: Teach the discovery funnel (5 min)\nStep 2: Demonstrate a full conversation (10 min)\nStep 3: Pair practice (10 min)\nStep 4: Debrief and highlight key takeaways (5 min)",
+      "isActive": true
+    }
+  ]
+}

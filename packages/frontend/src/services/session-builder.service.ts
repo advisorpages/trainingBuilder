@@ -249,6 +249,11 @@ export interface TopicSuggestion {
   materialsNeeded?: string;
   deliveryGuidance?: string;
   defaultDurationMinutes?: number;
+  aiGeneratedContent?: {
+    enhancedContent?: {
+      callToAction?: string;
+    };
+  };
 }
 
 export interface BuilderAutosavePayload {
@@ -438,9 +443,15 @@ export class SessionBuilderService {
     }
   }
 
-  async getPastTopics(categorySearch?: string, limit = 20): Promise<TopicSuggestion[]> {
+  async getPastTopics(options?: {
+    categoryFilter?: string;
+    textSearch?: string;
+    limit?: number;
+  }): Promise<TopicSuggestion[]> {
+    const { categoryFilter, textSearch, limit = 20 } = options || {};
+
     try {
-      console.log('🔍 getPastTopics called with:', { categorySearch, limit });
+      console.log('🔍 getPastTopics called with:', { categoryFilter, textSearch, limit });
       console.log('🌐 API base URL:', (import.meta as any).env?.VITE_API_URL || '/api');
       const response = await api.get<Array<any>>('/topics');
       console.log('📡 API response received:', response.data);
@@ -451,9 +462,23 @@ export class SessionBuilderService {
       console.log('📋 First topic (if any):', topics[0]);
 
       const filtered = topics.filter((topic: any) => {
-        if (!categorySearch) return true;
-        const haystack = `${topic.name} ${topic.description ?? ''} ${topic.category?.name ?? ''} ${topic.aiGeneratedContent?.categoryName ?? ''}`.toLowerCase();
-        return haystack.includes(categorySearch.toLowerCase());
+        // Filter by category if specified
+        if (categoryFilter) {
+          const topicCategory = (topic.category?.name ?? topic.aiGeneratedContent?.categoryName ?? '').toLowerCase();
+          if (!topicCategory.includes(categoryFilter.toLowerCase())) {
+            return false;
+          }
+        }
+
+        // Filter by text search if specified
+        if (textSearch) {
+          const haystack = `${topic.name} ${topic.description ?? ''}`.toLowerCase();
+          if (!haystack.includes(textSearch.toLowerCase())) {
+            return false;
+          }
+        }
+
+        return true;
       });
 
       console.log('🔍 Filtered topics length:', filtered.length);
@@ -475,6 +500,7 @@ export class SessionBuilderService {
             materialsNeeded: topic.materialsNeeded || aiMeta.materialsNeeded || '',
             deliveryGuidance: topic.deliveryGuidance || aiMeta.deliveryGuidance || '',
             defaultDurationMinutes: aiMeta.defaultDurationMinutes,
+            aiGeneratedContent: topic.aiGeneratedContent,
           };
         });
 

@@ -18,6 +18,7 @@ export const ManageTopicsPage: React.FC = () => {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [topicToDelete, setTopicToDelete] = useState<Topic | null>(null);
   const [topicToEdit, setTopicToEdit] = useState<Topic | null>(null);
+  const [topicsToDelete, setTopicsToDelete] = useState<number[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [notification, setNotification] = useState<{
@@ -122,6 +123,37 @@ export const ManageTopicsPage: React.FC = () => {
     setTopicToDelete(topic);
   };
 
+  const handleBulkDelete = (topicIds: number[]) => {
+    setTopicsToDelete(topicIds);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (topicsToDelete.length === 0) return;
+
+    try {
+      setIsDeleting(true);
+      const result = await topicService.bulkDeleteTopics(topicsToDelete);
+
+      const successCount = result.success.length;
+      const failedCount = result.failed.length;
+
+      if (failedCount === 0) {
+        showNotification('success', `Successfully deleted ${successCount} topic${successCount === 1 ? '' : 's'}`);
+      } else if (successCount === 0) {
+        showNotification('error', `Failed to delete ${failedCount} topic${failedCount === 1 ? '' : 's'}`);
+      } else {
+        showNotification('success', `Deleted ${successCount} topic${successCount === 1 ? '' : 's'}. ${failedCount} failed.`);
+      }
+
+      setTopicsToDelete([]);
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      showNotification('error', error.response?.data?.message || 'Bulk delete operation failed');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleCancel = () => {
     setViewMode('list');
     setSelectedTopic(null);
@@ -198,6 +230,7 @@ export const ManageTopicsPage: React.FC = () => {
           <TopicList
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onBulkDelete={handleBulkDelete}
             onStatusChange={handleStatusChange}
             onAddNew={() => setViewMode('create')}
             refreshTrigger={refreshTrigger}
@@ -249,6 +282,63 @@ export const ManageTopicsPage: React.FC = () => {
             onCancel={() => setTopicToDelete(null)}
             isDeleting={isDeleting}
           />
+        )}
+
+        {/* Bulk Delete Modal */}
+        {topicsToDelete.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+              <div className="p-6">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-6 w-6 text-red-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-lg font-medium text-gray-900">Delete Multiple Topics</h3>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Are you sure you want to delete {topicsToDelete.length} topic
+                      {topicsToDelete.length === 1 ? '' : 's'}? This action cannot be undone.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 rounded-b-lg">
+                <button
+                  onClick={() => setTopicsToDelete([])}
+                  disabled={isDeleting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmBulkDelete}
+                  disabled={isDeleting}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </BuilderLayout>

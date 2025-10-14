@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { Button } from '../../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../ui/tabs';
 import { importExportService } from '../../services/import-export.service';
 
 interface ImportSummary {
@@ -18,13 +19,10 @@ interface ProgressState {
 }
 
 type EntityType = 'sessions' | 'topics';
-type ExportFormat = 'json' | 'csv';
 type LoadingState =
   | null
   | 'sessions-export-json'
-  | 'sessions-export-csv'
   | 'topics-export-json'
-  | 'topics-export-csv'
   | 'sessions-import'
   | 'topics-import';
 
@@ -39,6 +37,8 @@ export const ImportExportTabContent: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<{ sessions: boolean; topics: boolean }>({ sessions: false, topics: false });
+  const [sessionsJsonText, setSessionsJsonText] = useState<string>('');
+  const [topicsJsonText, setTopicsJsonText] = useState<string>('');
 
   const resetStatus = () => {
     setMessage(null);
@@ -95,70 +95,32 @@ export const ImportExportTabContent: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const downloadBlob = (blob: Blob, prefix: string, extension: string) => {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${prefix}-${timestamp}.${extension}`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExport = async (type: EntityType, format: ExportFormat) => {
+  const handleExport = async (type: EntityType) => {
     resetStatus();
-    const loadingKey = `${type}-export-${format}` as LoadingState;
+    const loadingKey = `${type}-export-json` as LoadingState;
     setLoading(loadingKey);
 
     try {
       updateProgress(`Preparing ${type} export...`, 10);
 
-      const formatLabel = format.toUpperCase();
-
       if (type === 'sessions') {
         updateProgress('Fetching sessions data...', 30);
-        const response = await importExportService.exportSessions(format);
+        const response = await importExportService.exportSessions('json');
 
         updateProgress('Processing export data...', 70);
 
-        if (format === 'csv') {
-          const blob = response.data as Blob;
-          downloadBlob(blob, 'sessions-export', 'csv');
-          const countHeader = response.headers?.['x-export-count'];
-          const parsedCount = countHeader ? Number.parseInt(String(countHeader), 10) : NaN;
-          const countMessage = Number.isFinite(parsedCount) && !Number.isNaN(parsedCount) ? parsedCount : null;
-          setMessage(
-            countMessage !== null
-              ? `✅ Exported ${countMessage} sessions as ${formatLabel}.`
-              : `✅ Exported sessions as ${formatLabel}.`,
-          );
-        } else {
-          const data = response.data as any[];
-          downloadJson(data, 'sessions-export');
-          setMessage(`✅ Exported ${data.length} sessions as ${formatLabel}.`);
-        }
+        const data = response.data as any[];
+        downloadJson(data, 'sessions-export');
+        setMessage(`✅ Exported ${data.length} sessions as JSON.`);
       } else {
         updateProgress('Fetching topics data...', 30);
-        const response = await importExportService.exportTopics(format);
+        const response = await importExportService.exportTopics('json');
 
         updateProgress('Processing export data...', 70);
 
-        if (format === 'csv') {
-          const blob = response.data as Blob;
-          downloadBlob(blob, 'topics-export', 'csv');
-          const countHeader = response.headers?.['x-export-count'];
-          const parsedCount = countHeader ? Number.parseInt(String(countHeader), 10) : NaN;
-          const countMessage = Number.isFinite(parsedCount) && !Number.isNaN(parsedCount) ? parsedCount : null;
-          setMessage(
-            countMessage !== null
-              ? `✅ Exported ${countMessage} topics as ${formatLabel}.`
-              : `✅ Exported topics as ${formatLabel}.`,
-          );
-        } else {
-          const data = response.data as any[];
-          downloadJson(data, 'topics-export');
-          setMessage(`✅ Exported ${data.length} topics as ${formatLabel}.`);
-        }
+        const data = response.data as any[];
+        downloadJson(data, 'topics-export');
+        setMessage(`✅ Exported ${data.length} topics as JSON.`);
       }
 
       updateProgress('Export completed successfully!', 100);
@@ -225,6 +187,67 @@ export const ImportExportTabContent: React.FC = () => {
 
         const successMessage = `✅ Processed ${summary.total} topics. Created ${summary.created}, updated ${summary.updated}.`;
         setMessage(successMessage);
+      }
+
+      updateProgress('Import completed successfully!', 100);
+    } catch (err) {
+      const errorMessage = (err as Error).message || `Failed to import ${type}.`;
+      setError(`❌ ${errorMessage}`);
+    } finally {
+      setLoading(null);
+      setTimeout(() => setProgress(initialProgress), 3000);
+    }
+  };
+
+  const handleImportFromText = async (type: EntityType) => {
+    const text = type === 'sessions' ? sessionsJsonText : topicsJsonText;
+
+    if (!text.trim()) {
+      setError('Please paste JSON content before importing.');
+      return;
+    }
+
+    resetStatus();
+    setLoading(`${type}-import` as LoadingState);
+
+    try {
+      updateProgress('Parsing JSON data...', 30);
+
+      const payload = JSON.parse(text);
+
+      updateProgress('Validating data structure...', 50);
+
+      let summary: ImportSummary;
+      if (type === 'sessions') {
+        if (!Array.isArray(payload.sessions)) {
+          throw new Error('Invalid JSON format: Expected a "sessions" array property.');
+        }
+        if (payload.sessions.length === 0) {
+          throw new Error('No sessions found. The sessions array is empty.');
+        }
+
+        updateProgress('Importing sessions...', 70);
+        summary = await importExportService.importSessions({ sessions: payload.sessions });
+        setSessionsSummary(summary);
+
+        const successMessage = `✅ Processed ${summary.total} sessions. Created ${summary.created}, updated ${summary.updated}.`;
+        setMessage(successMessage);
+        setSessionsJsonText(''); // Clear textarea after successful import
+      } else {
+        if (!Array.isArray(payload.topics)) {
+          throw new Error('Invalid JSON format: Expected a "topics" array property.');
+        }
+        if (payload.topics.length === 0) {
+          throw new Error('No topics found. The topics array is empty.');
+        }
+
+        updateProgress('Importing topics...', 70);
+        summary = await importExportService.importTopics({ topics: payload.topics });
+        setTopicsSummary(summary);
+
+        const successMessage = `✅ Processed ${summary.total} topics. Created ${summary.created}, updated ${summary.updated}.`;
+        setMessage(successMessage);
+        setTopicsJsonText(''); // Clear textarea after successful import
       }
 
       updateProgress('Import completed successfully!', 100);
@@ -337,69 +360,91 @@ export const ImportExportTabContent: React.FC = () => {
 
           {/* Export Section */}
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-slate-700">Export Options</h4>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                onClick={() => void handleExport('sessions', 'json')}
-                disabled={loading === 'sessions-export-json'}
-                className="bg-blue-600 hover:bg-blue-700 flex-1 sm:flex-none"
-              >
-                {loading === 'sessions-export-json' ? '📤 Exporting…' : '📄 Export JSON'}
-              </Button>
-              <Button
-                onClick={() => void handleExport('sessions', 'csv')}
-                disabled={loading === 'sessions-export-csv'}
-                variant="outline"
-                className="border-blue-200 text-blue-700 hover:bg-blue-50 flex-1 sm:flex-none"
-              >
-                {loading === 'sessions-export-csv' ? '📊 Exporting…' : '📊 Export CSV'}
-              </Button>
-            </div>
+            <h4 className="text-sm font-medium text-slate-700">Export</h4>
+            <Button
+              onClick={() => void handleExport('sessions')}
+              disabled={loading === 'sessions-export-json'}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {loading === 'sessions-export-json' ? '📤 Exporting…' : '📄 Export as JSON'}
+            </Button>
           </div>
 
-          {/* Import Section with Drag & Drop */}
+          {/* Import Section with Tabs */}
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-slate-700">Import Options</h4>
-            <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 transform ${
-                dragOver.sessions
-                  ? 'border-blue-400 bg-blue-50 scale-105 shadow-inner'
-                  : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50 hover:scale-102'
-              }`}
-              onDragOver={(e) => handleDragOver(e, 'sessions')}
-              onDragLeave={(e) => handleDragLeave(e, 'sessions')}
-              onDrop={(e) => void handleDrop(e, 'sessions')}
-            >
-              <div className="space-y-3">
-                <div className="text-4xl">
-                  {dragOver.sessions ? '📥' : '📋'}
+            <Tabs defaultValue="file" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="file">Upload File</TabsTrigger>
+                <TabsTrigger value="paste">Paste JSON</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="file">
+                <div
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 transform ${
+                    dragOver.sessions
+                      ? 'border-blue-400 bg-blue-50 scale-105 shadow-inner'
+                      : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50 hover:scale-102'
+                  }`}
+                  onDragOver={(e) => handleDragOver(e, 'sessions')}
+                  onDragLeave={(e) => handleDragLeave(e, 'sessions')}
+                  onDrop={(e) => void handleDrop(e, 'sessions')}
+                >
+                  <div className="space-y-3">
+                    <div className="text-4xl">
+                      {dragOver.sessions ? '📥' : '📋'}
+                    </div>
+                    <div className="space-y-2">
+                      <p className={`text-sm font-medium transition-colors ${
+                        dragOver.sessions ? 'text-blue-700' : 'text-slate-600'
+                      }`}>
+                        {dragOver.sessions
+                          ? 'Drop your sessions file here!'
+                          : 'Drag and drop a JSON file here, or click to browse'
+                        }
+                      </p>
+                      <label className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 cursor-pointer bg-white px-3 py-2 rounded-md border border-blue-200 hover:border-blue-300 hover:bg-blue-50 transition-colors">
+                        <span className="font-medium">📁 Choose File</span>
+                        <input
+                          type="file"
+                          accept="application/json"
+                          onChange={(event) =>
+                            void handleImport('sessions', event.target.files?.[0] ?? null)
+                          }
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-xs text-slate-500">
+                        Supports JSON files up to 10MB
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <p className={`text-sm font-medium transition-colors ${
-                    dragOver.sessions ? 'text-blue-700' : 'text-slate-600'
-                  }`}>
-                    {dragOver.sessions
-                      ? 'Drop your sessions file here!'
-                      : 'Drag and drop a JSON file here, or click to browse'
-                    }
-                  </p>
-                  <label className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 cursor-pointer bg-white px-3 py-2 rounded-md border border-blue-200 hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                    <span className="font-medium">📁 Choose File</span>
-                    <input
-                      type="file"
-                      accept="application/json"
-                      onChange={(event) =>
-                        void handleImport('sessions', event.target.files?.[0] ?? null)
-                      }
-                      className="hidden"
-                    />
-                  </label>
-                  <p className="text-xs text-slate-500">
-                    Supports JSON files up to 10MB
-                  </p>
+              </TabsContent>
+
+              <TabsContent value="paste">
+                <div className="space-y-3">
+                  <textarea
+                    value={sessionsJsonText}
+                    onChange={(e) => setSessionsJsonText(e.target.value)}
+                    placeholder='Paste your JSON here, e.g., {"sessions": [...]}'
+                    className="w-full h-64 p-3 border-2 border-slate-300 rounded-lg font-mono text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-200 focus:outline-none resize-y"
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                      {sessionsJsonText.length} characters
+                    </p>
+                    <Button
+                      onClick={() => void handleImportFromText('sessions')}
+                      disabled={loading === 'sessions-import' || !sessionsJsonText.trim()}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {loading === 'sessions-import' ? '📥 Importing…' : '📥 Import'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           </div>
 
           {renderSummary('sessions')}
@@ -421,69 +466,91 @@ export const ImportExportTabContent: React.FC = () => {
 
           {/* Export Section */}
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-slate-700">Export Options</h4>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                onClick={() => void handleExport('topics', 'json')}
-                disabled={loading === 'topics-export-json'}
-                className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
-              >
-                {loading === 'topics-export-json' ? '📤 Exporting…' : '📄 Export JSON'}
-              </Button>
-              <Button
-                onClick={() => void handleExport('topics', 'csv')}
-                disabled={loading === 'topics-export-csv'}
-                variant="outline"
-                className="border-green-200 text-green-700 hover:bg-green-50 flex-1 sm:flex-none"
-              >
-                {loading === 'topics-export-csv' ? '📊 Exporting…' : '📊 Export CSV'}
-              </Button>
-            </div>
+            <h4 className="text-sm font-medium text-slate-700">Export</h4>
+            <Button
+              onClick={() => void handleExport('topics')}
+              disabled={loading === 'topics-export-json'}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading === 'topics-export-json' ? '📤 Exporting…' : '📄 Export as JSON'}
+            </Button>
           </div>
 
-          {/* Import Section with Drag & Drop */}
+          {/* Import Section with Tabs */}
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-slate-700">Import Options</h4>
-            <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 transform ${
-                dragOver.topics
-                  ? 'border-green-400 bg-green-50 scale-105 shadow-inner'
-                  : 'border-slate-300 hover:border-green-400 hover:bg-slate-50 hover:scale-102'
-              }`}
-              onDragOver={(e) => handleDragOver(e, 'topics')}
-              onDragLeave={(e) => handleDragLeave(e, 'topics')}
-              onDrop={(e) => void handleDrop(e, 'topics')}
-            >
-              <div className="space-y-3">
-                <div className="text-4xl">
-                  {dragOver.topics ? '📥' : '🏷️'}
+            <Tabs defaultValue="file" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="file">Upload File</TabsTrigger>
+                <TabsTrigger value="paste">Paste JSON</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="file">
+                <div
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 transform ${
+                    dragOver.topics
+                      ? 'border-green-400 bg-green-50 scale-105 shadow-inner'
+                      : 'border-slate-300 hover:border-green-400 hover:bg-slate-50 hover:scale-102'
+                  }`}
+                  onDragOver={(e) => handleDragOver(e, 'topics')}
+                  onDragLeave={(e) => handleDragLeave(e, 'topics')}
+                  onDrop={(e) => void handleDrop(e, 'topics')}
+                >
+                  <div className="space-y-3">
+                    <div className="text-4xl">
+                      {dragOver.topics ? '📥' : '🏷️'}
+                    </div>
+                    <div className="space-y-2">
+                      <p className={`text-sm font-medium transition-colors ${
+                        dragOver.topics ? 'text-green-700' : 'text-slate-600'
+                      }`}>
+                        {dragOver.topics
+                          ? 'Drop your topics file here!'
+                          : 'Drag and drop a JSON file here, or click to browse'
+                        }
+                      </p>
+                      <label className="inline-flex items-center gap-2 text-sm text-green-600 hover:text-green-800 cursor-pointer bg-white px-3 py-2 rounded-md border border-green-200 hover:border-green-300 hover:bg-green-50 transition-colors">
+                        <span className="font-medium">📁 Choose File</span>
+                        <input
+                          type="file"
+                          accept="application/json"
+                          onChange={(event) =>
+                            void handleImport('topics', event.target.files?.[0] ?? null)
+                          }
+                          className="hidden"
+                        />
+                      </label>
+                      <p className="text-xs text-slate-500">
+                        Supports JSON files up to 10MB
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <p className={`text-sm font-medium transition-colors ${
-                    dragOver.topics ? 'text-green-700' : 'text-slate-600'
-                  }`}>
-                    {dragOver.topics
-                      ? 'Drop your topics file here!'
-                      : 'Drag and drop a JSON file here, or click to browse'
-                    }
-                  </p>
-                  <label className="inline-flex items-center gap-2 text-sm text-green-600 hover:text-green-800 cursor-pointer bg-white px-3 py-2 rounded-md border border-green-200 hover:border-green-300 hover:bg-green-50 transition-colors">
-                    <span className="font-medium">📁 Choose File</span>
-                    <input
-                      type="file"
-                      accept="application/json"
-                      onChange={(event) =>
-                        void handleImport('topics', event.target.files?.[0] ?? null)
-                      }
-                      className="hidden"
-                    />
-                  </label>
-                  <p className="text-xs text-slate-500">
-                    Supports JSON files up to 10MB
-                  </p>
+              </TabsContent>
+
+              <TabsContent value="paste">
+                <div className="space-y-3">
+                  <textarea
+                    value={topicsJsonText}
+                    onChange={(e) => setTopicsJsonText(e.target.value)}
+                    placeholder='Paste your JSON here, e.g., {"topics": [...]}'
+                    className="w-full h-64 p-3 border-2 border-slate-300 rounded-lg font-mono text-xs focus:border-green-400 focus:ring-2 focus:ring-green-200 focus:outline-none resize-y"
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                      {topicsJsonText.length} characters
+                    </p>
+                    <Button
+                      onClick={() => void handleImportFromText('topics')}
+                      disabled={loading === 'topics-import' || !topicsJsonText.trim()}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {loading === 'topics-import' ? '📥 Importing…' : '📥 Import'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </TabsContent>
+            </Tabs>
           </div>
 
           {renderSummary('topics')}

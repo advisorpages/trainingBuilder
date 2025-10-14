@@ -27,6 +27,11 @@ export class ImportTopicItemDto {
   description?: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  categoryId?: number;
+
+  @IsOptional()
   @IsString()
   learningOutcomes?: string;
 

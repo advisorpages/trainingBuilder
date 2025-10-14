@@ -9,6 +9,8 @@ interface CategorySectionProps {
   onDelete: (topic: Topic) => void;
   onStatusChange?: (topic: Topic, isActive: boolean) => Promise<void>;
   refreshTrigger?: number;
+  selectedTopicIds?: Set<number>;
+  onToggleSelection?: (topicId: number) => void;
 }
 
 export const CategorySection: React.FC<CategorySectionProps> = ({
@@ -17,7 +19,9 @@ export const CategorySection: React.FC<CategorySectionProps> = ({
   onEdit,
   onDelete,
   onStatusChange,
-  refreshTrigger = 0
+  refreshTrigger = 0,
+  selectedTopicIds = new Set(),
+  onToggleSelection
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [togglingStatus, setTogglingStatus] = useState<Set<number>>(new Set());
@@ -113,17 +117,36 @@ export const CategorySection: React.FC<CategorySectionProps> = ({
               const createdAt = new Date(topic.createdAt);
               const updatedAt = topic.updatedAt ? new Date(topic.updatedAt) : createdAt;
 
+              const isSelected = selectedTopicIds.has(topic.id);
+
               return (
                 <div
                   key={topic.id}
-                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                  onClick={() => onToggleSelection && onToggleSelection(topic.id)}
+                  className={`bg-white rounded-lg shadow-sm border p-4 hover:shadow-md transition-all ${
+                    isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+                  } ${onToggleSelection ? 'cursor-pointer' : ''}`}
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-900 flex-1">
-                      {topic.name}
-                    </h4>
+                    <div className="flex items-center gap-2 flex-1">
+                      {onToggleSelection && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            onToggleSelection(topic.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      )}
+                      <h4 className="text-sm font-medium text-gray-900">
+                        {topic.name}
+                      </h4>
+                    </div>
                     <div className="ml-2 flex-shrink-0">
-                      <label className="inline-flex items-center">
+                      <label className="inline-flex items-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={topic.isActive}
@@ -206,7 +229,10 @@ export const CategorySection: React.FC<CategorySectionProps> = ({
                     <div className="flex items-center space-x-3">
                       <button
                         type="button"
-                        onClick={() => toggleTopicDetails(topic.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTopicDetails(topic.id);
+                        }}
                         className="text-sm font-medium text-blue-600 hover:text-blue-800 focus:outline-none"
                       >
                         {isTopicExpanded ? 'Show less' : 'Show more'}
@@ -217,7 +243,10 @@ export const CategorySection: React.FC<CategorySectionProps> = ({
                     </div>
                     <div className="flex items-center space-x-1">
                       <button
-                        onClick={() => onEdit(topic)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(topic);
+                        }}
                         className="text-blue-600 hover:text-blue-800 p-1"
                         title="Edit topic"
                       >
@@ -226,7 +255,10 @@ export const CategorySection: React.FC<CategorySectionProps> = ({
                         </svg>
                       </button>
                       <button
-                        onClick={() => onDelete(topic)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(topic);
+                        }}
                         className="text-red-600 hover:text-red-800 p-1"
                         title="Delete topic"
                       >

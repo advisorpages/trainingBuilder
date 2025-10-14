@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Input, Card, CardContent, CardHeader, CardTitle, Button } from '../../../ui';
-import { SessionMetadata } from '../state/types';
+import { SessionMetadata, SessionTopicDraft } from '../state/types';
 import { TopicInputRepeater } from './TopicInputRepeater';
 import { cn } from '../../../lib/utils';
 import { CategorySelect } from '@/components/ui/CategorySelect';
