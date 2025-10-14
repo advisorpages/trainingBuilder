@@ -126,7 +126,9 @@ export const SessionPreview: React.FC<SessionPreviewProps> = ({
                 <svg className="h-4 w-4 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <span className="font-medium text-slate-700 capitalize">{metadata.sessionType}</span>
+                <span className="font-medium text-slate-700 capitalize">
+                  {metadata.sessionType ?? 'Not set'}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <svg className="h-4 w-4 text-slate-400" fill="currentColor" viewBox="0 0 20 20">

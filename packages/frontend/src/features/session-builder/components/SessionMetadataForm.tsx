@@ -54,7 +54,7 @@ const generateTestData = (): SessionMetadata => {
 
   return {
     title: 'Effective Leadership Through Change',
-    sessionType: 'workshop',
+    sessionType: '' as any,
     category: 'Leadership',
     categoryId: 1,
     desiredOutcome: 'Participants will be able to lead their teams through organizational change with confidence and clear communication strategies',
@@ -85,7 +85,7 @@ const generateTestDataWithTopics = (): SessionMetadata => {
   return {
     ...base,
     title: 'Mutual Fund Fundamentals for Client Advisors',
-    sessionType: 'training',
+    sessionType: '' as any,
     category: 'Financial Services',
     desiredOutcome: 'Client advisors can confidently explain mutual fund options, align them with client goals, and close more investment opportunities.',
     currentProblem: 'Team members know basic investment terminology but lack a structured approach to positioning mutual funds for existing clients.',
@@ -149,7 +149,7 @@ const generateRecruitingAgentsData = (): SessionMetadata => {
 
   return {
     title: 'Recruiting Rockstar Agents',
-    sessionType: 'workshop',
+    sessionType: '' as any,
     category: 'Professional Skills',
     categoryId: 2,
     desiredOutcome: 'Leaders can confidently pitch our agency, host discovery chats, and sign two qualified agents within 30 days.',
@@ -242,7 +242,7 @@ const structureTemplates: Array<{
 }> = [
   {
     id: 'workshop-3-block',
-    name: '3-Block Workshop (90 min)',
+    name: 'Training Day (90 mins)',
     description: 'Open strong, teach new ideas, then apply them before wrapping.',
     topics: [
       {
@@ -291,7 +291,7 @@ const structureTemplates: Array<{
   },
   {
     id: 'power-hour',
-    name: 'Power Hour (60 min)',
+    name: 'Bootcamp Template (120 mins)',
     description: 'Fast-paced format for quick refreshers or focused coaching.',
     topics: [
       {
@@ -345,6 +345,13 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
 }) => {
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
 
+  // Log topics whenever metadata changes
+  React.useEffect(() => {
+    if (metadata.topics && metadata.topics.length > 0) {
+      console.log('[SessionMetadataForm] Rendering with topics:', metadata.topics);
+    }
+  }, [metadata.topics]);
+
   const handleStringChange = (field: keyof SessionMetadata) =>
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const value = event.target.value;
@@ -356,6 +363,25 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
       }
     };
 
+  const handleSessionTypeChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const rawValue = event.target.value as SessionMetadata['sessionType'] | '';
+    const nextValue = rawValue ? (rawValue as SessionMetadata['sessionType']) : null;
+    onChange({ sessionType: nextValue });
+
+    if (fieldErrors.sessionType) {
+      setFieldErrors(prev => ({ ...prev, sessionType: '' }));
+    }
+  };
+
+  // Calculate required fields completion
+  const requiredFields = {
+    desiredOutcome: !!metadata.desiredOutcome?.trim(),
+    categoryId: !!metadata.categoryId,
+    sessionType: !!metadata.sessionType,
+    locationId: !!metadata.locationId,
+  };
+  const completedRequired = Object.values(requiredFields).filter(Boolean).length;
+  const totalRequired = Object.keys(requiredFields).length;
 
   const handleFillTestData = () => {
     const testData = generateTestData();
@@ -422,47 +448,53 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-slate-900">Session Setup</h2>
-        <p className="text-sm text-slate-600">
-          Fill in these basics so we can build a clear session plan.
-        </p>
-      </div>
+      {/* Progress Indicator */}
+      {completedRequired < totalRequired && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-blue-900">
+                {completedRequired} of {totalRequired} required fields complete
+              </h3>
+              <p className="text-xs text-blue-700 mt-1">
+                Fill in the required fields to continue to the next step
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Session Configuration */}
+      {/* Section 1: Define Your Objective & Audience */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base font-semibold">
-            Essential session details
-          </CardTitle>
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            <CardTitle className="text-base font-semibold">
+              Define Your Objective & Audience
+            </CardTitle>
+          </div>
+          <p className="text-sm text-slate-600 mt-1">
+            Start with WHY and WHO — what's the goal and who needs to learn it?
+          </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            {/* Audience */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                Target Audience
-              </label>
-              <AudienceSelect
-                value={metadata.audienceId ?? ''}
-                selectedLabel={metadata.audienceName}
-                onChange={(audience) => {
-                  onChange({
-                    audienceId: audience?.id ?? undefined,
-                    audienceName: audience?.name ?? undefined,
-                  });
-                }}
-              />
-              <p className="text-xs text-slate-500">
-                Optional — tailor prompts for a specific learner group
-              </p>
-            </div>
-
             {/* Category */}
             <div className="space-y-2">
-              <label htmlFor="session-category" className="text-sm font-medium text-slate-700">
+              <label htmlFor="session-category" className="text-sm font-medium text-slate-700 flex items-center gap-1">
                 Category <span className="text-red-500">*</span>
+                {requiredFields.categoryId && (
+                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
               </label>
               <CategorySelect
                 value={metadata.categoryId ?? ''}
@@ -495,37 +527,70 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               {fieldErrors.categoryId && (
                 <p className="text-xs text-red-600">{fieldErrors.categoryId}</p>
               )}
+              <p className="text-xs text-slate-500">
+                What subject area does this cover?
+              </p>
             </div>
 
             {/* Session Type */}
             <div className="space-y-2">
-              <label htmlFor="session-type" className="text-sm font-medium text-slate-700">
+              <label htmlFor="session-type" className="text-sm font-medium text-slate-700 flex items-center gap-1">
                 Session Type <span className="text-red-500">*</span>
-              </label>
-              <select
-                id="session-type"
-                className={cn(
-                  'h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500',
-                  fieldErrors.sessionType && 'border-red-500 focus:border-red-500'
+                {requiredFields.sessionType && (
+                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
                 )}
-                value={metadata.sessionType}
-                onChange={(event) => onChange({ sessionType: event.target.value as SessionMetadata['sessionType'] })}
-              >
-                {sessionTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </option>
-                ))}
-              </select>
+              </label>
+              <div className="relative">
+                <select
+                  id="session-type"
+                  aria-invalid={!!fieldErrors.sessionType}
+                  className={cn(
+                    'h-10 w-full appearance-none rounded-md border border-slate-200 bg-white px-3 pr-10 text-sm font-medium text-slate-700 shadow-sm transition',
+                    'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                    'disabled:cursor-not-allowed disabled:opacity-60',
+                    fieldErrors.sessionType && 'border-red-500 focus:border-red-500 focus:ring-red-500',
+                    !metadata.sessionType && 'text-slate-400 font-normal'
+                  )}
+                  value={metadata.sessionType ?? ''}
+                  onChange={handleSessionTypeChange}
+                >
+                  <option value="">Select a session type...</option>
+                  {sessionTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
               {fieldErrors.sessionType && (
                 <p className="text-xs text-red-600">{fieldErrors.sessionType}</p>
               )}
+              <p className="text-xs text-slate-500">
+                What format will this take?
+              </p>
             </div>
 
             {/* Desired Outcome */}
-            <div className="space-y-2">
-              <label htmlFor="session-desired-outcome" className="text-sm font-medium text-slate-700">
+            <div className="space-y-2 sm:col-span-2">
+              <label htmlFor="session-desired-outcome" className="text-sm font-medium text-slate-700 flex items-center gap-1">
                 What should people be able to do after? <span className="text-red-500">*</span>
+                {requiredFields.desiredOutcome && (
+                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
               </label>
               <textarea
                 id="session-desired-outcome"
@@ -534,7 +599,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                   fieldErrors.desiredOutcome && 'border-red-500 focus:border-red-500'
                 )}
                 value={metadata.desiredOutcome}
-                placeholder="Example: give clear feedback using the SBI method within 10 minutes."
+                placeholder="Example: give clear feedback using the SBI method within 10 minutes"
                 onChange={handleStringChange('desiredOutcome')}
                 rows={3}
               />
@@ -542,7 +607,27 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 <p className="text-xs text-red-600">{fieldErrors.desiredOutcome}</p>
               )}
               <p className="text-xs text-slate-500">
-                One or two sentences that describe the new action or skill.
+                One or two sentences that describe the new action or skill
+              </p>
+            </div>
+
+            {/* Target Audience */}
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Target Audience
+              </label>
+              <AudienceSelect
+                value={metadata.audienceId ?? ''}
+                selectedLabel={metadata.audienceName}
+                onChange={(audience) => {
+                  onChange({
+                    audienceId: audience?.id ?? undefined,
+                    audienceName: audience?.name ?? undefined,
+                  });
+                }}
+              />
+              <p className="text-xs text-slate-500">
+                Optional — tailor the session for a specific group
               </p>
             </div>
 
@@ -554,96 +639,163 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <textarea
                 className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 value={metadata.currentProblem}
-                placeholder="Example: managers avoid hard talks because they worry about hurting morale."
+                placeholder="Example: managers avoid hard talks because they worry about hurting morale"
                 onChange={handleStringChange('currentProblem')}
                 rows={3}
               />
               <p className="text-xs text-slate-500">
-                Optional, but it helps us suggest better stories and examples.
+                Optional, but helps us suggest better stories and examples
               </p>
             </div>
 
-            {/* Specific Topics to Cover */}
+            {/* Session Title - moved to bottom */}
             <div className="space-y-2 sm:col-span-2">
-              <label className="text-sm font-medium text-slate-700">
-                List the key points to cover
+              <label htmlFor="session-title" className="text-sm font-medium text-slate-700">
+                What will you call this session?
               </label>
-              <textarea
-                className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                value={metadata.specificTopics}
-                placeholder="Example: trust-building, root-cause questions, one-page action plans."
-                onChange={handleStringChange('specificTopics')}
-                rows={2}
+              <Input
+                id="session-title"
+                value={metadata.title}
+                placeholder="Example: Coaching Through Change"
+                onChange={handleStringChange('title')}
+                className={cn(
+                  fieldErrors.title && 'border-red-500 focus:border-red-500'
+                )}
               />
-              <p className="text-xs text-slate-500">
-                Separate ideas with commas.
-              </p>
-            </div>
-
-            {/* Structured Topics */}
-            <div className="space-y-2 sm:col-span-2">
-              <label className="text-sm font-medium text-slate-700">
-                Plan each topic and trainer task
-              </label>
-              {structureTemplates.length > 0 && (
-                <div className="bg-slate-50 border border-slate-200 rounded-md p-4 space-y-3">
-                  <p className="text-sm text-slate-600">
-                    Don’t want to start from scratch? Pick a structure to load sample topics and trainer tasks, then adjust anything you like.
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {structureTemplates.map((template) => (
-                      <div key={template.id} className="bg-white border border-slate-200 rounded-md p-3 space-y-2 shadow-sm">
-                        <div>
-                          <h4 className="text-sm font-semibold text-slate-900">{template.name}</h4>
-                          <p className="text-xs text-slate-600">{template.description}</p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onChange({ topics: template.topics })}
-                        >
-                          Use this structure
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {fieldErrors.title && (
+                <p className="text-xs text-red-600">{fieldErrors.title}</p>
               )}
-              <TopicInputRepeater
-                topics={metadata.topics || []}
-                onChange={(topics) => onChange({ topics })}
-                category={metadata.category}
-              />
               <p className="text-xs text-slate-500">
-                Add every topic, how long it takes, and what the trainer should do.
+                Optional — give it a name after you've defined the goal
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            {/* Session Tone */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                How should it sound?
-              </label>
-              <ToneSelect
-                value={metadata.toneId ?? ''}
-                selectedLabel={metadata.toneName}
-                onChange={(tone) => {
-                  onChange({
-                    toneId: tone?.id ?? undefined,
-                    toneName: tone?.name ?? undefined,
-                  });
-                }}
-              />
-              <p className="text-xs text-slate-500">
-                Optional. Pick a voice to guide the wording.
-              </p>
+      {/* Section 2: Assemble Your Topics (OPTIONAL) */}
+      <Card className="border-2 border-amber-200 bg-amber-50/30">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            <CardTitle className="text-base font-semibold text-amber-900">
+              Assemble Your Topics (Optional)
+            </CardTitle>
+          </div>
+          <p className="text-sm text-slate-700 mt-1">
+            You can skip this section and let AI generate topics for you, OR select topics from your library or create custom ones
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Optional Callout */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-blue-900">Not sure what to include?</h4>
+                <p className="text-xs text-blue-800 mt-1">
+                  This entire section is optional. Skip it and continue to the next step if you want AI to suggest topics based on your objective. You can always come back and add specific topics later.
+                </p>
+              </div>
             </div>
+          </div>
+
+          {/* Simple Topic List */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">
+              Quick topic list (optional)
+            </label>
+            <textarea
+              className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              value={metadata.specificTopics}
+              placeholder="Example: trust-building, root-cause questions, one-page action plans"
+              onChange={handleStringChange('specificTopics')}
+              rows={2}
+            />
+            <p className="text-xs text-slate-500">
+              Comma-separated list for a quick overview
+            </p>
+          </div>
+
+          {/* Detailed Topics Section */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">
+              Add detailed topics (optional)
+            </label>
+
+            {/* Structure Templates */}
+            {structureTemplates.length > 0 && (
+              <div className="bg-white border border-slate-200 rounded-md p-4 space-y-3">
+                <p className="text-sm text-slate-600">
+                  Want a head start? Pick a structure to load sample topics and trainer tasks, then customize anything you like.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {structureTemplates.map((template) => (
+                    <div key={template.id} className="bg-slate-50 border border-slate-200 rounded-md p-3 space-y-2 shadow-sm">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900">{template.name}</h4>
+                        <p className="text-xs text-slate-600">{template.description}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onChange({ topics: template.topics })}
+                      >
+                        Use this structure
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Topic Repeater */}
+            <TopicInputRepeater
+              topics={metadata.topics || []}
+              onChange={(topics) => onChange({ topics })}
+              category={metadata.category}
+            />
+            <p className="text-xs text-slate-500">
+              Include learning outcomes, trainer notes, materials, and delivery guidance for each topic
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Section 3: Session Logistics & Details */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <CardTitle className="text-base font-semibold">
+              Session Logistics & Details
+            </CardTitle>
+          </div>
+          <p className="text-sm text-slate-600 mt-1">
+            When and where will this happen?
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
 
             {/* Session Location */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
+              <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
                 Where will you host it? <span className="text-red-500">*</span>
+                {requiredFields.locationId && (
+                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
               </label>
               <LocationSelect
                 value={metadata.locationId ?? ''}
@@ -670,41 +822,12 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 <p className="text-xs text-red-600">{fieldErrors.locationId}</p>
               )}
               <p className="text-xs text-slate-500">
-                Pick an approved room, link, or meeting space.
-              </p>
-            </div>
-
-            {/* Session Title */}
-            <div className="space-y-2 sm:col-span-2">
-              <label htmlFor="session-title" className="text-sm font-medium text-slate-700">
-                What will you call this session?
-              </label>
-              <Input
-                id="session-title"
-                value={metadata.title}
-                placeholder="Example: Coaching Through Change"
-                onChange={handleStringChange('title')}
-                className={cn(
-                  fieldErrors.title && 'border-red-500 focus:border-red-500'
-                )}
-              />
-              {fieldErrors.title && (
-                <p className="text-xs text-red-600">{fieldErrors.title}</p>
-              )}
-              <p className="text-xs text-slate-500">
-                Keep it short, friendly, and clear.
+                Pick an approved room, link, or meeting space
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Schedule & Logistics */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base font-semibold">When and where</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          {/* Date and Time Row */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
@@ -788,10 +911,30 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               </div>
             </div>
           )}
+
+          {/* Session Tone */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">
+                How should it sound?
+              </label>
+              <ToneSelect
+                value={metadata.toneId ?? ''}
+                selectedLabel={metadata.toneName}
+                onChange={(tone) => {
+                  onChange({
+                    toneId: tone?.id ?? undefined,
+                    toneName: tone?.name ?? undefined,
+                  });
+                }}
+              />
+              <p className="text-xs text-slate-500">
+                Optional — pick a voice to guide the wording
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
-
-
     </div>
   );
 };

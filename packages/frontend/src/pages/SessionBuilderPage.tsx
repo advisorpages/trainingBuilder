@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types/auth.types';
 import { ToastProvider, Button } from '../ui';
@@ -32,7 +32,7 @@ const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
-const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessionId }) => {
+const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?: any[] | null }> = ({ routeSessionId, prefilledTopics }) => {
   const {
     state,
     updateMetadata,
@@ -58,6 +58,16 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
     variantSelectionTime,
   } = useSessionBuilder();
   const navigate = useNavigate();
+  const [showTopicsNotification, setShowTopicsNotification] = React.useState(false);
+
+  // Show notification when topics are pre-filled
+  React.useEffect(() => {
+    if (prefilledTopics && prefilledTopics.length > 0 && state.status === 'ready') {
+      setShowTopicsNotification(true);
+      const timer = setTimeout(() => setShowTopicsNotification(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [prefilledTopics, state.status]);
 
   // Step management
   const {
@@ -586,6 +596,32 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
           />
         }
       >
+        {/* Topics Pre-filled Notification */}
+        {showTopicsNotification && prefilledTopics && prefilledTopics.length > 0 && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-start gap-3">
+              <svg className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-blue-900">Topics Pre-loaded</h3>
+                <p className="text-sm text-blue-800 mt-1">
+                  {prefilledTopics.length} topic{prefilledTopics.length === 1 ? '' : 's'} from your selection {prefilledTopics.length === 1 ? 'has' : 'have'} been added.
+                  Scroll down to the "Plan each topic and trainer task" section to see them.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowTopicsNotification(false)}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Step Indicator */}
         <div className="mb-6 sm:mb-8">
           <StepIndicator
@@ -669,15 +705,68 @@ export const SessionBuilderPage: React.FC = () => {
   const { sessionId = 'new' } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isCreatingDraft, setIsCreatingDraft] = React.useState(sessionId === 'new');
   const [draftCreationError, setDraftCreationError] = React.useState<string | null>(null);
+
+  // Extract prefilled topics from navigation state OR sessionStorage
+  const getPrefilledTopics = React.useCallback(() => {
+    // First try location state
+    const stateTopics = (location.state as any)?.prefilledTopics;
+    if (stateTopics && Array.isArray(stateTopics) && stateTopics.length > 0) {
+      console.log('[Session Builder Page] Found topics in location.state:', stateTopics);
+      return stateTopics;
+    }
+
+    // Fallback to sessionStorage
+    try {
+      const storedTopics = sessionStorage.getItem('sessionBuilder_prefilledTopics');
+      const timestamp = sessionStorage.getItem('sessionBuilder_prefilledTopics_timestamp');
+
+      if (storedTopics) {
+        const topics = JSON.parse(storedTopics);
+        const age = timestamp ? Date.now() - parseInt(timestamp, 10) : 0;
+
+        // Only use topics if they're less than 5 minutes old
+        if (age < 5 * 60 * 1000) {
+          console.log('[Session Builder Page] Found topics in sessionStorage:', topics);
+          return topics;
+        } else {
+          console.log('[Session Builder Page] Stored topics are stale, ignoring');
+          // Clear stale data
+          sessionStorage.removeItem('sessionBuilder_prefilledTopics');
+          sessionStorage.removeItem('sessionBuilder_prefilledTopics_timestamp');
+        }
+      }
+    } catch (error) {
+      console.error('[Session Builder Page] Error reading from sessionStorage:', error);
+    }
+
+    return null;
+  }, [location.state]);
+
+  const prefilledTopics = getPrefilledTopics();
+
+  React.useEffect(() => {
+    console.log('[Session Builder Page] Received prefilled topics:', prefilledTopics);
+    console.log('[Session Builder Page] Location state:', location.state);
+  }, [prefilledTopics, location.state]);
 
   const beginDraftCreation = React.useCallback(async () => {
     try {
       setDraftCreationError(null);
       setIsCreatingDraft(true);
       const response = await sessionBuilderService.createDraft();
-      navigate(`/sessions/builder/${response.draftId}`, { replace: true });
+      console.log('[Session Builder Page] Created draft, preserving topics:', prefilledTopics);
+
+      // Keep topics in sessionStorage for the next navigation
+      // They will be cleared after successful load in SessionBuilderProvider
+
+      // Preserve the prefilled topics when navigating to the new draft
+      navigate(`/sessions/builder/${response.draftId}`, {
+        replace: true,
+        state: prefilledTopics ? { prefilledTopics } : undefined
+      });
     } catch (error) {
       console.error('Failed to create builder draft', error);
       const message = error instanceof Error ? error.message : 'Failed to create session draft';
@@ -685,7 +774,7 @@ export const SessionBuilderPage: React.FC = () => {
     } finally {
       setIsCreatingDraft(false);
     }
-  }, [navigate]);
+  }, [navigate, prefilledTopics]);
 
   React.useEffect(() => {
     if (sessionId === 'new') {
@@ -750,8 +839,8 @@ export const SessionBuilderPage: React.FC = () => {
 
   return (
     <ToastProvider>
-      <SessionBuilderProvider sessionId={sessionId}>
-        <SessionBuilderScreen routeSessionId={sessionId} />
+      <SessionBuilderProvider sessionId={sessionId} prefilledTopics={prefilledTopics}>
+        <SessionBuilderScreen routeSessionId={sessionId} prefilledTopics={prefilledTopics} />
       </SessionBuilderProvider>
     </ToastProvider>
   );

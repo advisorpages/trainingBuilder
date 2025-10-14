@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Topic } from '@leadership-training/shared';
 import { topicService, CreateTopicRequest, UpdateTopicRequest } from '../services/topic.service';
 import { TopicList } from '../components/topics/TopicList';
@@ -14,6 +15,7 @@ type ViewMode = 'list' | 'create' | 'details' | 'edit';
 
 export const ManageTopicsPage: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [topicToDelete, setTopicToDelete] = useState<Topic | null>(null);
@@ -160,6 +162,39 @@ export const ManageTopicsPage: React.FC = () => {
     setTopicToEdit(null);
   };
 
+  const handleCreateSessionFromTopics = (topics: Topic[]) => {
+    // Transform topics into the format expected by SessionBuilder (SessionTopicDraft)
+    const formattedTopics = topics.map(topic => ({
+      title: topic.name,
+      description: topic.description || '',
+      durationMinutes: 15, // Default duration
+      learningOutcomes: topic.learningOutcomes || '',
+      trainerNotes: topic.trainerNotes || '',
+      materialsNeeded: topic.materialsNeeded || '',
+      deliveryGuidance: topic.deliveryGuidance || '',
+      topicId: topic.id,
+      category: topic.category?.name || 'Uncategorized'
+    }));
+
+    console.log('[Topics Page] Navigating with topics:', formattedTopics);
+
+    // Store topics in sessionStorage to ensure they survive navigation redirects
+    try {
+      sessionStorage.setItem('sessionBuilder_prefilledTopics', JSON.stringify(formattedTopics));
+      sessionStorage.setItem('sessionBuilder_prefilledTopics_timestamp', Date.now().toString());
+      console.log('[Topics Page] Stored topics in sessionStorage');
+    } catch (error) {
+      console.error('[Topics Page] Failed to store topics in sessionStorage:', error);
+    }
+
+    // Navigate to session builder with topics in state (as backup)
+    navigate('/sessions/builder/new', {
+      state: {
+        prefilledTopics: formattedTopics
+      }
+    });
+  };
+
   if (!canManageTopics) {
     return (
       <BuilderLayout title="Topics" subtitle="Access Restricted">
@@ -233,6 +268,7 @@ export const ManageTopicsPage: React.FC = () => {
             onBulkDelete={handleBulkDelete}
             onStatusChange={handleStatusChange}
             onAddNew={() => setViewMode('create')}
+            onCreateSession={handleCreateSessionFromTopics}
             refreshTrigger={refreshTrigger}
           />
         )}

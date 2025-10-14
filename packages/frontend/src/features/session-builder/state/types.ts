@@ -20,7 +20,7 @@ export interface SessionTopicDraft {
 
 export interface SessionMetadata {
   title: string;
-  sessionType: 'event' | 'training' | 'workshop' | 'webinar';
+  sessionType: 'event' | 'training' | 'workshop' | 'webinar' | null;
   category: string; // Category name for display and API calls
   categoryId?: number;
   desiredOutcome: string;

@@ -11,6 +11,7 @@ interface TopicListProps {
   onBulkDelete?: (topicIds: number[]) => void;
   onStatusChange?: (topic: Topic, isActive: boolean) => Promise<void>;
   onAddNew?: () => void;
+  onCreateSession?: (topics: Topic[]) => void;
   refreshTrigger?: number;
 }
 
@@ -22,6 +23,7 @@ export const TopicList: React.FC<TopicListProps> = ({
   onBulkDelete,
   onStatusChange,
   onAddNew,
+  onCreateSession,
   refreshTrigger = 0
 }) => {
   const [groupedTopics, setGroupedTopics] = useState<GroupedTopics>({});
@@ -176,6 +178,22 @@ export const TopicList: React.FC<TopicListProps> = ({
     }
   };
 
+  const handleCreateSession = () => {
+    if (onCreateSession && selectedTopicIds.size > 0) {
+      // Get the full topic objects for selected IDs
+      const selectedTopics: Topic[] = [];
+      filteredGroups.forEach(([, topics]) => {
+        topics.forEach(topic => {
+          if (selectedTopicIds.has(topic.id)) {
+            selectedTopics.push(topic);
+          }
+        });
+      });
+      onCreateSession(selectedTopics);
+      setSelectedTopicIds(new Set());
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
@@ -219,13 +237,24 @@ export const TopicList: React.FC<TopicListProps> = ({
             )}
 
             {selectedTopicIds.size > 0 && (
-              <button
-                type="button"
-                onClick={handleBulkDelete}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                Delete Selected ({selectedTopicIds.size})
-              </button>
+              <>
+                {onCreateSession && (
+                  <button
+                    type="button"
+                    onClick={handleCreateSession}
+                    className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    Create Session from Selected ({selectedTopicIds.size})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  Delete Selected ({selectedTopicIds.size})
+                </button>
+              </>
             )}
 
             <label className="flex items-center space-x-2 text-sm text-gray-600">

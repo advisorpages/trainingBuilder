@@ -14,6 +14,12 @@ interface TopicInputRepeaterProps {
 export const TopicInputRepeater = ({ topics, onChange, category }: TopicInputRepeaterProps) => {
   const [isLibraryOpen, setIsLibraryOpen] = React.useState(false);
 
+  // Log when topics prop changes
+  React.useEffect(() => {
+    console.log('[TopicInputRepeater] Received topics prop:', topics);
+    console.log('[TopicInputRepeater] Topic count:', topics.length);
+  }, [topics]);
+
   const parseBulletList = (value?: string | null): string[] =>
     (value || '')
       .split('\n')

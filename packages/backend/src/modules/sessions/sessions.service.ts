@@ -1552,7 +1552,7 @@ export class SessionsService {
       subtitle: session?.subtitle ?? metadata.subtitle ?? '',
       readinessScore: session?.readinessScore ?? (payload?.readinessScore ?? 0),
       status: session?.status ?? SessionStatus.DRAFT,
-      sessionType: metadata.sessionType ?? 'workshop',
+      sessionType: metadata.sessionType ?? null,
       category: primaryTopic
         ? {
             id: primaryTopic.id,

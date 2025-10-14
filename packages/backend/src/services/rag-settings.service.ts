@@ -146,7 +146,7 @@ export class RagSettingsService {
       const results = await this.ragIntegrationService.queryRAGWithRetry({
         category: dto.category,
         desiredOutcome: dto.desiredOutcome,
-        sessionType: dto.sessionType || 'workshop',
+        sessionType: dto.sessionType || null,
         audienceName: dto.audienceName || 'General Audience',
       });
 

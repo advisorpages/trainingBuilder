@@ -46,6 +46,15 @@ const SessionBuilderContext =
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 const DEFAULT_TIMEZONE = 'America/New_York';
+const SESSION_TYPE_VALUES = ['event', 'training', 'workshop', 'webinar'] as const;
+
+type SessionTypeValue = (typeof SESSION_TYPE_VALUES)[number];
+
+function normalizeSessionType(value: unknown): SessionMetadata['sessionType'] {
+  return typeof value === 'string' && (SESSION_TYPE_VALUES as readonly string[]).includes(value)
+    ? (value as SessionTypeValue)
+    : null;
+}
 
 function createEmptyOutline(): SessionOutline {
   const nowIso = new Date().toISOString();
@@ -71,7 +80,7 @@ function buildDefaultMetadata(): SessionMetadata {
 
   return {
     title: '',
-    sessionType: 'workshop',
+    sessionType: null, // No default selection
     category: '',
     desiredOutcome: '',
     currentProblem: '',
@@ -100,7 +109,7 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     category: metadata.category,
     categoryId: metadata.categoryId,
     categoryName: metadata.category,
-    sessionType: metadata.sessionType,
+    sessionType: normalizeSessionType(metadata.sessionType),
     desiredOutcome: metadata.desiredOutcome,
     currentProblem: metadata.currentProblem,
     specificTopics: metadata.specificTopics,
@@ -126,10 +135,11 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
 function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
   const startTime = input.startTime || new Date().toISOString();
   const endTime = input.endTime || new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const normalizedSessionType = normalizeSessionType(input.sessionType);
 
   return {
     title: input.title ?? '',
-    sessionType: input.sessionType,
+    sessionType: normalizedSessionType,
     category: input.categoryName ?? input.category,
     categoryId: input.categoryId,
     desiredOutcome: input.desiredOutcome,
@@ -155,10 +165,13 @@ function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
 }
 
 function buildPrompt(metadata: SessionMetadata): string {
+  const sessionTypeDescription = metadata.sessionType
+    ? `${metadata.sessionType} session`
+    : 'session';
   const segments = [
     metadata.category?.trim()
-      ? `Design a ${metadata.sessionType} session about ${metadata.category}.`
-      : `Design a ${metadata.sessionType} session.`,
+      ? `Design a ${sessionTypeDescription} about ${metadata.category}.`
+      : `Design a ${sessionTypeDescription}.`,
   ];
   if (metadata.title) {
     segments.push(`Working title: ${metadata.title}.`);
@@ -362,8 +375,9 @@ function convertAutosavePayload(draft: SessionDraftData) {
 
 export const SessionBuilderProvider: React.FC<{
   sessionId?: string;
+  prefilledTopics?: any[] | null;
   children: React.ReactNode;
-}> = ({ sessionId = 'new', children }) => {
+}> = ({ sessionId = 'new', prefilledTopics = null, children }) => {
   const [state, dispatch] = React.useReducer(builderReducer, initialBuilderState);
   const { publish } = useToast();
   const lastSavedRef = React.useRef<SessionDraftData | null>(null);
@@ -424,8 +438,10 @@ export const SessionBuilderProvider: React.FC<{
 
           const metadata: SessionMetadata = {
             title: serverDraft.title ?? metadataFromDraft?.title ?? '',
-            sessionType: serverDraft.sessionType ?? metadataFromDraft?.sessionType ?? 'workshop',
-            category: metadataFromDraft?.category ?? serverDraft.category?.name ?? 'Leadership',
+            sessionType: normalizeSessionType(
+              serverDraft.sessionType ?? metadataFromDraft?.sessionType ?? null
+            ),
+            category: metadataFromDraft?.category ?? serverDraft.category?.name ?? '',
             categoryId: metadataFromDraft?.categoryId ?? serverDraft.category?.id,
             desiredOutcome: serverDraft.desiredOutcome ?? metadataFromDraft?.desiredOutcome ?? '',
             currentProblem: metadataFromDraft?.currentProblem ?? '',
@@ -459,7 +475,33 @@ export const SessionBuilderProvider: React.FC<{
             audienceName: metadataFromDraft?.audienceName ?? serverDraft.audienceName ?? undefined,
             toneId: metadataFromDraft?.toneId ?? serverDraft.toneId,
             toneName: metadataFromDraft?.toneName ?? serverDraft.toneName ?? undefined,
+            // If topics aren't in the draft metadata, check if we have prefilled topics
+            topics: metadataFromDraft?.topics ?? [],
           };
+
+          // Apply prefilled topics if they exist and metadata doesn't already have topics
+          if (prefilledTopics && Array.isArray(prefilledTopics) && prefilledTopics.length > 0) {
+            if (!metadata.topics || metadata.topics.length === 0) {
+              console.log('[Session Builder Context] Applying prefilled topics to loaded draft:', prefilledTopics);
+              metadata.topics = prefilledTopics;
+              metadata.specificTopics = prefilledTopics.map(t => t.title).join(', ');
+
+              // If all topics have the same category, set that as the category
+              const categories = [...new Set(prefilledTopics.map((t: any) => t.category).filter(Boolean))];
+              if (categories.length === 1 && !metadata.category) {
+                metadata.category = categories[0];
+              }
+
+              // Clear sessionStorage after successfully applying topics
+              try {
+                sessionStorage.removeItem('sessionBuilder_prefilledTopics');
+                sessionStorage.removeItem('sessionBuilder_prefilledTopics_timestamp');
+                console.log('[Session Builder Context] Cleared topics from sessionStorage');
+              } catch (error) {
+                console.error('[Session Builder Context] Failed to clear sessionStorage:', error);
+              }
+            }
+          }
 
           const outline: SessionOutline | null = serverDraft.aiGeneratedContent?.outline ?? createEmptyOutline();
 
@@ -493,6 +535,34 @@ export const SessionBuilderProvider: React.FC<{
     }
 
     const metadata = buildDefaultMetadata();
+
+    // If prefilled topics are provided, add them to metadata
+    if (prefilledTopics && Array.isArray(prefilledTopics) && prefilledTopics.length > 0) {
+      console.log('[Session Builder Context] Setting prefilled topics:', prefilledTopics);
+      // Topics are already formatted as SessionTopicDraft from ManageTopicsPage
+      metadata.topics = prefilledTopics;
+
+      // Also set specificTopics field with topic names
+      metadata.specificTopics = prefilledTopics.map(t => t.title).join(', ');
+
+      // If all topics have the same category, set that as the category
+      const categories = [...new Set(prefilledTopics.map((t: any) => t.category).filter(Boolean))];
+      if (categories.length === 1) {
+        metadata.category = categories[0];
+      }
+      console.log('[Session Builder Context] Metadata after setting topics:', metadata);
+      console.log('[Session Builder Context] Topics successfully applied, count:', metadata.topics.length);
+
+      // Clear sessionStorage after successfully loading topics
+      try {
+        sessionStorage.removeItem('sessionBuilder_prefilledTopics');
+        sessionStorage.removeItem('sessionBuilder_prefilledTopics_timestamp');
+        console.log('[Session Builder Context] Cleared topics from sessionStorage');
+      } catch (error) {
+        console.error('[Session Builder Context] Failed to clear sessionStorage:', error);
+      }
+    }
+
     return {
       sessionId,
       metadata,
@@ -505,7 +575,7 @@ export const SessionBuilderProvider: React.FC<{
       lastAutosaveAt: undefined,
       isDirty: false,
     };
-  }, [sessionId]);
+  }, [sessionId, prefilledTopics]);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -755,7 +825,7 @@ export const SessionBuilderProvider: React.FC<{
       setVariantsStatus('error');
       setVariantsError(message);
       publish({
-        variant: 'warning',
+        variant: 'error',
         title: 'More details needed',
         description: message,
       });
@@ -912,6 +982,15 @@ export const SessionBuilderProvider: React.FC<{
   const generateAIContent = React.useCallback(
     async (options?: { prompt?: string }) => {
       if (!state.draft) return;
+      if (!state.draft.metadata.sessionType) {
+        const message = 'Select a session type before generating an outline.';
+        publish({
+          variant: 'error',
+          title: 'Session type required',
+          description: message,
+        });
+        return;
+      }
       dispatch({ type: 'AI_REQUEST_START' });
       const prompt = options?.prompt ?? buildPrompt(state.draft.metadata);
 
@@ -954,6 +1033,15 @@ export const SessionBuilderProvider: React.FC<{
     }
 
     if (state.publishStatus === 'pending' || state.publishStatus === 'success') {
+      return;
+    }
+
+    if (!state.draft.metadata.sessionType) {
+      publish({
+        variant: 'error',
+        title: 'Session type required',
+        description: 'Select a session type before publishing your session.',
+      });
       return;
     }
 

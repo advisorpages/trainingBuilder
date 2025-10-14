@@ -7,7 +7,7 @@ export interface SessionBuilderInput {
   category: string;
   categoryId?: number;
   categoryName?: string;
-  sessionType: 'event' | 'training' | 'workshop' | 'webinar';
+  sessionType: 'event' | 'training' | 'workshop' | 'webinar' | null;
   desiredOutcome: string;
   currentProblem?: string;
   specificTopics?: string;
@@ -630,7 +630,10 @@ export class SessionBuilderService {
   }
 
   private generatePromptFromInput(input: SessionBuilderInput): string {
-    return `Generate content for a ${input.sessionType} session about ${input.category}.
+    const sessionTypeDescription = input.sessionType
+      ? `${input.sessionType} session`
+      : 'session';
+    return `Generate content for a ${sessionTypeDescription} about ${input.category}.
     Desired outcome: ${input.desiredOutcome}
     ${input.currentProblem ? `Problem to address: ${input.currentProblem}` : ''}
     ${input.specificTopics ? `Specific topics: ${input.specificTopics}` : ''}`;

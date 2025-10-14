@@ -90,7 +90,7 @@ describe('SessionMetadataForm', () => {
 
   const defaultMetadata: SessionMetadata = {
   title: 'Test Session',
-  sessionType: 'workshop',
+  sessionType: null,
   category: 'Leadership',
   categoryId: 42,
   desiredOutcome: 'Improve team collaboration',
@@ -126,7 +126,7 @@ describe('SessionMetadataForm', () => {
     );
 
     expect(screen.getByDisplayValue('Test Session')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: /session type/i })).toHaveValue('workshop');
+    expect(screen.getByRole('combobox', { name: /session type/i })).toHaveValue('');
     expect(screen.getByDisplayValue('Improve team collaboration')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Communication gaps')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Active listening, feedback')).toBeInTheDocument();
