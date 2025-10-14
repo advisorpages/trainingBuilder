@@ -16,6 +16,7 @@ export interface SessionTopicDraft {
   deliveryGuidance?: string;
   callToAction?: string;
   topicId?: number;
+  trainerId?: number;
 }
 
 export interface SessionMetadata {

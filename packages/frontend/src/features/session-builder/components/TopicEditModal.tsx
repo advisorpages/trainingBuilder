@@ -127,6 +127,7 @@ export const TopicEditModal: React.FC<TopicEditModalProps> = ({
           {/* Trainer Details */}
           <div className="border-t border-slate-200 pt-6">
             <h3 className="text-base font-semibold text-slate-900 mb-4">Trainer Details</h3>
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

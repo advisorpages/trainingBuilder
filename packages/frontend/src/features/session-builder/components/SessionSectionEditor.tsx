@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { Button, Card, CardContent } from '../../../ui';
+import { TrainerGridSelector } from '../../../components/ui/TrainerGridSelector';
+import { Trainer } from '@leadership-training/shared';
 import { FlexibleSessionSection, SectionType, SessionOutline, sessionBuilderService } from '../../../services/session-builder.service';
 import { SessionMetadata } from '../state/types';
 import { cn } from '../../../lib/utils';
@@ -13,21 +15,33 @@ interface SessionSectionEditorProps {
   onDuplicateSection: (sectionId: string) => void;
   metadata: SessionMetadata;
   onOpenQuickAdd?: () => void;
+  onUpdateMetadata: (updates: Partial<SessionMetadata>) => void;
+  showInlineTrainerSelector?: boolean;
 }
 
 export const SessionSectionEditor: React.FC<SessionSectionEditorProps> = ({
   outline,
   onUpdateSection,
-  onAddSection,
+  onAddSection: _onAddSection,
   onDeleteSection,
   onMoveSection,
   onDuplicateSection,
   metadata,
   onOpenQuickAdd,
+  onUpdateMetadata,
+  showInlineTrainerSelector = true,
 }) => {
+  const sessionTopics = React.useMemo(() => metadata.topics ?? [], [metadata.topics]);
+  const handleQuickAdd = React.useMemo(() => onOpenQuickAdd ?? (() => undefined), [onOpenQuickAdd]);
+
   const [editingSection, setEditingSection] = React.useState<string | null>(null);
-  const [sessionTitle, setSessionTitle] = React.useState(outline.suggestedSessionTitle || '');
-  const [sessionDescription, setSessionDescription] = React.useState(outline.suggestedDescription || '');
+  const sessionTitle = React.useMemo(() => {
+    return outline.suggestedSessionTitle || metadata.title || '';
+  }, [outline.suggestedSessionTitle, metadata.title]);
+
+  const sessionDescription = React.useMemo(() => {
+    return outline.suggestedDescription || metadata.desiredOutcome || '';
+  }, [outline.suggestedDescription, metadata.desiredOutcome]);
 
   const sortedSections = React.useMemo(() => {
     return sessionBuilderService.sortSectionsByPosition(outline.sections || []);
@@ -110,6 +124,45 @@ export const SessionSectionEditor: React.FC<SessionSectionEditorProps> = ({
       setLocalDescription(section.description);
       setLocalDuration(section.duration);
       setEditingSection(null);
+    };
+
+    let topicTrainerId: number | undefined;
+    if (section.type === 'topic') {
+      if (section.associatedTopic?.id) {
+        const matchingTopic = sessionTopics.find(
+          (t) => t.topicId === section.associatedTopic?.id
+        );
+        if (matchingTopic?.trainerId) {
+          topicTrainerId = matchingTopic.trainerId;
+        }
+      }
+      if (topicTrainerId === undefined && section.trainerId) {
+        topicTrainerId = section.trainerId;
+      }
+    }
+
+    const handleTrainerChange = (trainer: Trainer | null) => {
+      if (!showInlineTrainerSelector) return;
+
+      if (section.type === 'topic' && section.associatedTopic?.id) {
+        const updatedTopics = [...sessionTopics];
+        const topicIndex = updatedTopics.findIndex(
+          (t) => t.topicId === section.associatedTopic?.id
+        );
+
+        if (topicIndex >= 0) {
+          updatedTopics[topicIndex] = {
+            ...updatedTopics[topicIndex],
+            trainerId: trainer?.id ?? undefined,
+          };
+          onUpdateMetadata({ topics: updatedTopics });
+        }
+      }
+
+      onUpdateSection(section.id, {
+        trainerId: trainer?.id ?? undefined,
+        trainerName: trainer?.name ?? undefined,
+      });
     };
 
     return (
@@ -212,6 +265,43 @@ export const SessionSectionEditor: React.FC<SessionSectionEditorProps> = ({
                     </div>
                     <p className="text-sm text-slate-600 whitespace-pre-line">{section.description}</p>
                   </div>
+
+                  {/* Trainer Assignment */}
+                  {section.type === 'topic' && (
+                    <div className="rounded-lg border border-purple-200 bg-purple-50/70 px-4 py-3 text-sm text-purple-800">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2 font-semibold">
+                          <svg className="h-4 w-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.657 0 3-1.343 3-3S13.657 5 12 5 9 6.343 9 8s1.343 3 3 3z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6.5 18a5.5 5.5 0 1111 0v.5a.5.5 0 01-.5.5h-10a.5.5 0 01-.5-.5V18z" />
+                          </svg>
+                          Trainer Assignment
+                        </div>
+                        <div className={cn(
+                          'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border',
+                          section.trainerName
+                            ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                            : 'bg-rose-100 text-rose-600 border-rose-200'
+                        )}>
+                          {section.trainerName ?? 'Unassigned'}
+                        </div>
+                      </div>
+                      {showInlineTrainerSelector ? (
+                        <div className="mt-3">
+                          <TrainerGridSelector
+                            value={topicTrainerId}
+                            onChange={handleTrainerChange}
+                            placeholder="Search and select a trainer for this topic..."
+                            selectedLabel={section.trainerName}
+                          />
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-purple-700/80">
+                          Manage trainer assignments from the panel above. Updates appear here automatically.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Additional section properties preview */}
                   {section.learningObjectives && section.learningObjectives.length > 0 && (
@@ -359,7 +449,7 @@ export const SessionSectionEditor: React.FC<SessionSectionEditorProps> = ({
           <div>
             <h4 className="text-sm font-semibold text-blue-900 mb-1">Edit Your Session Sections</h4>
             <p className="text-xs text-blue-800">
-              Hover over sections to reveal edit controls. Click "Edit" to modify content, or use the action buttons to reorder, duplicate, or remove sections.
+              Hover over sections to reveal edit controls. Use the Edit action to modify content, or the other buttons to reorder, duplicate, or remove sections.
             </p>
           </div>
         </div>
@@ -377,7 +467,7 @@ export const SessionSectionEditor: React.FC<SessionSectionEditorProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <p className="text-sm text-slate-600 mb-4">No sections added yet</p>
-            <Button onClick={onOpenQuickAdd || (() => {})}>
+            <Button onClick={handleQuickAdd}>
               Add Your First Section
             </Button>
           </div>
@@ -388,7 +478,7 @@ export const SessionSectionEditor: React.FC<SessionSectionEditorProps> = ({
       {sortedSections.length > 0 && (
         <div className="flex justify-center pt-4">
           <Button
-            onClick={onOpenQuickAdd || (() => {})}
+            onClick={handleQuickAdd}
             variant="outline"
             size="lg"
             className="gap-2"

@@ -26,13 +26,13 @@ const statusConfig: Record<AutosaveStatus, StatusConfig> = {
     badge: 'bg-slate-100 text-slate-600 border-slate-200',
   },
   pending: {
-    label: 'Saving…',
+    label: '💾 Saving…',
     tone: 'text-blue-600',
     icon: ArrowPathIcon,
     badge: 'bg-blue-50 text-blue-600 border-blue-200',
   },
   success: {
-    label: 'Saved',
+    label: '✅ Saved just now',
     tone: 'text-emerald-600',
     icon: CheckCircleIcon,
     badge: 'bg-emerald-50 text-emerald-600 border-emerald-200',

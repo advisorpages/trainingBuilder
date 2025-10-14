@@ -11,6 +11,7 @@ import {
   SessionPreview,
   StepIndicator,
   QuickAddModal,
+  TrainerAssignmentPanel,
 } from '../features/session-builder/components';
 import type { BuilderStepConfig } from '../features/session-builder/components';
 import { useBuilderSteps } from '../features/session-builder/components/StepIndicator';
@@ -20,7 +21,7 @@ import {
   useClassicSessionBuilder,
 } from '../features/classic-session-builder/state';
 import { areClassicRequiredItemsComplete } from '../features/classic-session-builder/utils/readiness';
-import { sessionBuilderService, SectionType, FlexibleSessionSection } from '../services/session-builder.service';
+import { sessionBuilderService, SectionType, FlexibleSessionSection, SessionOutline } from '../services/session-builder.service';
 
 const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50">
@@ -36,18 +37,18 @@ const classicSteps: BuilderStepConfig[] = [
   },
   {
     key: 'generate',
-    label: 'Build Session Outline',
-    description: 'Arrange sections based on chosen topics',
+    label: 'Assign Trainers',
+    description: 'Match each topic with the right trainer',
   },
   {
     key: 'review',
     label: 'Review & Edit',
-    description: 'Fine-tune timing and content',
+    description: 'Confirm you are happy with what you built',
   },
   {
     key: 'finalize',
     label: 'Publish',
-    description: 'Save your session to the library',
+    description: 'Publish to make it live!',
   },
 ];
 
@@ -79,9 +80,20 @@ const ClassicSessionBuilderScreen: React.FC = () => {
 
   const [isQuickAddOpen, setQuickAddOpen] = React.useState(false);
 
+  const navigate = useNavigate();
   const draft = state.draft;
   const publishStatus = state.publishStatus;
   const isPublishing = publishStatus === 'pending';
+
+  // Redirect to sessions page after successful publish
+  React.useEffect(() => {
+    if (publishStatus === 'success') {
+      const timer = setTimeout(() => {
+        navigate('/sessions');
+      }, 1500); // Wait 1.5 seconds to show the success message
+      return () => clearTimeout(timer);
+    }
+  }, [publishStatus, navigate]);
 
   const readinessScore = draft?.readinessScore ?? 0;
   const canPublish = !!draft && areClassicRequiredItemsComplete(draft) && readinessScore >= 60;
@@ -95,6 +107,26 @@ const ClassicSessionBuilderScreen: React.FC = () => {
   const hasOutline = React.useMemo(() => {
     return !!draft?.outline && draft.outline.sections.length > 0;
   }, [draft?.outline]);
+
+  const draftOutline = draft?.outline;
+  const metadataTitle = draft?.metadata.title ?? '';
+  const metadataDesiredOutcome = draft?.metadata.desiredOutcome ?? '';
+
+  const resolvedOutline = React.useMemo<SessionOutline>(() => {
+    if (draftOutline) {
+      return draftOutline;
+    }
+    return {
+      sections: [],
+      totalDuration: 0,
+      suggestedSessionTitle: metadataTitle,
+      suggestedDescription: metadataDesiredOutcome,
+      difficulty: 'Intermediate',
+      recommendedAudienceSize: '10-25',
+      fallbackUsed: false,
+      generatedAt: new Date().toISOString(),
+    };
+  }, [draftOutline, metadataTitle, metadataDesiredOutcome]);
 
   React.useEffect(() => {
     if (!draft) return;
@@ -124,9 +156,60 @@ const ClassicSessionBuilderScreen: React.FC = () => {
     void duplicateOutlineSection(sectionId);
   }, [duplicateOutlineSection]);
 
+  const handleAssignTrainer = React.useCallback(async (topicIndex: number, trainer: { id: number; name: string } | null) => {
+    if (!draft) return;
+
+    const topics = draft.metadata.topics ?? [];
+    if (!topics[topicIndex]) {
+      return;
+    }
+
+    const updatedTopics = [...topics];
+    updatedTopics[topicIndex] = {
+      ...updatedTopics[topicIndex],
+      trainerId: trainer?.id ?? undefined,
+    };
+    updateMetadata({ topics: updatedTopics });
+
+    if (!draft.outline) {
+      return;
+    }
+
+    const sectionsToUpdate = draft.outline.sections.filter((section) => {
+      if (section.type !== 'topic') return false;
+      const targetTopic = updatedTopics[topicIndex];
+      if (targetTopic.topicId && section.associatedTopic?.id) {
+        return section.associatedTopic.id === targetTopic.topicId;
+      }
+      if (targetTopic.title) {
+        const normalizedTitle = targetTopic.title.trim().toLowerCase();
+        if (section.associatedTopic?.name) {
+          return section.associatedTopic.name.trim().toLowerCase() === normalizedTitle;
+        }
+        if (section.title) {
+          return section.title.trim().toLowerCase() === normalizedTitle;
+        }
+      }
+      return false;
+    });
+
+    if (sectionsToUpdate.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      sectionsToUpdate.map((section) =>
+        updateOutlineSection(section.id, {
+          trainerId: trainer?.id ?? undefined,
+          trainerName: trainer?.name ?? undefined,
+        }),
+      ),
+    );
+  }, [draft, updateMetadata, updateOutlineSection]);
+
   const primaryButtonLabel = React.useMemo(() => {
     switch (currentStep) {
-      case 'setup': return 'Continue to Outline Builder';
+      case 'setup': return 'Build Your Outline →';
       case 'generate': return 'Continue to Review';
       case 'review': return 'Continue to Finalize';
       case 'finalize':
@@ -160,7 +243,7 @@ const ClassicSessionBuilderScreen: React.FC = () => {
       .filter(Boolean)
   ), []);
 
-  const syncTopicsToOutline = React.useCallback(() => {
+  const syncTopicsToOutline = React.useCallback(async () => {
     if (!draft) return;
 
     const topics = draft.metadata.topics ?? [];
@@ -193,6 +276,29 @@ const ClassicSessionBuilderScreen: React.FC = () => {
       }
     });
 
+    // Get all unique trainer IDs to fetch trainer names
+    const trainerIds = new Set<number>();
+    topics.forEach((topic) => {
+      if (topic.trainerId) {
+        trainerIds.add(topic.trainerId);
+      }
+    });
+
+    // Fetch trainer names for all trainers
+    const trainerMap = new Map<number, string>();
+    if (trainerIds.size > 0) {
+      try {
+        const trainers = await sessionBuilderService.getTrainers('', 100);
+        trainers.forEach((trainer) => {
+          if (trainer.id && trainer.name) {
+            trainerMap.set(trainer.id, trainer.name);
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to fetch trainer names:', error);
+      }
+    }
+
     let changed = false;
     let nextPosition = sections.length;
 
@@ -200,43 +306,60 @@ const ClassicSessionBuilderScreen: React.FC = () => {
       const normalizedTitle = topic.title?.trim().toLowerCase();
       const key = topic.topicId ? `id-${topic.topicId}` : (normalizedTitle ? `title-${normalizedTitle}` : `index-${index}`);
 
-      if (key && topicKeyMap.has(key)) {
-        const sectionIndex = sections.findIndex((s) => s.id === topicKeyMap.get(key)!.id);
-        if (sectionIndex >= 0) {
-          const existing = sections[sectionIndex];
-          const updates: Partial<FlexibleSessionSection> = {};
-          let needsUpdate = false;
+      if (key) {
+        const matchedSection = topicKeyMap.get(key);
+        if (matchedSection) {
+          const sectionIndex = sections.findIndex((s) => s.id === matchedSection.id);
+          if (sectionIndex >= 0) {
+            const existing = sections[sectionIndex];
+            const updates: Partial<FlexibleSessionSection> = {};
+            let needsUpdate = false;
 
-          const durationMinutes = topic.durationMinutes && topic.durationMinutes > 0 ? topic.durationMinutes : 0;
-          if (durationMinutes > 0 && existing.duration !== durationMinutes) {
-            updates.duration = durationMinutes;
-            needsUpdate = true;
+            const durationMinutes = topic.durationMinutes && topic.durationMinutes > 0 ? topic.durationMinutes : 0;
+            if (durationMinutes > 0 && existing.duration !== durationMinutes) {
+              updates.duration = durationMinutes;
+              needsUpdate = true;
+            }
+
+            if (!existing.description && topic.description) {
+              updates.description = topic.description;
+              needsUpdate = true;
+            }
+
+            if (!existing.associatedTopic && topic.topicId) {
+              updates.associatedTopic = {
+                id: topic.topicId,
+                name: topic.title ?? '',
+                description: topic.description ?? '',
+              };
+              needsUpdate = true;
+            }
+
+            if (topic.trainerId && trainerMap.has(topic.trainerId)) {
+              const trainerId = topic.trainerId;
+              const trainerName = trainerMap.get(trainerId);
+              if (existing.trainerId !== trainerId || existing.trainerName !== trainerName) {
+                updates.trainerId = trainerId;
+                updates.trainerName = trainerName;
+                needsUpdate = true;
+              }
+            } else if (existing.trainerId || existing.trainerName) {
+              updates.trainerId = undefined;
+              updates.trainerName = undefined;
+              needsUpdate = true;
+            }
+
+            if (needsUpdate) {
+              sections[sectionIndex] = {
+                ...existing,
+                ...updates,
+              };
+              changed = true;
+            }
           }
 
-          if (!existing.description && topic.description) {
-            updates.description = topic.description;
-            needsUpdate = true;
-          }
-
-          if (!existing.associatedTopic && topic.topicId) {
-            updates.associatedTopic = {
-              id: topic.topicId,
-              name: topic.title ?? '',
-              description: topic.description ?? '',
-            };
-            needsUpdate = true;
-          }
-
-          if (needsUpdate) {
-            sections[sectionIndex] = {
-              ...existing,
-              ...updates,
-            };
-            changed = true;
-          }
+          return;
         }
-
-        return;
       }
 
       const duration = topic.durationMinutes && topic.durationMinutes > 0
@@ -256,7 +379,7 @@ const ClassicSessionBuilderScreen: React.FC = () => {
           ? `classic-${crypto.randomUUID()}`
           : `classic-${Date.now()}-${Math.random()}`;
 
-      sections.push({
+      const newSection: FlexibleSessionSection = {
         id,
         type: 'topic',
         position: nextPosition++,
@@ -274,7 +397,14 @@ const ClassicSessionBuilderScreen: React.FC = () => {
               description: topic.description ?? '',
             }
           : undefined,
-      });
+      };
+
+      if (topic.trainerId && trainerMap.has(topic.trainerId)) {
+        newSection.trainerId = topic.trainerId;
+        newSection.trainerName = trainerMap.get(topic.trainerId);
+      }
+
+      sections.push(newSection);
       changed = true;
     });
 
@@ -376,10 +506,10 @@ const ClassicSessionBuilderScreen: React.FC = () => {
             <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-2 max-w-2xl">
-                  <h3 className="text-lg font-semibold text-slate-900">Build your session outline</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">Assign trainers and fine-tune your outline</h3>
                   <p className="text-sm text-slate-600">
-                    Add sections to shape the session structure. Start with an opener, weave in topic blocks,
-                    and close with actionable takeaways. You can reorder and refine sections anytime.
+                    Start by assigning trainers to each topic using the panel below. Once everyone has coverage,
+                    adjust the session outline, reorder sections, or add new activities.
                   </p>
                 </div>
                 <Button variant="outline" onClick={() => setQuickAddOpen(true)}>
@@ -387,15 +517,22 @@ const ClassicSessionBuilderScreen: React.FC = () => {
                 </Button>
               </div>
             </div>
+            <TrainerAssignmentPanel
+              topics={draft.metadata.topics ?? []}
+              sections={resolvedOutline.sections}
+              onAssignTrainer={handleAssignTrainer}
+            />
             <SessionSectionEditor
-              outline={draft.outline!}
+              outline={resolvedOutline}
               onUpdateSection={handleUpdateSection}
               onAddSection={handleAddSection}
               onDeleteSection={handleDeleteSection}
               onMoveSection={handleMoveSection}
               onDuplicateSection={handleDuplicateSection}
               metadata={draft.metadata}
+              onUpdateMetadata={updateMetadata}
               onOpenQuickAdd={() => setQuickAddOpen(true)}
+              showInlineTrainerSelector={false}
             />
           </div>
         );

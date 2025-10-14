@@ -480,6 +480,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
             onMoveSection={handleMoveSection}
             onDuplicateSection={handleDuplicateSection}
             metadata={draft.metadata}
+            onUpdateMetadata={updateMetadata}
             onOpenQuickAdd={() => setQuickAddOpen(true)}
           />
         ) : (

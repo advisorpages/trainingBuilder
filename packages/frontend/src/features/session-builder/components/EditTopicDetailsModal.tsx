@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Topic, Trainer } from '@leadership-training/shared';
 import { SessionTopicDetail } from '@/components/sessions/EnhancedTopicCard';
 import { Button } from '@/components/ui/Button';
+import { TrainerGridSelector } from '@/components/ui/TrainerGridSelector';
 
 interface EditTopicDetailsModalProps {
   isOpen: boolean;
@@ -175,31 +176,25 @@ export const EditTopicDetailsModal: React.FC<EditTopicDetailsModalProps> = ({
 
           {/* Trainer Assignment */}
           <div>
-            <label htmlFor="trainer" className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Assigned Trainer (Optional)
             </label>
-            <select
-              id="trainer"
-              value={formData.assignedTrainerId || ''}
-              onChange={(e) =>
+            <TrainerGridSelector
+              value={formData.assignedTrainerId}
+              selectedLabel={
+                formData.assignedTrainerId
+                  ? trainers.find(t => t.id === formData.assignedTrainerId)?.name
+                  : undefined
+              }
+              onChange={(trainer) => {
                 setFormData((prev) => ({
                   ...prev,
-                  assignedTrainerId: e.target.value ? Number(e.target.value) : undefined,
-                }))
-              }
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  assignedTrainerId: trainer?.id,
+                }));
+              }}
+              placeholder="Search and select a trainer..."
               disabled={trainers.length === 0}
-            >
-              <option value="">
-                {trainers.length === 0 ? 'No trainers available' : 'No trainer assigned'}
-              </option>
-              {trainers.map((trainer) => (
-                <option key={trainer.id} value={trainer.id}>
-                  {trainer.name}
-                  {trainer.expertiseTags?.length ? ` - ${trainer.expertiseTags.join(', ')}` : ''}
-                </option>
-              ))}
-            </select>
+            />
             {trainers.length === 0 && (
               <p className="mt-1 text-xs text-slate-500">
                 No active trainers found. Please add trainers in the system settings.

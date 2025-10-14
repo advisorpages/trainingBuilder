@@ -347,6 +347,9 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
 }) => {
   const isClassic = mode === 'classic';
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+  const [showAdvancedFields, setShowAdvancedFields] = React.useState(false);
+  const [showTopicsSection, setShowTopicsSection] = React.useState(false);
+  const [showLogisticsSection, setShowLogisticsSection] = React.useState(false);
 
   // Log topics whenever metadata changes
   React.useEffect(() => {
@@ -385,6 +388,77 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   };
   const completedRequired = Object.values(requiredFields).filter(Boolean).length;
   const totalRequired = Object.keys(requiredFields).length;
+
+  // Progressive reveal logic - show advanced fields when initial 3 are complete
+  const initialFieldsComplete = React.useMemo(() => {
+    return !!metadata.categoryId && !!metadata.sessionType && !!metadata.title?.trim();
+  }, [metadata.categoryId, metadata.sessionType, metadata.title]);
+
+  React.useEffect(() => {
+    if (initialFieldsComplete && !showAdvancedFields) {
+      setShowAdvancedFields(true);
+    }
+  }, [initialFieldsComplete, showAdvancedFields]);
+
+  // Show Topics section when Section 1 core fields are complete
+  const section1CoreComplete = React.useMemo(() => {
+    return !!metadata.categoryId &&
+           !!metadata.sessionType &&
+           !!metadata.title?.trim() &&
+           !!metadata.desiredOutcome?.trim();
+  }, [metadata.categoryId, metadata.sessionType, metadata.title, metadata.desiredOutcome]);
+
+  React.useEffect(() => {
+    if (section1CoreComplete && !showTopicsSection) {
+      setShowTopicsSection(true);
+    }
+  }, [section1CoreComplete, showTopicsSection]);
+
+  // Calculate total duration from topics
+  const totalDurationMinutes = React.useMemo(() => {
+    if (!metadata.topics || metadata.topics.length === 0) return 0;
+    return metadata.topics.reduce((sum, topic) => sum + (topic.durationMinutes || 0), 0);
+  }, [metadata.topics]);
+
+  // Auto-adjust end time when duration changes
+  React.useEffect(() => {
+    if (totalDurationMinutes > 0 && metadata.startTime) {
+      const startDate = new Date(metadata.startTime);
+      const newEndTime = new Date(startDate.getTime() + totalDurationMinutes * 60 * 1000);
+      // Only update if end time is different to avoid infinite loops
+      const currentEndTime = metadata.endTime ? new Date(metadata.endTime).getTime() : 0;
+      if (Math.abs(newEndTime.getTime() - currentEndTime) > 60000) { // More than 1 minute difference
+        onChange({ endTime: newEndTime.toISOString() });
+      }
+    }
+  }, [totalDurationMinutes, metadata.startTime]); // Don't include metadata.endTime or onChange in dependencies
+
+  // Set default start time to 7:00pm tomorrow on first load
+  React.useEffect(() => {
+    if (!metadata.startTime || !metadata.startDate) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(19, 0, 0, 0); // 7:00 PM
+
+      onChange({
+        startDate: tomorrow.toISOString().slice(0, 10),
+        startTime: tomorrow.toISOString(),
+        endTime: new Date(tomorrow.getTime() + 60 * 60 * 1000).toISOString(), // Default 1 hour
+      });
+    }
+  }, []); // Only run once on mount
+
+  // Show Logistics section after at least one topic is added
+  React.useEffect(() => {
+    const hasTopics = metadata.topics && metadata.topics.length > 0;
+    if (showTopicsSection && hasTopics && !showLogisticsSection) {
+      // Delay slightly to let user see the added topic
+      const timer = setTimeout(() => {
+        setShowLogisticsSection(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [showTopicsSection, metadata.topics, showLogisticsSection]);
 
   const handleFillTestData = () => {
     const testData = generateTestData();
@@ -472,22 +546,20 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
         </div>
       )}
 
-      {/* Section 1: Define Your Objective & Audience */}
+      {/* Section 1: Set Your Goal */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
             <CardTitle className="text-base font-semibold">
-              Define Your Objective & Audience
+              🎯 Set Your Goal
             </CardTitle>
           </div>
           <p className="text-sm text-slate-600 mt-1">
-            Start with WHY and WHO — what's the goal and who needs to learn it?
+            Start with the basics — what will you cover and who's it for?
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Initial 3 fields - always visible */}
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Category */}
             <div className="space-y-2">
@@ -585,73 +657,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               </p>
             </div>
 
-            {/* Desired Outcome */}
-            <div className="space-y-2 sm:col-span-2">
-              <label htmlFor="session-desired-outcome" className="text-sm font-medium text-slate-700 flex items-center gap-1">
-                What should people be able to do after? <span className="text-red-500">*</span>
-                {requiredFields.desiredOutcome && (
-                  <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </label>
-              <textarea
-                id="session-desired-outcome"
-                className={cn(
-                  'min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none',
-                  fieldErrors.desiredOutcome && 'border-red-500 focus:border-red-500'
-                )}
-                value={metadata.desiredOutcome}
-                placeholder="Example: give clear feedback using the SBI method within 10 minutes"
-                onChange={handleStringChange('desiredOutcome')}
-                rows={3}
-              />
-              {fieldErrors.desiredOutcome && (
-                <p className="text-xs text-red-600">{fieldErrors.desiredOutcome}</p>
-              )}
-              <p className="text-xs text-slate-500">
-                One or two sentences that describe the new action or skill
-              </p>
-            </div>
-
-            {/* Target Audience */}
-            <div className="space-y-2 sm:col-span-2">
-              <label className="text-sm font-medium text-slate-700">
-                Target Audience
-              </label>
-              <AudienceSelect
-                value={metadata.audienceId ?? ''}
-                selectedLabel={metadata.audienceName}
-                onChange={(audience) => {
-                  onChange({
-                    audienceId: audience?.id ?? undefined,
-                    audienceName: audience?.name ?? undefined,
-                  });
-                }}
-              />
-              <p className="text-xs text-slate-500">
-                Optional — tailor the session for a specific group
-              </p>
-            </div>
-
-            {/* Current Problem or Challenge */}
-            <div className="space-y-2 sm:col-span-2">
-              <label className="text-sm font-medium text-slate-700">
-                What problem are people facing today?
-              </label>
-              <textarea
-                className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                value={metadata.currentProblem}
-                placeholder="Example: managers avoid hard talks because they worry about hurting morale"
-                onChange={handleStringChange('currentProblem')}
-                rows={3}
-              />
-              <p className="text-xs text-slate-500">
-                Optional, but helps us suggest better stories and examples
-              </p>
-            </div>
-
-            {/* Session Title - moved to bottom */}
+            {/* Session Title */}
             <div className="space-y-2 sm:col-span-2">
               <label htmlFor="session-title" className="text-sm font-medium text-slate-700">
                 What will you call this session?
@@ -673,21 +679,100 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               </p>
             </div>
           </div>
+
+          {/* Progressive reveal - remaining fields */}
+          <div
+            className={cn(
+              'transition-all duration-300 ease-in-out',
+              showAdvancedFields ? 'max-h-[2000px] opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
+            )}
+          >
+            <div className="grid gap-4 sm:grid-cols-2 pt-4">
+              {/* Desired Outcome */}
+              <div className="space-y-2 sm:col-span-2">
+                <label htmlFor="session-desired-outcome" className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                  What should people be able to do after? <span className="text-red-500">*</span>
+                  {requiredFields.desiredOutcome && (
+                    <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </label>
+                <textarea
+                  id="session-desired-outcome"
+                  className={cn(
+                    'min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none',
+                    fieldErrors.desiredOutcome && 'border-red-500 focus:border-red-500'
+                  )}
+                  value={metadata.desiredOutcome}
+                  placeholder="Example: give clear feedback using the SBI method within 10 minutes"
+                  onChange={handleStringChange('desiredOutcome')}
+                  rows={3}
+                />
+                {fieldErrors.desiredOutcome && (
+                  <p className="text-xs text-red-600">{fieldErrors.desiredOutcome}</p>
+                )}
+                <p className="text-xs text-slate-500">
+                  One or two sentences that describe the new action or skill
+                </p>
+              </div>
+
+              {/* Current Problem or Challenge */}
+              <div className="space-y-2 sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">
+                  What problem are people facing today?
+                </label>
+                <textarea
+                  className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  value={metadata.currentProblem}
+                  placeholder="Example: managers avoid hard talks because they worry about hurting morale"
+                  onChange={handleStringChange('currentProblem')}
+                  rows={3}
+                />
+                <p className="text-xs text-slate-500">
+                  Optional, but helps us suggest better stories and examples
+                </p>
+              </div>
+
+              {/* Target Audience */}
+              <div className="space-y-2 sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Target Audience
+                </label>
+                <AudienceSelect
+                  value={metadata.audienceId ?? ''}
+                  selectedLabel={metadata.audienceName}
+                  onChange={(audience) => {
+                    onChange({
+                      audienceId: audience?.id ?? undefined,
+                      audienceName: audience?.name ?? undefined,
+                    });
+                  }}
+                />
+                <p className="text-xs text-slate-500">
+                  Optional — tailor the session for a specific group
+                </p>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Section 2: Assemble Your Topics (OPTIONAL) */}
-      <Card className="border-2 border-amber-200 bg-amber-50/30">
+      {/* Section 2: Choose What You'll Cover - Progressive reveal */}
+      <div
+        className={cn(
+          'transition-all duration-300 ease-in-out',
+          showTopicsSection ? 'max-h-[3000px] opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
+        )}
+      >
+        <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-amber-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-            <CardTitle className="text-base font-semibold text-amber-900">
-              {isClassic ? 'Assemble Your Topics' : 'Assemble Your Topics (Optional)'}
+            <CardTitle className="text-base font-semibold">
+              📚 {isClassic ? 'Choose What You\'ll Cover' : 'Choose What You\'ll Cover (Optional)'}
             </CardTitle>
           </div>
-          <p className="text-sm text-slate-700 mt-1">
+          <p className="text-sm text-slate-600 mt-1">
             {isClassic
               ? 'Select the topics you will cover in this session. Choose items from your library or add new custom topics.'
               : 'You can skip this section and let AI generate topics for you, OR select topics from your library or create custom ones'}
@@ -769,25 +854,47 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
             <TopicInputRepeater
               topics={metadata.topics || []}
               onChange={(topics) => onChange({ topics })}
-              category={metadata.category}
               mode={mode}
             />
             <p className="text-xs text-slate-500">
               Include learning outcomes, trainer notes, materials, and delivery guidance for each topic
             </p>
           </div>
+
+          {/* Duration Display */}
+          {totalDurationMinutes > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="h-5 w-5 text-amber-700" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                  </svg>
+                  <div>
+                    <span className="text-sm font-semibold text-amber-900">Total Duration: {totalDurationMinutes} minutes</span>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Based on your topic durations. This will set your session end time.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+      </div>
 
-      {/* Section 3: Session Logistics & Details */}
-      <Card>
+      {/* Section 3: Plan When & Where - Progressive reveal */}
+      <div
+        className={cn(
+          'transition-all duration-300 ease-in-out',
+          showLogisticsSection ? 'max-h-[2000px] opacity-100 overflow-visible' : 'max-h-0 opacity-0 overflow-hidden'
+        )}
+      >
+        <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
             <CardTitle className="text-base font-semibold">
-              Session Logistics & Details
+              🕒 Plan When & Where
             </CardTitle>
           </div>
           <p className="text-sm text-slate-600 mt-1">
@@ -838,7 +945,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           </div>
 
           {/* Date and Time Row */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
                 Pick a date
@@ -891,36 +998,11 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                   });
                 }}
               />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">
-                How long is it?
-              </label>
-              <div className="h-10 flex items-center px-3 text-sm bg-slate-50 border border-slate-200 rounded-md">
-                {metadata.startTime && metadata.endTime && (
-                  <span className="text-slate-700 font-medium">
-                    {Math.round((new Date(metadata.endTime).getTime() - new Date(metadata.startTime).getTime()) / 60000)} min
-                  </span>
-                )}
-              </div>
+              <p className="text-xs text-slate-500">
+                Auto-set from topic durations, but you can override
+              </p>
             </div>
           </div>
-
-          {/* Duration Display */}
-          {metadata.startTime && metadata.endTime && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-              <div className="flex items-center gap-2 text-sm text-blue-800">
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-                <span className="font-medium">Total time:</span>
-                <span>
-                  {Math.round((new Date(metadata.endTime).getTime() - new Date(metadata.startTime).getTime()) / 60000)} minutes
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* Session Tone */}
           <div className="grid gap-4 sm:grid-cols-2">
@@ -945,6 +1027,7 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

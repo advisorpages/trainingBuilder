@@ -18,14 +18,20 @@ const sectionOptions: { type: SectionType; label: string; description: string }[
 ];
 
 export const QuickAddModal: React.FC<QuickAddModalProps> = ({ open, onClose, onAdd }) => {
+  const onCloseRef = React.useRef(onClose);
+
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   React.useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current?.();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

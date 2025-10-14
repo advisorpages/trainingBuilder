@@ -860,27 +860,27 @@ Respond with JSON that matches this exact schema:
   private async upsertTopic(_topicDto: ImportTopicItemDto): Promise<'created' | 'updated'> {
     let existing: Topic | null = null;
 
-    if (topicDto.id) {
-      existing = await this.topicRepository.findOne({ where: { id: topicDto.id } });
+    if (_topicDto.id) {
+      existing = await this.topicRepository.findOne({ where: { id: _topicDto.id } });
     }
 
     if (!existing) {
       existing = await this.topicRepository.findOne({
-        where: { name: ILike(topicDto.name) },
+        where: { name: ILike(_topicDto.name) },
       });
     }
 
     if (existing) {
-      existing.name = topicDto.name;
-      existing.description = topicDto.description ?? existing.description ?? null;
-      existing.categoryId = topicDto.categoryId ?? existing.categoryId ?? null;
-      existing.learningOutcomes = topicDto.learningOutcomes ?? existing.learningOutcomes ?? null;
-      existing.trainerNotes = topicDto.trainerNotes ?? existing.trainerNotes ?? null;
-      existing.materialsNeeded = topicDto.materialsNeeded ?? existing.materialsNeeded ?? null;
-      existing.deliveryGuidance = topicDto.deliveryGuidance ?? existing.deliveryGuidance ?? null;
-      existing.aiGeneratedContent = topicDto.aiGeneratedContent ?? existing.aiGeneratedContent ?? null;
-      if (typeof topicDto.isActive === 'boolean') {
-        existing.isActive = topicDto.isActive;
+      existing.name = _topicDto.name;
+      existing.description = _topicDto.description ?? existing.description ?? null;
+      existing.categoryId = _topicDto.categoryId ?? existing.categoryId ?? null;
+      existing.learningOutcomes = _topicDto.learningOutcomes ?? existing.learningOutcomes ?? null;
+      existing.trainerNotes = _topicDto.trainerNotes ?? existing.trainerNotes ?? null;
+      existing.materialsNeeded = _topicDto.materialsNeeded ?? existing.materialsNeeded ?? null;
+      existing.deliveryGuidance = _topicDto.deliveryGuidance ?? existing.deliveryGuidance ?? null;
+      existing.aiGeneratedContent = _topicDto.aiGeneratedContent ?? existing.aiGeneratedContent ?? null;
+      if (typeof _topicDto.isActive === 'boolean') {
+        existing.isActive = _topicDto.isActive;
       }
 
       existing.updatedAt = new Date();
@@ -889,15 +889,15 @@ Respond with JSON that matches this exact schema:
     }
 
     const topic = this.topicRepository.create({
-      name: topicDto.name,
-      description: topicDto.description,
-      categoryId: topicDto.categoryId,
-      learningOutcomes: topicDto.learningOutcomes,
-      trainerNotes: topicDto.trainerNotes,
-      materialsNeeded: topicDto.materialsNeeded,
-      deliveryGuidance: topicDto.deliveryGuidance,
-      isActive: typeof topicDto.isActive === 'boolean' ? topicDto.isActive : true,
-      aiGeneratedContent: topicDto.aiGeneratedContent,
+      name: _topicDto.name,
+      description: _topicDto.description,
+      categoryId: _topicDto.categoryId,
+      learningOutcomes: _topicDto.learningOutcomes,
+      trainerNotes: _topicDto.trainerNotes,
+      materialsNeeded: _topicDto.materialsNeeded,
+      deliveryGuidance: _topicDto.deliveryGuidance,
+      isActive: typeof _topicDto.isActive === 'boolean' ? _topicDto.isActive : true,
+      aiGeneratedContent: _topicDto.aiGeneratedContent,
     });
 
     await this.topicRepository.save(topic);

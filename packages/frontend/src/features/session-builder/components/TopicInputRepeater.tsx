@@ -10,14 +10,12 @@ import { TopicSuggestion } from '../../../services/session-builder.service';
 interface TopicInputRepeaterProps {
   topics: TopicInputValue[];
   onChange: (topics: TopicInputValue[]) => void;
-  category?: string;
   mode?: 'guided' | 'classic';
 }
 
 export const TopicInputRepeater = ({
   topics,
   onChange,
-  category,
   mode = 'guided',
 }: TopicInputRepeaterProps) => {
   const isClassic = mode === 'classic';
@@ -129,6 +127,34 @@ export const TopicInputRepeater = ({
 
   return (
     <div className="space-y-4">
+      {/* Smart Empty State for Classic Mode */}
+      {topics.length === 0 && isClassic && (
+        <div className='empty-state bg-gray-50 rounded-lg p-6 text-center border border-gray-200'>
+          <p className='text-gray-600 mb-4'>
+            <span className="text-2xl block mb-2">📚</span>
+            <strong>No topics yet.</strong> Add from your Library or create a new one to start building your flow.
+          </p>
+          <div className='flex gap-2 justify-center flex-wrap'>
+            <Button
+              type="button"
+              onClick={() => {
+                console.log('🔘 Add from Library button clicked (empty state)');
+                setIsLibraryOpen(true);
+              }}
+            >
+              Add from Library
+            </Button>
+            <Button
+              type="button"
+              onClick={addTopic}
+              variant="outline"
+            >
+              Create New Topic
+            </Button>
+          </div>
+        </div>
+      )}
+
       {topics.length > 0 && (
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
           <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -183,6 +209,7 @@ export const TopicInputRepeater = ({
                         <TopicInput
                           value={topic}
                           onChange={(updated) => updateTopic(index, updated)}
+                          onEdit={() => handleEditTopic(index)}
                         />
                       </div>
 
@@ -207,58 +234,68 @@ export const TopicInputRepeater = ({
         </Droppable>
       </DragDropContext>
 
-      <div className="flex flex-wrap gap-2">
-        {isClassic ? (
-          <>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                console.log('🔘 Add from Library button clicked');
-                setIsLibraryOpen(true);
-              }}
-            >
-              Add from Library
-            </Button>
-            <Button
-              type="button"
-              onClick={addTopic}
-              variant="outline"
-              size="sm"
-            >
-              Create New Topic
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              type="button"
-              onClick={addTopic}
-              variant="outline"
-              size="sm"
-            >
-              Add Topic
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                console.log('🔘 Add from Library button clicked');
-                setIsLibraryOpen(true);
-              }}
-              variant="ghost"
-              size="sm"
-            >
-              Add from Library
-            </Button>
-          </>
-        )}
-      </div>
+      {/* Only show button row if topics exist OR not in classic mode */}
+      {(topics.length > 0 || !isClassic) && (
+        <div className="flex flex-wrap gap-2">
+          {isClassic ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  console.log('🔘 Add from Library button clicked');
+                  setIsLibraryOpen(true);
+                }}
+              >
+                Add from Library
+              </Button>
+              <Button
+                type="button"
+                onClick={addTopic}
+                variant="outline"
+                size="sm"
+              >
+                Create New Topic
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                onClick={addTopic}
+                variant="outline"
+                size="sm"
+              >
+                Add Topic
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  console.log('🔘 Add from Library button clicked');
+                  setIsLibraryOpen(true);
+                }}
+                variant="ghost"
+                size="sm"
+              >
+                Add from Library
+              </Button>
+            </>
+          )}
+        </div>
+      )}
       <TopicLibraryModal
         open={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}
         onSelect={upsertFromLibrary}
-        category={category}
       />
+      {editingIndex !== null && (
+        <TopicEditModal
+          isOpen={editingIndex !== null}
+          topic={topics[editingIndex]}
+          onSave={handleSaveTopic}
+          onCancel={handleCancelEdit}
+        />
+      )}
     </div>
   );
 };

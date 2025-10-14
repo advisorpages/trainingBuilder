@@ -161,7 +161,6 @@ TrainingBuilderv4/
 │   └── shared/           # Shared TypeScript types
 │       └── src/
 │           └── types/    # Type definitions
-├── .claude/              # Claude Code configuration
 ├── scripts/              # Helper scripts
 └── docker-compose.yml    # Docker services configuration
 ```
@@ -576,8 +575,6 @@ See `packages/backend/.env.example` for complete list with descriptions.
 
 ## Additional Resources
 
-- **Quick Command Reference:** `.claude/CHEATSHEET.md`
-- **Claude Code Context:** `.claude/PROJECT_CONTEXT.md`
 - **Architecture Overview:** `README.md`
 - **API Documentation:** Run backend and visit http://localhost:3001/api (if Swagger is enabled)
 

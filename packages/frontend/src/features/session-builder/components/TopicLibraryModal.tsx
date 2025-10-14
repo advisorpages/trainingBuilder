@@ -8,14 +8,12 @@ interface TopicLibraryModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (topic: TopicSuggestion) => void;
-  category?: string;
 }
 
 export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
   open,
   onClose,
   onSelect,
-  category,
 }) => {
   const [topics, setTopics] = React.useState<TopicSuggestion[]>([]);
   const [categories, setCategories] = React.useState<Category[]>([]);
@@ -24,6 +22,14 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
   const [searchTerm, setSearchTerm] = React.useState<string>('');
   const [activeSearchTerm, setActiveSearchTerm] = React.useState<string>('');
   const [selectedCategory, setSelectedCategory] = React.useState<string>('');
+
+  // Add abort controller ref to prevent race conditions
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+  const onCloseRef = React.useRef(onClose);
+
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   const parseBulletList = React.useCallback(
     (value?: string | null): string[] =>
       (value || '')
@@ -38,18 +44,38 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
       console.log('🚀 TopicLibraryModal: fetchTopics called with:', { categoryFilter, textSearch });
       setLoading(true);
       setError(null);
+
+      // Cancel previous request if still pending
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
       const suggestions = await sessionBuilderService.getPastTopics({
         categoryFilter,
         textSearch,
         limit: 50, // Increase limit since we're showing all topics
       });
+
+      // Check if request was aborted before updating state
+      if (abortControllerRef.current?.signal.aborted) {
+        return;
+      }
+
       console.log('📋 TopicLibraryModal: received suggestions:', suggestions);
       setTopics(suggestions);
     } catch (err) {
+      // Don't set error if request was aborted
+      if ((err as Error).name === 'AbortError') {
+        console.log('🚫 TopicLibraryModal: request aborted');
+        return;
+      }
       console.error('💥 TopicLibraryModal: error fetching topics:', err);
       setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (!abortControllerRef.current?.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -67,31 +93,52 @@ export const TopicLibraryModal: React.FC<TopicLibraryModalProps> = ({
   }, []);
 
   React.useEffect(() => {
-    console.log('🚪 TopicLibraryModal useEffect triggered:', { open, category });
+    console.log('🚪 TopicLibraryModal useEffect triggered:', { open });
     if (!open) {
+      // Clean up any pending requests when modal closes
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
       return;
     }
 
-    const initialCategory = category ?? '';
     setSearchTerm('');
     setActiveSearchTerm('');
-    setSelectedCategory(initialCategory);
+    setSelectedCategory('');
 
-    console.log('📖 TopicLibraryModal opening, fetching topics...', { initialCategory });
-    void fetchTopics(initialCategory || undefined, activeSearchTerm || undefined);
+    console.log('📖 TopicLibraryModal opening, fetching topics...');
+    void fetchTopics(undefined, undefined);
 
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current?.();
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, category, activeSearchTerm, fetchTopics, onClose]);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      // Clean up any pending requests when effect cleanup runs
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [open, fetchTopics]);
 
   React.useEffect(() => {
     if (!open) return;
-    console.log('🔄 Category changed, refetching topics', { selectedCategory, activeSearchTerm });
+    console.log('🔄 Filters changed, refetching topics', { selectedCategory, activeSearchTerm });
     void fetchTopics(selectedCategory || undefined, activeSearchTerm || undefined);
   }, [selectedCategory, activeSearchTerm, open, fetchTopics]);
+
+  // Debounced search effect to prevent excessive API calls while typing
+  React.useEffect(() => {
+    if (!open || !searchTerm.trim()) return;
+
+    const timeoutId = setTimeout(() => {
+      console.log('🔍 TopicLibraryModal: debounced search triggered:', searchTerm);
+      setActiveSearchTerm(searchTerm.trim());
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, open]);
 
   if (!open) {
     console.log('🚪 TopicLibraryModal: modal closed, not rendering');

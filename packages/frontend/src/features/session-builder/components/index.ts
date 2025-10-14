@@ -12,3 +12,4 @@ export * from './TopicInputRepeater';
 export * from './TopicLibraryModal';
 export * from './SessionSectionEditor';
 export * from './SessionPreview';
+export * from './TrainerAssignmentPanel';
