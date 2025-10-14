@@ -21,17 +21,25 @@ export const SessionBuilderInputStep: React.FC<SessionBuilderInputStepProps> = (
   const [audiences, setAudiences] = useState<any[]>([]);
   const [tones, setTones] = useState<any[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const hasInitializedDefaults = React.useRef(false);
 
   useEffect(() => {
     loadAttributes();
   }, []);
 
   // After attributes load, prefill missing fields with convenient defaults
+  // Only run once when attributes are loaded to prevent infinite loops
   useEffect(() => {
+    // Skip if we've already initialized defaults or attributes aren't loaded yet
+    if (hasInitializedDefaults.current || categories.length === 0) {
+      return;
+    }
+
     const updates: Partial<SessionBuilderInput> = {};
 
     if (!input.category && categories.length > 0) {
       updates.category = categories[0].name;
+      updates.categoryId = categories[0].id;
     }
     if (!input.locationId && locations.length > 0) {
       updates.locationId = locations[0].id;
@@ -62,9 +70,10 @@ export const SessionBuilderInputStep: React.FC<SessionBuilderInputStepProps> = (
     }
 
     if (Object.keys(updates).length > 0) {
+      hasInitializedDefaults.current = true;
       onInputChange({ ...input, ...updates });
     }
-  }, [categories, locations, audiences, tones]);
+  }, [categories, locations, audiences, tones, input, onInputChange]);
 
   const loadAttributes = async () => {
     try {
@@ -143,15 +152,35 @@ export const SessionBuilderInputStep: React.FC<SessionBuilderInputStepProps> = (
             Training Category *
           </label>
           <select
-            value={input.category || ''}
-            onChange={(e) => handleInputChange('category', e.target.value)}
+            value={input.categoryId || ''}
+            onChange={(e) => {
+              const selectedId = e.target.value ? parseInt(e.target.value) : undefined;
+              const selectedCategory = categories.find(c => c.id === selectedId);
+              if (selectedCategory) {
+                onInputChange({
+                  ...input,
+                  categoryId: selectedCategory.id,
+                  category: selectedCategory.name
+                });
+                // Clear error when user selects
+                if (errors.category) {
+                  setErrors(prev => ({ ...prev, category: '' }));
+                }
+              } else {
+                onInputChange({
+                  ...input,
+                  categoryId: undefined,
+                  category: ''
+                });
+              }
+            }}
             className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
               errors.category ? 'border-red-500' : 'border-gray-300'
             }`}
           >
             <option value="">Select a category</option>
             {categories.map(category => (
-              <option key={category.id} value={category.name}>
+              <option key={category.id} value={category.id}>
                 {category.name}
               </option>
             ))}

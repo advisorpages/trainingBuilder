@@ -8,7 +8,7 @@ interface SessionPreviewProps {
   outline: SessionOutline;
   metadata: SessionMetadata;
   readinessScore: number;
-  onPublish: () => void;
+  onPublish?: () => void;
   onEdit: () => void;
   isPublishing?: boolean;
   isPublished?: boolean;
@@ -23,6 +23,20 @@ export const SessionPreview: React.FC<SessionPreviewProps> = ({
   isPublishing = false,
   isPublished = false,
 }) => {
+  const [expandedSections, setExpandedSections] = React.useState<Set<string>>(new Set());
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
+
   const sortedSections = React.useMemo(() => {
     return sessionBuilderService.sortSectionsByPosition(outline.sections || []);
   }, [outline.sections]);
@@ -202,30 +216,237 @@ export const SessionPreview: React.FC<SessionPreviewProps> = ({
           </h3>
 
           <div className="space-y-3">
-            {sortedSections.map((section, index) => (
-              <div key={section.id} className="flex gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-sm font-medium">
-                  <span>{getIconForSection(section.type)}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between gap-2 mb-1">
-                    <h4 className="text-sm font-semibold text-slate-900">{section.title}</h4>
-                    <span className="text-xs text-slate-500 whitespace-nowrap">
-                      {section.duration} min
-                    </span>
+            {sortedSections.map((section, index) => {
+              const isExpanded = expandedSections.has(section.id);
+              const hasDetails =
+                (section.learningObjectives && section.learningObjectives.length > 0) ||
+                (section.materialsNeeded && section.materialsNeeded.length > 0) ||
+                (section.suggestedActivities && section.suggestedActivities.length > 0) ||
+                section.trainerNotes ||
+                section.deliveryGuidance ||
+                (section.keyTakeaways && section.keyTakeaways.length > 0) ||
+                (section.actionItems && section.actionItems.length > 0) ||
+                (section.nextSteps && section.nextSteps.length > 0) ||
+                (section.discussionPrompts && section.discussionPrompts.length > 0) ||
+                section.exerciseInstructions;
+
+              return (
+                <div key={section.id} className="rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
+                  <div className="flex gap-3 p-3">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-sm font-medium">
+                      <span>{getIconForSection(section.type)}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2 mb-1">
+                        <h4 className="text-sm font-semibold text-slate-900">{section.title}</h4>
+                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                          {section.duration} min
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600">{section.description}</p>
+
+                      {/* Quick Stats */}
+                      {hasDetails && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                          {section.learningObjectives && section.learningObjectives.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <svg className="h-3 w-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                              </svg>
+                              <span className="text-blue-600">{section.learningObjectives.length} objectives</span>
+                            </span>
+                          )}
+                          {section.materialsNeeded && section.materialsNeeded.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>📦</span>
+                              <span>{section.materialsNeeded.length} materials</span>
+                            </span>
+                          )}
+                          {section.suggestedActivities && section.suggestedActivities.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>🎪</span>
+                              <span>{section.suggestedActivities.length} activities</span>
+                            </span>
+                          )}
+                          {(section.trainerNotes || section.deliveryGuidance) && (
+                            <span className="flex items-center gap-1">
+                              <span>👨‍🏫</span>
+                              <span>Trainer notes</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Expand/Collapse Button */}
+                      {hasDetails && (
+                        <button
+                          onClick={() => toggleSection(section.id)}
+                          className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          {isExpanded ? (
+                            <>
+                              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                              </svg>
+                              <span>Hide details</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                              <span>Show details</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-600 line-clamp-2">{section.description}</p>
-                  {section.learningObjectives && section.learningObjectives.length > 0 && (
-                    <div className="mt-2 flex items-center gap-1 text-xs text-blue-600">
-                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-                      </svg>
-                      <span>{section.learningObjectives.length} learning objective{section.learningObjectives.length !== 1 ? 's' : ''}</span>
+
+                  {/* Expanded Details */}
+                  {isExpanded && hasDetails && (
+                    <div className="px-3 pb-3 pt-1 space-y-3 border-t border-slate-200 bg-white">
+                      {/* Learning Objectives */}
+                      {section.learningObjectives && section.learningObjectives.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            <svg className="h-3.5 w-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                            </svg>
+                            Learning Objectives
+                          </h5>
+                          <ul className="list-disc list-inside space-y-0.5 text-xs text-slate-600">
+                            {section.learningObjectives.map((obj, idx) => (
+                              <li key={idx}>{obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Materials Needed */}
+                      {section.materialsNeeded && section.materialsNeeded.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            📦 Materials Needed
+                          </h5>
+                          <ul className="list-disc list-inside space-y-0.5 text-xs text-slate-600">
+                            {section.materialsNeeded.map((material, idx) => (
+                              <li key={idx}>{material}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Suggested Activities */}
+                      {section.suggestedActivities && section.suggestedActivities.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            🎪 Suggested Activities
+                          </h5>
+                          <ul className="list-disc list-inside space-y-0.5 text-xs text-slate-600">
+                            {section.suggestedActivities.map((activity, idx) => (
+                              <li key={idx}>{activity}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Trainer Notes */}
+                      {section.trainerNotes && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            👨‍🏫 Trainer Notes
+                          </h5>
+                          <p className="text-xs text-slate-600 bg-amber-50 p-2 rounded border border-amber-200">
+                            {section.trainerNotes}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Delivery Guidance */}
+                      {section.deliveryGuidance && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            💡 Delivery Tips
+                          </h5>
+                          <p className="text-xs text-slate-600 bg-blue-50 p-2 rounded border border-blue-200">
+                            {section.deliveryGuidance}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Exercise Instructions */}
+                      {section.exerciseInstructions && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            🎮 Exercise Instructions
+                          </h5>
+                          <p className="text-xs text-slate-600 bg-purple-50 p-2 rounded border border-purple-200">
+                            {section.exerciseInstructions}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Discussion Prompts */}
+                      {section.discussionPrompts && section.discussionPrompts.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            💬 Discussion Prompts
+                          </h5>
+                          <ul className="list-disc list-inside space-y-0.5 text-xs text-slate-600">
+                            {section.discussionPrompts.map((prompt, idx) => (
+                              <li key={idx}>{prompt}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Key Takeaways (Closing) */}
+                      {section.keyTakeaways && section.keyTakeaways.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            ⭐ Key Takeaways
+                          </h5>
+                          <ul className="list-disc list-inside space-y-0.5 text-xs text-slate-600">
+                            {section.keyTakeaways.map((takeaway, idx) => (
+                              <li key={idx}>{takeaway}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Action Items (Closing) */}
+                      {section.actionItems && section.actionItems.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            ✅ Action Items
+                          </h5>
+                          <ul className="list-disc list-inside space-y-0.5 text-xs text-slate-600">
+                            {section.actionItems.map((item, idx) => (
+                              <li key={idx}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Next Steps (Closing) */}
+                      {section.nextSteps && section.nextSteps.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1">
+                            🎯 Next Steps
+                          </h5>
+                          <ul className="list-disc list-inside space-y-0.5 text-xs text-slate-600">
+                            {section.nextSteps.map((step, idx) => (
+                              <li key={idx}>{step}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </CardContent>
       </Card>
@@ -243,33 +464,35 @@ export const SessionPreview: React.FC<SessionPreviewProps> = ({
           </svg>
           Make Changes
         </Button>
-        <Button
-          onClick={onPublish}
-          disabled={isPublishing || isPublished}
-          size="lg"
-          className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
-        >
-          {isPublishing ? (
-            <>
-              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
-              Publishing...
-            </>
-          ) : isPublished ? (
-            <>
-              <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              Published
-            </>
-          ) : (
-            <>
-              <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Publish Session
-            </>
-          )}
-        </Button>
+        {onPublish && (
+          <Button
+            onClick={onPublish}
+            disabled={isPublishing || isPublished}
+            size="lg"
+            className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+          >
+            {isPublishing ? (
+              <>
+                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                Publishing...
+              </>
+            ) : isPublished ? (
+              <>
+                <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                Published
+              </>
+            ) : (
+              <>
+                <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Publish Session
+              </>
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Readiness Info */}

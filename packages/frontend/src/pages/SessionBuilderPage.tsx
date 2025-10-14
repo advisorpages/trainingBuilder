@@ -77,6 +77,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
   const [isDebugOpen, setIsDebugOpen] = React.useState(false);
   const [selectedVariantId, setSelectedVariantId] = React.useState<string | undefined>(undefined);
   const hasBootstrappedVariants = React.useRef(false);
+  const hasRedirectedAfterPublish = React.useRef(false);
 
   // Enable API debugging
   useApiDebugger();
@@ -102,11 +103,15 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
   }, [draft?.aiVersions, draft?.aiPrompt]);
 
   React.useEffect(() => {
-    const nextSessionId = state.draft?.sessionId;
-    if (state.publishStatus === 'success' && nextSessionId && nextSessionId !== routeSessionId) {
-      navigate(`/sessions/builder/${nextSessionId}`, { replace: true });
+    if (state.publishStatus === 'success' && !hasRedirectedAfterPublish.current) {
+      hasRedirectedAfterPublish.current = true;
+      navigate('/sessions', { replace: true });
     }
-  }, [navigate, routeSessionId, state.draft?.sessionId, state.publishStatus]);
+
+    if (state.publishStatus !== 'success' && hasRedirectedAfterPublish.current) {
+      hasRedirectedAfterPublish.current = false;
+    }
+  }, [navigate, state.publishStatus]);
 
   // Auto-complete steps only when users move forward
   // This prevents confusing auto-completion while users are still working on a step
@@ -336,6 +341,48 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
     );
   };
 
+  const primaryButtonLabel = React.useMemo(() => {
+    switch (currentStep) {
+      case 'setup': return 'Continue to Generate Outline';
+      case 'generate': return 'Continue to Review';
+      case 'review': return 'Continue to Finalize';
+      case 'finalize':
+        if (publishStatus === 'success') return 'Published';
+        if (isPublishing) return 'Publishing...';
+        return 'Publish Session';
+      default: return 'Continue';
+    }
+  }, [currentStep, isPublishing, publishStatus]);
+
+  const primaryButtonDisabled = React.useMemo(() => {
+    if (currentStep === 'setup') {
+      return !hasRequiredSetupFields;
+    }
+
+    if (currentStep === 'generate') {
+      return !draft?.acceptedVersionId;
+    }
+
+    if (currentStep === 'review') {
+      return !canGoNext;
+    }
+
+    if (currentStep === 'finalize') {
+      return isPublishing || publishStatus === 'success' || !canPublish;
+    }
+
+    return false;
+  }, [currentStep, hasRequiredSetupFields, draft?.acceptedVersionId, canGoNext, isPublishing, publishStatus, canPublish]);
+
+  const handlePrimaryAction = React.useCallback(() => {
+    if (currentStep === 'finalize') {
+      void publishSession();
+      return;
+    }
+
+    nextStep();
+  }, [currentStep, publishSession, nextStep]);
+
   const handleAcceptVersion = (versionId: string) => {
     acceptVersion(versionId);
     // Don't auto-jump - let user navigate with Next button
@@ -447,7 +494,6 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
             outline={draft.outline}
             metadata={draft.metadata}
             readinessScore={draft.readinessScore}
-            onPublish={() => void publishSession()}
             onEdit={() => goToStep('review')}
             isPublishing={isPublishing}
             isPublished={publishStatus === 'success'}
@@ -572,19 +618,12 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
 
               {/* Right: Primary Action */}
               <Button
-                onClick={nextStep}
-                disabled={
-                  currentStep === 'setup' ? !hasRequiredSetupFields :
-                  currentStep === 'generate' ? !draft.acceptedVersionId :
-                  !canGoNext
-                }
+                onClick={handlePrimaryAction}
+                disabled={primaryButtonDisabled}
                 className="w-full sm:w-auto sm:ml-auto"
                 size="lg"
               >
-                {currentStep === 'setup' && 'Continue to Generate Outline'}
-                {currentStep === 'generate' && 'Continue to Review'}
-                {currentStep === 'review' && 'Continue to Finalize'}
-                {currentStep === 'finalize' && 'Complete'}
+                {primaryButtonLabel}
                 <svg className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
@@ -603,6 +642,13 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string }> = ({ routeSessi
               <div className="mt-3 text-center">
                 <p className="text-sm text-amber-600">
                   Please select an outline to continue
+                </p>
+              </div>
+            )}
+            {currentStep === 'finalize' && !canPublish && (
+              <div className="mt-3 text-center">
+                <p className="text-sm text-amber-600">
+                  Complete the readiness checklist before publishing.
                 </p>
               </div>
             )}

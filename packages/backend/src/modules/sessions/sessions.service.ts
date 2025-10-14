@@ -3195,6 +3195,22 @@ export class SessionsService {
       outlineContext
     );
 
+    // Log AI outline structure for debugging and monitoring field coverage
+    this.logger.debug(`Variant ${meta.index + 1} AI outline structure:`, {
+      variantLabel: meta.label,
+      sectionsCount: aiOutline.sections?.length ?? 0,
+      sampleSection: aiOutline.sections?.[0] ? {
+        title: aiOutline.sections[0].title,
+        availableFields: Object.keys(aiOutline.sections[0]),
+        hasLearningObjectives: Array.isArray(aiOutline.sections[0].learningObjectives),
+        hasMaterialsNeeded: Array.isArray(aiOutline.sections[0].materialsNeeded),
+        hasTrainerNotes: typeof aiOutline.sections[0].trainerNotes === 'string',
+        hasDeliveryGuidance: typeof aiOutline.sections[0].deliveryGuidance === 'string',
+        hasKeyTakeaways: Array.isArray(aiOutline.sections[0].keyTakeaways),
+        hasActionItems: Array.isArray(aiOutline.sections[0].actionItems),
+      } : 'No sections generated',
+    });
+
     const userTopics = Array.isArray(payload.topics) ? payload.topics.filter(Boolean) : [];
 
     let sections: FlexibleSessionSection[];
@@ -3215,6 +3231,32 @@ export class SessionsService {
           description: typeof section.description === 'string' ? section.description : '',
           learningObjectives: Array.isArray(section.learningObjectives) ? section.learningObjectives : [],
           suggestedActivities: Array.isArray(section.suggestedActivities) ? section.suggestedActivities : [],
+          // Capture all additional AI-generated fields
+          materialsNeeded: Array.isArray(section.materialsNeeded) ? section.materialsNeeded : [],
+          trainerNotes: typeof section.trainerNotes === 'string' ? section.trainerNotes : undefined,
+          deliveryGuidance: typeof section.deliveryGuidance === 'string' ? section.deliveryGuidance : undefined,
+          learningOutcomes: typeof section.learningOutcomes === 'string' ? section.learningOutcomes : undefined,
+          // Closing section fields
+          keyTakeaways: Array.isArray(section.keyTakeaways) ? section.keyTakeaways : undefined,
+          actionItems: Array.isArray(section.actionItems) ? section.actionItems : undefined,
+          nextSteps: Array.isArray(section.nextSteps) ? section.nextSteps : undefined,
+          // Discussion/Interactive fields
+          discussionPrompts: Array.isArray(section.discussionPrompts) ? section.discussionPrompts : undefined,
+          engagementType: typeof section.engagementType === 'string' ? section.engagementType as any : undefined,
+          // Exercise fields
+          isExercise: typeof section.isExercise === 'boolean' ? section.isExercise : undefined,
+          exerciseType: typeof section.exerciseType === 'string' ? section.exerciseType as any : undefined,
+          exerciseInstructions: typeof section.exerciseInstructions === 'string' ? section.exerciseInstructions : undefined,
+          // Inspiration/Media fields
+          inspirationType: typeof section.inspirationType === 'string' ? section.inspirationType as any : undefined,
+          mediaUrl: typeof section.mediaUrl === 'string' ? section.mediaUrl : undefined,
+          mediaDuration: typeof section.mediaDuration === 'number' ? section.mediaDuration : undefined,
+          suggestions: Array.isArray(section.suggestions) ? section.suggestions : undefined,
+          // Assessment fields
+          assessmentType: typeof section.assessmentType === 'string' ? section.assessmentType as any : undefined,
+          assessmentCriteria: Array.isArray(section.assessmentCriteria) ? section.assessmentCriteria : undefined,
+          // Store raw AI content for debugging and future use
+          aiGeneratedContent: section,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }),
@@ -3224,6 +3266,28 @@ export class SessionsService {
       sections = this.applyStructuredDurationDefaults(sections, duration);
       sections = this.applyVariantPersonaAdjustments(sections, meta.label);
       sections = this.balanceDurations(sections, duration);
+
+      // Log field retention statistics
+      const fieldStats = sections.reduce((stats, section) => ({
+        withLearningObjectives: stats.withLearningObjectives + (section.learningObjectives?.length ? 1 : 0),
+        withMaterials: stats.withMaterials + (section.materialsNeeded?.length ? 1 : 0),
+        withTrainerNotes: stats.withTrainerNotes + (section.trainerNotes ? 1 : 0),
+        withDeliveryGuidance: stats.withDeliveryGuidance + (section.deliveryGuidance ? 1 : 0),
+        withKeyTakeaways: stats.withKeyTakeaways + (section.keyTakeaways?.length ? 1 : 0),
+        withActionItems: stats.withActionItems + (section.actionItems?.length ? 1 : 0),
+        total: stats.total + 1,
+      }), { withLearningObjectives: 0, withMaterials: 0, withTrainerNotes: 0, withDeliveryGuidance: 0, withKeyTakeaways: 0, withActionItems: 0, total: 0 });
+
+      this.logger.log(`Variant ${meta.index + 1} field retention:`, {
+        variantLabel: meta.label,
+        totalSections: fieldStats.total,
+        learningObjectives: `${fieldStats.withLearningObjectives}/${fieldStats.total}`,
+        materialsNeeded: `${fieldStats.withMaterials}/${fieldStats.total}`,
+        trainerNotes: `${fieldStats.withTrainerNotes}/${fieldStats.total}`,
+        deliveryGuidance: `${fieldStats.withDeliveryGuidance}/${fieldStats.total}`,
+        keyTakeaways: `${fieldStats.withKeyTakeaways}/${fieldStats.total}`,
+        actionItems: `${fieldStats.withActionItems}/${fieldStats.total}`,
+      });
     }
 
     const matchingTopics = await this.findMatchingTopics(sections);

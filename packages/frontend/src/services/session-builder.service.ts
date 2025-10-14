@@ -280,9 +280,13 @@ type TopicPersistencePayload = {
   materialsNeeded?: string;
   deliveryGuidance?: string;
   aiGeneratedContent?: Record<string, unknown>;
+  categoryId?: number;
 };
 
 export class SessionBuilderService {
+  private static readonly OPENING_CATEGORY_NAME = 'Opening';
+  private static readonly CLOSING_CATEGORY_NAME = 'Closing';
+
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
       const params = templateId ? `?template=${templateId}` : '';
@@ -387,9 +391,21 @@ export class SessionBuilderService {
 
   async createSessionFromOutline(request: CreateSessionFromOutlineRequest): Promise<any> {
     try {
+      console.log('🔍 createSessionFromOutline - request.input:', {
+        category: request.input.category,
+        categoryId: request.input.categoryId,
+        categoryName: request.input.categoryName,
+      });
+
+      const resolvedCategoryId = await this.ensureCategoryId(request.input);
+      if (typeof resolvedCategoryId === 'number') {
+        request.input.categoryId = resolvedCategoryId;
+      }
+
       const topicIds = await this.ensureTopicsFromOutline(
         request.outline,
         request.input.categoryName ?? request.input.category,
+        resolvedCategoryId,
       );
 
       const sessionData = this.transformOutlineToSession(
@@ -399,12 +415,25 @@ export class SessionBuilderService {
         request.readinessScore,
       );
 
-      console.log('Session data being sent to backend:', sessionData);
+      if (typeof resolvedCategoryId === 'number') {
+        sessionData.categoryId = resolvedCategoryId;
+      } else if ('categoryId' in sessionData) {
+        delete sessionData.categoryId;
+      }
+
+      console.log('📤 Session data being sent to backend:', sessionData);
+      console.log('🎯 CategoryId in payload:', sessionData.categoryId);
       const response = await api.post<Session>('/sessions', sessionData);
       const createdSession = response.data;
 
       return createdSession;
     } catch (error: any) {
+      console.error('❌ Error creating session:', {
+        message: error?.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data,
+      });
       throw new Error(error.response?.data?.message || 'Failed to create session from outline');
     }
   }
@@ -534,7 +563,11 @@ export class SessionBuilderService {
       payload.objective = objective;
     }
 
-    if (typeof input.categoryId === 'number' && !Number.isNaN(input.categoryId)) {
+    if (
+      typeof input.categoryId === 'number' &&
+      Number.isInteger(input.categoryId) &&
+      input.categoryId > 0
+    ) {
       payload.categoryId = input.categoryId;
     }
 
@@ -578,6 +611,7 @@ export class SessionBuilderService {
   }
 
   private topicLookupCache: { map: Map<string, number>; fetchedAt: number } | null = null;
+  private categoryLookupCache: { map: Map<string, number>; fetchedAt: number } | null = null;
 
   private async getTopicLookup(forceRefresh = false): Promise<Map<string, number>> {
     const isStale =
@@ -609,9 +643,111 @@ export class SessionBuilderService {
     return this.topicLookupCache?.map ?? new Map<string, number>();
   }
 
+  private async ensureCategoryId(input: SessionBuilderInput): Promise<number | undefined> {
+    const isValidId = (value: unknown): value is number =>
+      typeof value === 'number' && Number.isInteger(value) && value > 0;
+
+    const verifyExistingId = async (id?: number): Promise<number | undefined> => {
+      if (!isValidId(id)) return undefined;
+      try {
+        await api.get(`/admin/categories/${id}`);
+        return id;
+      } catch (error: any) {
+        if (error?.response?.status === 404) {
+          return undefined;
+        }
+        throw error;
+      }
+    };
+
+    let categoryId = await verifyExistingId(input.categoryId);
+
+    const categoryName = (input.categoryName ?? input.category ?? '').trim();
+    const normalizedName = categoryName.toLowerCase();
+
+    if (!categoryId && categoryName) {
+      const lookupId = await this.getCategoryIdByName(categoryName, true);
+      if (isValidId(lookupId)) {
+        categoryId = lookupId;
+      } else {
+        try {
+          const response = await api.post('/admin/categories', {
+            name: categoryName,
+            description: `Category created from Session Builder: ${categoryName}`,
+          });
+
+          const createdId = Number(response.data?.id);
+          if (isValidId(createdId)) {
+            categoryId = createdId;
+            await this.getCategoryIdByName(categoryName, true);
+            if (this.categoryLookupCache?.map && normalizedName) {
+              this.categoryLookupCache.map.set(normalizedName, createdId);
+            }
+          } else {
+            console.warn('SessionBuilderService: Created category missing valid id', response.data);
+          }
+        } catch (error: any) {
+          if (error?.response?.status === 409) {
+            const retryId = await this.getCategoryIdByName(categoryName, true);
+            if (isValidId(retryId)) {
+              categoryId = retryId;
+            }
+          } else {
+            console.warn('SessionBuilderService: Failed to create category', {
+              message: error?.message,
+              status: error?.response?.status,
+              data: error?.response?.data,
+            });
+            throw error;
+          }
+        }
+      }
+    }
+
+    return categoryId ?? undefined;
+  }
+
+  private async getCategoryIdByName(name?: string, forceRefresh = false): Promise<number | null> {
+    const normalized = typeof name === 'string' ? name.trim().toLowerCase() : '';
+    if (!normalized) {
+      return null;
+    }
+
+    const isStale =
+      forceRefresh ||
+      !this.categoryLookupCache ||
+      Date.now() - this.categoryLookupCache.fetchedAt > 5 * 60 * 1000;
+
+    if (isStale) {
+      try {
+        const response = await api.get('/admin/categories/active');
+        const categories = Array.isArray(response.data) ? response.data : [];
+        const map = new Map<string, number>();
+
+        categories.forEach((category: any) => {
+          if (category?.name && typeof category.id === 'number') {
+            const key = String(category.name).trim().toLowerCase();
+            if (key) {
+              map.set(key, category.id);
+            }
+          }
+        });
+
+        this.categoryLookupCache = { map, fetchedAt: Date.now() };
+      } catch (error) {
+        console.warn('Failed to refresh category cache', error);
+        this.categoryLookupCache = null;
+        return null;
+      }
+    }
+
+    return this.categoryLookupCache?.map.get(normalized) ?? null;
+  }
+
   private buildTopicPayload(
     section: FlexibleSessionSection,
     categoryName?: string,
+    categoryId?: number,
   ): TopicPersistencePayload | null {
     const rawName = section.associatedTopic?.name ?? section.title;
     const name = typeof rawName === 'string' ? rawName.trim() : '';
@@ -621,6 +757,14 @@ export class SessionBuilderService {
     }
 
     const payload: TopicPersistencePayload = { name };
+
+    if (
+      typeof categoryId === 'number' &&
+      Number.isInteger(categoryId) &&
+      categoryId > 0
+    ) {
+      payload.categoryId = categoryId;
+    }
 
     if (typeof section.description === 'string' && section.description.trim()) {
       payload.description = section.description.trim();
@@ -721,6 +865,7 @@ export class SessionBuilderService {
   private async ensureTopicsFromOutline(
     outline: SessionOutline,
     categoryName?: string,
+    categoryId?: number,
   ): Promise<number[]> {
     if (!outline?.sections?.length) {
       return [];
@@ -730,10 +875,42 @@ export class SessionBuilderService {
     const topicIds: number[] = [];
     const seenTopicIds = new Set<number>();
 
-    const topicSections = outline.sections.filter((section) => section.type === 'topic');
+    const baseCategoryId =
+      typeof categoryId === 'number' && Number.isInteger(categoryId) && categoryId > 0
+        ? categoryId
+        : undefined;
 
-    for (const section of topicSections) {
-      const payload = this.buildTopicPayload(section, categoryName);
+    const relevantSections = outline.sections.filter(
+      (section) => section.type === 'topic' || section.type === 'opener' || section.type === 'closing',
+    );
+
+    for (const section of relevantSections) {
+      let sectionCategoryName = categoryName;
+      let sectionCategoryId = baseCategoryId;
+
+      if (section.type === 'opener') {
+        sectionCategoryName = SessionBuilderService.OPENING_CATEGORY_NAME;
+        const lookupId = await this.getCategoryIdByName(sectionCategoryName);
+        if (
+          typeof lookupId === 'number' &&
+          Number.isInteger(lookupId) &&
+          lookupId > 0
+        ) {
+          sectionCategoryId = lookupId;
+        }
+      } else if (section.type === 'closing') {
+        sectionCategoryName = SessionBuilderService.CLOSING_CATEGORY_NAME;
+        const lookupId = await this.getCategoryIdByName(sectionCategoryName);
+        if (
+          typeof lookupId === 'number' &&
+          Number.isInteger(lookupId) &&
+          lookupId > 0
+        ) {
+          sectionCategoryId = lookupId;
+        }
+      }
+
+      const payload = this.buildTopicPayload(section, sectionCategoryName, sectionCategoryId);
       if (!payload) {
         continue;
       }

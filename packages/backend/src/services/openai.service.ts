@@ -67,6 +67,28 @@ export interface OpenAISessionSection {
   learningObjectives?: string[];
   suggestedActivities?: string[];
   materialsNeeded?: string[];
+  trainerNotes?: string;
+  deliveryGuidance?: string;
+  learningOutcomes?: string;
+  // Closing section fields
+  keyTakeaways?: string[];
+  actionItems?: string[];
+  nextSteps?: string[];
+  // Discussion/Interactive fields
+  discussionPrompts?: string[];
+  engagementType?: string;
+  // Exercise fields
+  isExercise?: boolean;
+  exerciseType?: string;
+  exerciseInstructions?: string;
+  // Inspiration/Media fields
+  inspirationType?: string;
+  mediaUrl?: string;
+  mediaDuration?: number;
+  suggestions?: string[];
+  // Assessment fields
+  assessmentType?: string;
+  assessmentCriteria?: string[];
 }
 
 export interface OpenAISessionOutline {
@@ -926,13 +948,28 @@ Respond ONLY with valid JSON matching this exact structure:
       "duration": number,
       "description": "string (2-3 sentences)",
       "learningObjectives": ["string", "string"],
-      "suggestedActivities": ["string", "string"]
+      "suggestedActivities": ["string", "string"],
+      "materialsNeeded": ["string", "string"],
+      "trainerNotes": "string (optional guidance for the trainer)",
+      "deliveryGuidance": "string (optional tips for effective delivery)",
+      "keyTakeaways": ["string", "string"] (for closing sections),
+      "actionItems": ["string", "string"] (for closing sections),
+      "nextSteps": ["string"] (for closing sections),
+      "discussionPrompts": ["string", "string"] (for discussion sections),
+      "exerciseInstructions": "string" (for exercise/activity sections)
     }
   ],
   "totalDuration": number,
   "difficulty": "Beginner|Intermediate|Advanced",
   "recommendedAudienceSize": "string"
 }
+
+IMPORTANT: For each section, generate ALL relevant fields:
+- Always include: title, duration, description, learningObjectives
+- For topic/content sections: Add suggestedActivities, materialsNeeded, trainerNotes, deliveryGuidance
+- For closing sections: Add keyTakeaways, actionItems, nextSteps
+- For interactive sections: Add discussionPrompts
+- For exercise sections: Add exerciseInstructions, materialsNeeded
 
 When knowledge base materials are provided, use them as inspiration and reference points while maintaining the variant personality. Adapt proven frameworks to match the variant's unique style.
 

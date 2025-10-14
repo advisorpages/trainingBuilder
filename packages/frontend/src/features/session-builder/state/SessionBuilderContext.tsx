@@ -953,7 +953,7 @@ export const SessionBuilderProvider: React.FC<{
       return;
     }
 
-    if (state.publishStatus === 'pending') {
+    if (state.publishStatus === 'pending' || state.publishStatus === 'success') {
       return;
     }
 
