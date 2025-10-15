@@ -174,7 +174,7 @@ function buildPrompt(metadata: SessionMetadata): string {
       : `Design a ${sessionTypeDescription}.`,
   ];
   if (metadata.title) {
-    segments.push(`Working title: ${metadata.title}.`);
+    segments.push(`Use this as inspiration for the session title: "${metadata.title}". Feel free to create variations that are more engaging and descriptive.`);
   }
   if (metadata.desiredOutcome) {
     segments.push(`Desired outcome: ${metadata.desiredOutcome}.`);

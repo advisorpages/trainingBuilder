@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Button, Card, CardContent, Progress } from '../../../ui';
 import { Trainer } from '@leadership-training/shared';
 import { FlexibleSessionSection, SectionType, SessionOutline, sessionBuilderService } from '../../../services/session-builder.service';
@@ -30,8 +29,10 @@ interface TopicWithSection {
   topic: SessionTopicDraft;
   topicIndex: number;
   section?: FlexibleSessionSection;
-  trainerId?: number;
-  trainerName?: string;
+  trainerId?: number; // Legacy single trainer
+  trainerIds?: number[]; // New multiple trainers
+  trainerName?: string; // Legacy single trainer name
+  trainerNames?: string[]; // New multiple trainer names
   isAssigned: boolean;
   isComplete: boolean;
 }
@@ -66,6 +67,8 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
 }) => {
   const [expandedTopics, setExpandedTopics] = React.useState<Set<number>>(new Set());
   const [editingSection, setEditingSection] = React.useState<string | null>(null);
+  const trainerCache = React.useRef(new Map<number, any>());
+  const [resolvedTrainerNames, setResolvedTrainerNames] = React.useState<Record<number, string>>({});
 
   const handleQuickAdd = React.useMemo(() => onOpenQuickAdd || (() => undefined), [onOpenQuickAdd]);
 
@@ -86,51 +89,95 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
         return false;
       });
 
+      // Support both legacy single trainer and new multiple trainers
+      const trainerIds = topic.trainerIds || [];
       const trainerId = topic.trainerId ?? associatedSection?.trainerId ?? undefined;
-      const trainerName = associatedSection?.trainerName;
+
+      // If using legacy single trainer, convert to array
+      const allTrainerIds = trainerIds.length > 0 ? trainerIds : (trainerId ? [trainerId] : []);
+
+      const trainerNames = allTrainerIds.map(id => resolvedTrainerNames[id]).filter(Boolean);
+      const trainerName = associatedSection?.trainerName ?? (trainerId ? resolvedTrainerNames[trainerId] : undefined);
 
       // Check if topic is complete (has description, duration, and trainer)
+      // Note: Trainer assignment is nice to have but not required for completion
       const isComplete = !!(
         topic.description?.trim() &&
         topic.durationMinutes &&
-        topic.durationMinutes > 0 &&
-        trainerId &&
-        trainerName
+        topic.durationMinutes > 0
       );
 
       return {
         topic,
         topicIndex: index,
         section: associatedSection,
-        trainerId,
-        trainerName,
-        isAssigned: Boolean(trainerId),
+        trainerId, // Legacy single trainer
+        trainerIds: allTrainerIds, // New multiple trainers
+        trainerName, // Legacy single trainer name
+        trainerNames, // New multiple trainer names
+        isAssigned: allTrainerIds.length > 0,
         isComplete,
       };
     });
-  }, [topics, outline.sections]);
+  }, [topics, outline.sections, resolvedTrainerNames]);
+
+  // Resolve trainer names (same as step 2)
+  React.useEffect(() => {
+    const missingIds = new Set<number>();
+
+    topicsWithSections.forEach((item) => {
+      if (item.trainerIds) {
+        item.trainerIds.forEach(id => {
+          if (!resolvedTrainerNames[id] && !trainerCache.current.has(id)) {
+            missingIds.add(id);
+          }
+        });
+      } else if (item.trainerId && !item.trainerName && !trainerCache.current.has(item.trainerId)) {
+        missingIds.add(item.trainerId);
+      }
+    });
+
+    if (!missingIds.size) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMissing = async () => {
+      await Promise.all(Array.from(missingIds).map(async (trainerId) => {
+        try {
+          // Simple trainer name resolution - using sessionBuilderService like step 2
+          const trainers = await sessionBuilderService.getTrainers('', 100);
+          const trainer = trainers.find(t => t.id === trainerId);
+          if (trainer && !cancelled) {
+            trainerCache.current.set(trainer.id, trainer);
+            setResolvedTrainerNames((prev) => {
+              if (prev[trainer.id] === trainer.name) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [trainer.id]: trainer.name,
+              };
+            });
+          }
+        } catch (error) {
+          console.error('UnifiedReviewEditor: failed to resolve trainer', error);
+        }
+      }));
+    };
+
+    void loadMissing();
+    return () => {
+      cancelled = true;
+    };
+  }, [topicsWithSections]);
 
   // Calculate statistics
   const totalTopics = topicsWithSections.length;
   const assignedCount = topicsWithSections.filter(item => item.isAssigned).length;
   const completedCount = topicsWithSections.filter(item => item.isComplete).length;
   const completionProgress = totalTopics > 0 ? (completedCount / totalTopics) * 100 : 0;
-
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) {
-      return;
-    }
-
-    if (result.source.index === result.destination.index) {
-      return;
-    }
-
-    const items = Array.from(topics);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-
-    onTopicsChange(items);
-  };
 
   const toggleTopicExpansion = (topicIndex: number) => {
     setExpandedTopics(prev => {
@@ -183,52 +230,45 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
 
   const TopicCard: React.FC<{
     topicWithSection: TopicWithSection;
-    provided: any;
-    snapshot: any;
-  }> = ({ topicWithSection, provided, snapshot }) => {
-    const { topic, topicIndex, section, trainerName, isComplete } = topicWithSection;
+  }> = ({ topicWithSection }) => {
+    const { topic, topicIndex, section, trainerId, trainerIds, trainerName, trainerNames, isComplete, isAssigned } = topicWithSection;
     const isExpanded = expandedTopics.has(topicIndex);
 
-    const parseBulletList = (value?: string | null): string[] => (
-      (String(value || '') || '')
+    const parseBulletList = (value?: string | string[] | null): string[] => {
+      if (!value) {
+        return [];
+      }
+
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => String(item || '').replace(/^•\s*/, '').trim())
+          .filter(Boolean);
+      }
+
+      return String(value || '')
         .split('\n')
         .map((item) => item.replace(/^•\s*/, '').trim())
-        .filter(Boolean)
-    );
+        .filter(Boolean);
+    };
 
     const trainerTasks = parseBulletList(section?.trainerNotes || topic.trainerNotes);
     const materials = parseBulletList(section?.materialsNeeded || topic.materialsNeeded);
 
     return (
-      <div
-        ref={provided.innerRef}
-        {...provided.draggableProps}
-        className={cn(
-          'flex items-start gap-3 transition-all',
-          snapshot.isDragging ? 'opacity-50' : ''
-        )}
-      >
-        {/* Drag Handle and Number Badge */}
-        <div className="flex flex-col items-center gap-2 pt-4">
-          <div
-            {...provided.dragHandleProps}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200 cursor-grab active:cursor-grabbing transition-colors"
-            title="Drag to reorder"
-          >
-            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z" />
-            </svg>
-          </div>
+      <div className="space-y-4">
+        {/* Topic Number Badge */}
+        <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
             {topicIndex + 1}
           </div>
         </div>
 
         {/* Topic Card */}
-        <div className="flex-1">
-          <div className="space-y-3 rounded-lg border-2 border-slate-300 bg-white shadow-md hover:shadow-lg hover:border-blue-400 transition-all">
-            {/* Main Content */}
-            <div className="p-5">
+        <div className="rounded-lg border-2 border-slate-300 bg-white shadow-md hover:shadow-lg hover:border-blue-400 transition-all">
+          {/* Main Content Grid - 80/20 Split */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-0">
+            {/* Left Column - Topic Content (80%) */}
+            <div className="lg:col-span-4 p-5">
               {/* Header with Title, Status, Duration and Actions */}
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="flex-1">
@@ -240,17 +280,25 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
                       'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
                       isComplete
                         ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                        : 'bg-amber-100 text-amber-700 border border-amber-200'
+                        : 'bg-slate-100 text-slate-600 border border-slate-200'
                     )}>
                       <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         {isComplete ? (
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 5a7 7 0 100 14 7 7 0 000-14z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         )}
                       </svg>
-                      {isComplete ? 'Complete' : 'Needs Review'}
+                      {isComplete ? 'Complete' : 'Incomplete'}
                     </span>
+                    {isAssigned && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        {trainerNames?.length || 1} trainer{(trainerNames?.length || 1) > 1 ? 's' : ''}
+                      </span>
+                    )}
                     <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md border border-blue-200">
                       <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
@@ -260,18 +308,6 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!isFinalStep && (
-                    <button
-                      type="button"
-                      onClick={onEdit}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-blue-600 hover:text-white hover:bg-blue-600 border border-blue-600 rounded-md transition-colors"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit
-                    </button>
-                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -299,62 +335,22 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
                 </div>
               )}
 
-              {/* Trainer Assignment Display */}
-              {trainerName && (
-                <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-md">
+    
+              {/* Incomplete Topic Indicator */}
+              {!isComplete && (
+                <div className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded-md">
                   <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span className="text-sm font-medium text-emerald-800">{trainerName}</span>
+                    <span className="text-sm font-medium text-slate-700">
+                      {!topic.description?.trim() && 'Needs description'}
+                      {(!topic.durationMinutes || topic.durationMinutes <= 0) && topic.description?.trim() && 'Needs duration'}
+                      {!topic.description?.trim() && (!topic.durationMinutes || topic.durationMinutes <= 0) && 'Needs description and duration'}
+                    </span>
                   </div>
                 </div>
               )}
-
-              {/* Review Checklist */}
-              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
-                <div className="flex items-center gap-2 mb-2">
-                  <svg className="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="text-sm font-medium text-amber-800">Review Status</span>
-                </div>
-                <div className="space-y-1 text-xs">
-                  <div className="flex items-center gap-2">
-                    <svg className={cn(
-                      'h-3.5 w-3.5 flex-shrink-0',
-                      topic.description?.trim() ? 'text-emerald-600' : 'text-slate-300'
-                    )} fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span className={topic.description?.trim() ? 'text-slate-700' : 'text-slate-400'}>
-                      Has Description
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <svg className={cn(
-                      'h-3.5 w-3.5 flex-shrink-0',
-                      topic.durationMinutes && topic.durationMinutes > 0 ? 'text-emerald-600' : 'text-slate-300'
-                    )} fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span className={topic.durationMinutes && topic.durationMinutes > 0 ? 'text-slate-700' : 'text-slate-400'}>
-                      Duration Set
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <svg className={cn(
-                      'h-3.5 w-3.5 flex-shrink-0',
-                      trainerName ? 'text-emerald-600' : 'text-slate-300'
-                    )} fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span className={trainerName ? 'text-slate-700' : 'text-slate-400'}>
-                      Trainer Assigned
-                    </span>
-                  </div>
-                </div>
-              </div>
 
               {/* Expand/Collapse Button */}
               <button
@@ -376,70 +372,30 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
 
             {/* Expanded View */}
             {isExpanded && (
-              <div className="px-4 pb-4 space-y-4 border-t border-slate-200 pt-4 bg-slate-50">
-                {/* Section Details */}
-                {section && (
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <h4 className="text-base font-semibold text-slate-900">{section.title}</h4>
-                      <p className="text-sm text-slate-600 whitespace-pre-line mt-1">{section.description}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-700">
-                        {section.type}
-                      </span>
-                      <span className="text-sm text-slate-500 whitespace-nowrap">
-                        {sessionBuilderService.formatDuration(section.duration)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Trainer Tasks */}
-                {trainerTasks.length > 0 && (
-                  <div className="space-y-2">
-                    <h5 className="text-sm font-semibold text-slate-700">
-                      Trainer Tasks ({trainerTasks.length})
-                    </h5>
-                    <ul className="space-y-1.5">
-                      {trainerTasks.map((task, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-slate-700">
-                          <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
-                          <span>{task}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
+              <div className="px-4 pb-4 space-y-4 border-t border-slate-200 pt-4 bg-slate-50 lg:col-span-4">
                 {/* Learning Objectives */}
                 {section?.learningObjectives && section.learningObjectives.length > 0 && (
                   <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <h5 className="text-xs font-semibold text-blue-900 mb-1">Learning Objectives:</h5>
+                    <h5 className="text-xs font-semibold text-blue-900 mb-2">Learning Objectives</h5>
                     <ul className="text-xs text-blue-800 space-y-1">
-                      {section.learningObjectives.slice(0, 3).map((obj, idx) => (
+                      {section.learningObjectives.map((obj, idx) => (
                         <li key={idx} className="flex items-start gap-1">
-                          <span>•</span>
+                          <span className="text-blue-600">•</span>
                           <span>{obj}</span>
                         </li>
                       ))}
-                      {section.learningObjectives.length > 3 && (
-                        <li className="text-blue-600 italic">+{section.learningObjectives.length - 3} more...</li>
-                      )}
                     </ul>
                   </div>
                 )}
 
-                {/* Materials */}
+                {/* Materials Needed */}
                 {materials.length > 0 && (
-                  <div className="space-y-2">
-                    <h5 className="text-sm font-semibold text-slate-700">
-                      Materials Needed ({materials.length})
-                    </h5>
-                    <ul className="space-y-1.5">
+                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                    <h5 className="text-xs font-semibold text-amber-900 mb-2">Materials Needed</h5>
+                    <ul className="text-xs text-amber-800 space-y-1">
                       {materials.map((material, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-slate-700">
-                          <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                        <li key={index} className="flex items-start gap-1">
+                          <span className="text-amber-600">•</span>
                           <span>{material}</span>
                         </li>
                       ))}
@@ -447,42 +403,94 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
                   </div>
                 )}
 
-                {/* Additional Details */}
-                <div className="space-y-3">
+                {/* Trainer Notes */}
+                {trainerTasks.length > 0 && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3">
+                    <h5 className="text-xs font-semibold text-emerald-900 mb-2">Trainer Notes</h5>
+                    <ul className="text-xs text-emerald-800 space-y-1">
+                      {trainerTasks.map((task, index) => (
+                        <li key={index} className="flex items-start gap-1">
+                          <span className="text-emerald-600">•</span>
+                          <span>{task}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Topic Details Summary */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
                   {topic.learningOutcomes && (
                     <div>
-                      <h5 className="text-xs font-semibold uppercase text-slate-500 mb-1">
-                        Trainer Goal
-                      </h5>
-                      <p className="text-sm text-slate-700">{topic.learningOutcomes}</p>
+                      <span className="font-semibold text-slate-500">Desired Outcome:</span>
+                      <p className="text-slate-700 mt-1">{topic.learningOutcomes}</p>
                     </div>
                   )}
-
                   {topic.callToAction && (
                     <div>
-                      <h5 className="text-xs font-semibold uppercase text-slate-500 mb-1">
-                        Call to Action
-                      </h5>
-                      <p className="text-sm text-slate-700">{topic.callToAction}</p>
+                      <span className="font-semibold text-slate-500">Activities:</span>
+                      <p className="text-slate-700 mt-1">{topic.callToAction}</p>
                     </div>
                   )}
                 </div>
               </div>
             )}
+
+            {/* Right Column - Trainer Assignment (20%) */}
+            <div className="lg:col-span-1 border-l border-slate-200 bg-slate-50 p-4">
+              <div className="h-fit">
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="h-4 w-4 flex-shrink-0 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    Trainer Assignment
+                  </h4>
+                </div>
+
+                {(trainerNames?.length > 0 || trainerName) && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-md">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span className="text-sm font-medium text-emerald-800">
+                          {trainerNames?.length > 0
+                            ? `${trainerNames.length} trainer${trainerNames.length > 1 ? 's' : ''} assigned`
+                            : trainerName
+                          }
+                        </span>
+                      </div>
+                      {trainerNames && trainerNames.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {trainerNames.map((name, index) => (
+                            <span key={index} className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded">
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!isAssigned && (
+                  <div className="p-3 bg-slate-100 border border-slate-200 rounded-md">
+                    <div className="flex items-center gap-2">
+                      <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      <span className="text-sm font-medium text-slate-600">
+                        No trainer assigned
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Remove Button */}
-        <button
-          type="button"
-          onClick={() => onDuplicateSection(section?.id || `topic-${topicIndex}`)}
-          className="mt-4 p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-md transition-colors"
-          title="Duplicate topic"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-        </button>
       </div>
     );
   };
@@ -494,12 +502,12 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex-1 min-w-0">
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">
-              {isFinalStep ? 'Final Review & Publish' : 'Review Your Session'}
+              {isFinalStep ? 'Final Review & Publish' : 'Session Summary'}
             </h2>
             <p className="text-sm text-slate-700 mb-4">
               {isFinalStep
-                ? 'Review your complete session one final time before publishing. All topics should be complete with trainers assigned.'
-                : 'Review each topic to ensure completeness. Expand topics to check detailed content and trainer assignments.'
+                ? 'Review your complete session before publishing. Make sure everything looks correct.'
+                : 'Here\'s a summary of your session. Review all details before proceeding.'
               }
             </p>
 
@@ -524,103 +532,45 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
                   {completedCount === totalTopics ? 'All complete' : `${completedCount}/${totalTopics} complete`}
                 </span>
               </div>
-
-              <div className={cn(
-                'flex items-center gap-2 px-3 py-1 rounded-md',
-                getReadinessColor()
-              )}>
-                <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="text-xs font-medium">
-                  {readinessScore}% {getReadinessMessage()}
-                </span>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-slate-700">Completion Progress</span>
-            <span className="text-sm text-slate-600">{completedCount}/{totalTopics} topics complete</span>
+        {completedCount < totalTopics && (
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">Topic Completion</span>
+              <span className="text-sm text-slate-600">{completedCount}/{totalTopics} topics complete</span>
+            </div>
+            <Progress value={completionProgress} className="h-2" />
           </div>
-          <Progress value={completionProgress} className="h-2" />
-        </div>
+        )}
       </div>
 
-      {/* Priority Alert */}
-      {completedCount < totalTopics && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="flex gap-3">
-            <svg className="h-5 w-5 text-amber-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            <div>
-              <h4 className="text-sm font-semibold text-amber-900 mb-1">Topics Need Attention</h4>
-              <p className="text-xs text-amber-800">
-                {totalTopics - completedCount} topic{totalTopics - completedCount === 1 ? '' : 's'} still need review.
-                {isFinalStep ? ' Complete all topics before publishing.' : ' Ensure all topics are complete before proceeding to publish.'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Drag Instructions */}
-      {topicsWithSections.length > 0 && (
-        <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M7 2a1 1 0 000 2h6a1 1 0 100-2H7zM7 8a1 1 0 000 2h6a1 1 0 100-2H7zM7 14a1 1 0 100 2h6a1 1 0 100-2H7z" />
-          </svg>
-          Drag topics to reorder them for final review
-        </div>
-      )}
-
+  
+    
       {/* Topic Cards */}
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="topics-list">
-          {(provided, snapshot) => (
-            <div
-              {...provided.droppableProps}
-              ref={provided.innerRef}
-              className={`space-y-4 transition-colors ${
-                snapshot.isDraggingOver ? 'bg-blue-50/50 rounded-lg p-2' : ''
-              }`}
-            >
-              {topicsWithSections.length > 0 ? (
-                topicsWithSections.map((topicWithSection, index) => (
-                  <Draggable
-                    key={topicWithSection.topicIndex}
-                    draggableId={`topic-${topicWithSection.topicIndex}`}
-                    index={index}
-                  >
-                    {(providedDraggable, snapshotDraggable) => (
-                      <TopicCard
-                        topicWithSection={topicWithSection}
-                        provided={providedDraggable}
-                        snapshot={snapshotDraggable}
-                      />
-                    )}
-                  </Draggable>
-                ))
-              ) : (
-                <div className="text-center py-12 border border-dashed border-slate-300 rounded-lg bg-slate-50">
-                  <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <p className="text-sm text-slate-600 mb-4">No topics to review</p>
-                  <Button onClick={handleQuickAdd}>
-                    Add Topics
-                  </Button>
-                </div>
-              )}
-              {provided.placeholder}
-            </div>
-          )}
-        </Droppable>
-      </DragDropContext>
+      <div className="space-y-4">
+        {topicsWithSections.length > 0 ? (
+          topicsWithSections.map((topicWithSection) => (
+            <TopicCard
+              key={topicWithSection.topicIndex}
+              topicWithSection={topicWithSection}
+            />
+          ))
+        ) : (
+          <div className="text-center py-12 border border-dashed border-slate-300 rounded-lg bg-slate-50">
+            <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-sm text-slate-600 mb-4">No topics to review</p>
+            <Button onClick={handleQuickAdd}>
+              Add Topics
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Add Section Button */}
       {topicsWithSections.length > 0 && !isFinalStep && (

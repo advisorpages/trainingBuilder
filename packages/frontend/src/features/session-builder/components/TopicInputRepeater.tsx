@@ -228,61 +228,68 @@ export const TopicInputRepeater = ({
                   )}
                 </Draggable>
               ))}
+
+              {/* Add Topic Buttons - Inside the topics container */}
+              <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 bg-slate-50/50">
+                <div className="text-center space-y-3">
+                  <p className="text-sm text-slate-600">
+                    {topics.length === 0 ? 'Start building your session' : 'Add another topic to your session'}
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {isClassic ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            console.log('🔘 Add from Library button clicked');
+                            setIsLibraryOpen(true);
+                          }}
+                        >
+                          Add from Library
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={addTopic}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Create New Topic
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          onClick={addTopic}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Add Topic
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            console.log('🔘 Add from Library button clicked');
+                            setIsLibraryOpen(true);
+                          }}
+                          variant="ghost"
+                          size="sm"
+                        >
+                          Add from Library
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {provided.placeholder}
             </div>
           )}
         </Droppable>
       </DragDropContext>
 
-      {/* Only show button row if topics exist OR not in classic mode */}
-      {(topics.length > 0 || !isClassic) && (
-        <div className="flex flex-wrap gap-2">
-          {isClassic ? (
-            <>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => {
-                  console.log('🔘 Add from Library button clicked');
-                  setIsLibraryOpen(true);
-                }}
-              >
-                Add from Library
-              </Button>
-              <Button
-                type="button"
-                onClick={addTopic}
-                variant="outline"
-                size="sm"
-              >
-                Create New Topic
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                type="button"
-                onClick={addTopic}
-                variant="outline"
-                size="sm"
-              >
-                Add Topic
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  console.log('🔘 Add from Library button clicked');
-                  setIsLibraryOpen(true);
-                }}
-                variant="ghost"
-                size="sm"
-              >
-                Add from Library
-              </Button>
-            </>
-          )}
-        </div>
-      )}
       <TopicLibraryModal
         open={isLibraryOpen}
         onClose={() => setIsLibraryOpen(false)}

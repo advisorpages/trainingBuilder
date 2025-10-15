@@ -17,7 +17,7 @@ interface MultiTrainerSelectProps {
 }
 
 // Cache for storing previously fetched trainers
-const trainerCache = new Map<string, Trainer[]>();
+const trainerCache = new Map<string, { trainers: Trainer[]; timestamp: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export const MultiTrainerSelect: React.FC<MultiTrainerSelectProps> = ({
@@ -89,8 +89,8 @@ export const MultiTrainerSelect: React.FC<MultiTrainerSelectProps> = ({
 
         // Check cache first
         const cached = trainerCache.get(cacheKey);
-        if (cached && (now - (cached as any).timestamp) < CACHE_DURATION) {
-          setTrainers((cached as any).trainers);
+        if (cached && now - cached.timestamp < CACHE_DURATION) {
+          setTrainers(cached.trainers);
           setError(null);
           return;
         }

@@ -68,9 +68,25 @@ export class AiPromptSettingsService {
       current = await this.createDefaultCurrentSetting();
     }
 
+    // Ensure all default personas are present and in correct order
+    const settings = (current.settings ?? {}) as PromptSandboxSettings;
+    const defaultSettings = this.buildDefaultSettings();
+
+    // If personas don't match exactly (different count or content), reset to defaults
+    if (!settings.variantPersonas ||
+        settings.variantPersonas.length !== defaultSettings.variantPersonas.length ||
+        !this.arePersonasMatch(settings.variantPersonas, defaultSettings.variantPersonas)) {
+
+      settings.variantPersonas = [...defaultSettings.variantPersonas];
+
+      // Update the database record
+      current.settings = settings;
+      current = await this.promptSettingsRepository.save(current);
+    }
+
     return {
       setting: current,
-      settings: (current.settings ?? {}) as PromptSandboxSettings,
+      settings: settings,
     };
   }
 
@@ -217,18 +233,25 @@ export class AiPromptSettingsService {
             'Lead with measurable outcomes, cite relevant metrics when available, and tighten language to reduce filler. Maintain a confident, expert tone that anticipates stakeholder scrutiny.',
         },
         {
-          id: 'momentum',
-          label: 'Momentum Persona',
-          summary: 'Keep energy high and momentum building between sections.',
+          id: 'insight',
+          label: 'Insight Persona',
+          summary: 'Emphasize evidence-based approaches with data, research, and proven strategies.',
           prompt:
-            'Prioritize active verbs, forward-looking statements, and smooth transitions between agenda items. Highlight “why now” urgency and include micro-moments that reinforce engagement.',
+            'Build logic-driven content emphasizing facts, statistics, case studies, and measurable outcomes. Include analysis activities, research findings, and evidence-based practices. Present insights with statistics and proof points.',
         },
         {
-          id: 'coaching',
-          label: 'Coaching Persona',
-          summary: 'Balance empathy with accountability for leaders in transition.',
+          id: 'ignite',
+          label: 'Ignite Persona',
+          summary: 'Fast-paced, results-oriented approach with immediate takeaways and momentum.',
           prompt:
-            'Surface reflective questions, integrate short feedback loops, and provide practical language leaders can use with their teams. Reinforce supportive yet directive guidance throughout.',
+            'Design high-energy content focused on quick wins and immediate action. Use rapid-fire activities, time-boxed exercises, and goal-oriented challenges. Keep content concise and focus on "what to do now" with urgency.',
+        },
+        {
+          id: 'connect',
+          label: 'Connect Persona',
+          summary: 'Story-driven, collaborative approach building rapport and real-world connection.',
+          prompt:
+            'Create people-centered content using stories, real-world scenarios, and collaborative activities. Use storytelling, empathy, and authentic connection. Encourage peer discussions, group sharing, and relationship-building exercises.',
         },
       ],
       globalTone: {
@@ -269,6 +292,15 @@ export class AiPromptSettingsService {
     if (!settings.durationFlow?.pacingGuidelines || !settings.durationFlow?.structuralNotes) {
       throw new BadRequestException('Duration & flow must include pacingGuidelines and structuralNotes.');
     }
+  }
+
+  private arePersonasMatch(current: PromptVariantPersona[], expected: PromptVariantPersona[]): boolean {
+    if (current.length !== expected.length) return false;
+
+    const currentIds = current.map(p => p.id).sort();
+    const expectedIds = expected.map(p => p.id).sort();
+
+    return JSON.stringify(currentIds) === JSON.stringify(expectedIds);
   }
 
   private async generateUniqueSlug(label: string, excludeId?: string): Promise<string> {

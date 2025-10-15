@@ -535,6 +535,40 @@ export class SessionBuilderService {
     }
   }
 
+  private createSessionTopicsFromOutline(
+    outline: SessionOutline,
+    topicIds?: number[]
+  ): Array<{topicId: number; trainerId?: number; sequenceOrder: number; durationMinutes?: number; notes?: string}> {
+    const sessionTopics: Array<{topicId: number; trainerId?: number; sequenceOrder: number; durationMinutes?: number; notes?: string}> = [];
+
+    if (!outline?.sections?.length || !topicIds?.length) {
+      return sessionTopics;
+    }
+
+    // Filter for topic sections and map them to session topics
+    const topicSections = outline.sections
+      .filter(section => section.type === 'topic')
+      .sort((a, b) => a.position - b.position);
+
+    topicSections.forEach((section, index) => {
+      // Find the corresponding topic ID from the topicIds array
+      const topicId = topicIds[index];
+      if (!topicId) return;
+
+      const sessionTopic = {
+        topicId,
+        trainerId: section.trainerId, // This should be set from the classic builder
+        sequenceOrder: index + 1,
+        durationMinutes: section.duration || undefined,
+        notes: section.trainerNotes || undefined
+      };
+
+      sessionTopics.push(sessionTopic);
+    });
+
+    return sessionTopics;
+  }
+
   async autosaveDraft(
     sessionId: string,
     payload: BuilderAutosavePayload
@@ -624,6 +658,12 @@ export class SessionBuilderService {
 
     if (typeof input.toneId === 'number') {
       payload.toneId = input.toneId;
+    }
+
+    // Add sessionTopics with trainer assignments
+    const sessionTopics = this.createSessionTopicsFromOutline(outline, topicIds);
+    if (sessionTopics.length > 0) {
+      payload.sessionTopics = sessionTopics;
     }
 
     return payload;

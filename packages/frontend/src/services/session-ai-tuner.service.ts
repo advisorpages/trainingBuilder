@@ -171,6 +171,123 @@ class SessionAiTunerService {
     const response = await api.put<PromptSettingsResponse>('/ai-prompts/current', { sourceOverrideId: id });
     return response.data;
   }
+
+  async getVariantLogs(params: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {}): Promise<{
+    logs: VariantLogEntry[];
+    total: number;
+    summary: {
+      totalRuns: number;
+      successRate: number;
+      avgProcessingTime: number;
+      totalCost: number;
+    };
+  }> {
+    // Use the existing ai-interactions endpoint with filters
+    const filters: any = {
+      interactionType: 'outline_generation', // Filter for variant generations only
+    };
+
+    if (params.search) filters.search = params.search;
+    if (params.status) filters.status = params.status;
+    if (params.startDate) filters.startDate = params.startDate;
+    if (params.endDate) filters.endDate = params.endDate;
+
+    // Calculate page from offset/limit for the existing API
+    const page = params.offset && params.limit
+      ? Math.floor(params.offset / params.limit) + 1
+      : 1;
+
+    const response = await api.get<{
+      data: any[];
+      total: number;
+      page: number;
+      limit: number;
+    }>('/ai-interactions', {
+      params: {
+        ...filters,
+        page: page.toString(),
+        limit: (params.limit || 20).toString(),
+      }
+    });
+
+    // Transform the response to match our expected format
+    const logs: VariantLogEntry[] = response.data.data.map((interaction: any) => ({
+      id: interaction.id,
+      createdAt: interaction.createdAt,
+      status: interaction.status,
+      sessionTitle: interaction.session?.title || 'Untitled',
+      category: interaction.category,
+      sessionType: interaction.sessionType,
+      processingTimeMs: interaction.processingTimeMs,
+      tokensUsed: interaction.tokensUsed,
+      estimatedCost: interaction.estimatedCost,
+      modelUsed: interaction.modelUsed,
+      userName: interaction.user?.name || 'Unknown',
+      variantLabel: interaction.metadata?.variantLabel,
+      ragWeight: interaction.metadata?.ragWeight,
+      errorMessage: interaction.errorMessage,
+      qualityScore: interaction.qualityScore,
+      userFeedback: interaction.userFeedback,
+    }));
+
+    // Calculate summary metrics from the logs
+    const totalRuns = logs.length;
+    const successfulRuns = logs.filter(log => log.status === 'success').length;
+    const successRate = totalRuns > 0 ? (successfulRuns / totalRuns) * 100 : 0;
+    const avgProcessingTime = logs.reduce((sum, log) => sum + (log.processingTimeMs || 0), 0) / Math.max(totalRuns, 1);
+    const totalCost = logs.reduce((sum, log) => sum + (Number(log.estimatedCost) || 0), 0);
+
+    return {
+      logs,
+      total: response.data.total,
+      summary: {
+        totalRuns,
+        successRate,
+        avgProcessingTime,
+        totalCost,
+      },
+    };
+  }
+
+  async getVariantLogDetails(id: string): Promise<VariantLogDetail> {
+    const response = await api.get<VariantLogDetail>(`/ai-interactions/${id}`);
+    return response.data;
+  }
+}
+
+export interface VariantLogEntry {
+  id: string;
+  createdAt: string;
+  status: 'success' | 'failure' | 'partial';
+  sessionTitle?: string;
+  category?: string;
+  sessionType?: string;
+  processingTimeMs?: number;
+  tokensUsed?: number;
+  estimatedCost?: number;
+  modelUsed?: string;
+  userName?: string;
+  variantLabel?: string;
+  ragWeight?: number;
+  errorMessage?: string;
+  qualityScore?: number;
+  userFeedback?: 'accepted' | 'rejected' | 'modified' | 'no_feedback';
+}
+
+export interface VariantLogDetail extends VariantLogEntry {
+  renderedPrompt: string;
+  inputVariables: Record<string, any>;
+  aiResponse?: string;
+  structuredOutput?: Record<string, any>;
+  metadata?: Record<string, any>;
+  errorDetails?: Record<string, any>;
 }
 
 export const sessionAiTunerService = new SessionAiTunerService();

@@ -9,7 +9,6 @@ import { AudiencesTabContent } from '../components/admin/AudiencesTabContent';
 import { TonesTabContent } from '../components/admin/TonesTabContent';
 import { AIInsightsTabContent } from '../components/admin/AIInsightsTabContent';
 import SessionAITunerPage from './SessionAITunerPage';
-import { VariantsTabContent } from '../components/admin/VariantsTabContent';
 import { ImportExportTabContent } from '../components/admin/ImportExportTabContent';
 import { RagSettingsTabContent } from '../components/admin/RagSettingsTabContent';
 
@@ -51,7 +50,7 @@ const CORE_PROMPTS = [
   }
 ];
 
-type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'audiences' | 'tones' | 'ai-insights' | 'variants' | 'rag-settings' | 'import-export' | 'ai-tuner';
+type TabType = 'prompts' | 'config' | 'status' | 'logs' | 'analytics' | 'categories' | 'audiences' | 'tones' | 'ai-insights' | 'rag-settings' | 'import-export' | 'ai-tuner';
 
 // Placeholder descriptions
 const PLACEHOLDER_DESCRIPTIONS: Record<string, string> = {
@@ -588,7 +587,6 @@ export const AdminDashboardPage: React.FC = () => {
         {/* Tab Content */}
         {activeTab === 'prompts' && renderPromptsTab()}
         {activeTab === 'ai-tuner' && <SessionAITunerPage />}
-        {activeTab === 'variants' && <VariantsTabContent />}
         {activeTab === 'rag-settings' && <RagSettingsTabContent />}
         {activeTab === 'analytics' && <AnalyticsTabContent />}
         {activeTab === 'ai-insights' && <AIInsightsTabContent />}

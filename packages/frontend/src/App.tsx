@@ -156,8 +156,7 @@ function App() {
           <Route path="/admin/tones" element={<Navigate to="/admin/dashboard?tab=tones" replace />} />
           <Route path="/admin/categories" element={<Navigate to="/admin/dashboard?tab=categories" replace />} />
           <Route path="/analytics" element={<Navigate to="/admin/dashboard?tab=analytics" replace />} />
-          <Route path="/settings/ai" element={<Navigate to="/admin/ai-tuner" replace />} />
-          <Route
+            <Route
             path="/admin/ai-tuner"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>

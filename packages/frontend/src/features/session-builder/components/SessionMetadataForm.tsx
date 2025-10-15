@@ -389,10 +389,10 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   const completedRequired = Object.values(requiredFields).filter(Boolean).length;
   const totalRequired = Object.keys(requiredFields).length;
 
-  // Progressive reveal logic - show advanced fields when initial 3 are complete
+  // Progressive reveal logic - show advanced fields when initial 2 are complete
   const initialFieldsComplete = React.useMemo(() => {
-    return !!metadata.categoryId && !!metadata.sessionType && !!metadata.title?.trim();
-  }, [metadata.categoryId, metadata.sessionType, metadata.title]);
+    return !!metadata.categoryId && !!metadata.sessionType;
+  }, [metadata.categoryId, metadata.sessionType]);
 
   React.useEffect(() => {
     if (initialFieldsComplete && !showAdvancedFields) {
@@ -400,13 +400,11 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
     }
   }, [initialFieldsComplete, showAdvancedFields]);
 
-  // Show Topics section when Section 1 core fields are complete
+  // Show Topics section when core fields are complete
   const section1CoreComplete = React.useMemo(() => {
-    return !!metadata.categoryId &&
-           !!metadata.sessionType &&
-           !!metadata.title?.trim() &&
-           !!metadata.desiredOutcome?.trim();
-  }, [metadata.categoryId, metadata.sessionType, metadata.title, metadata.desiredOutcome]);
+    return !!metadata.desiredOutcome?.trim() &&
+           !!(metadata.audienceId || metadata.audienceName);
+  }, [metadata.desiredOutcome, metadata.audienceId, metadata.audienceName]);
 
   React.useEffect(() => {
     if (section1CoreComplete && !showTopicsSection) {
@@ -448,17 +446,15 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
     }
   }, []); // Only run once on mount
 
-  // Show Logistics section after at least one topic is added
+  // Show Logistics section when core requirements are met
   React.useEffect(() => {
-    const hasTopics = metadata.topics && metadata.topics.length > 0;
-    if (showTopicsSection && hasTopics && !showLogisticsSection) {
-      // Delay slightly to let user see the added topic
-      const timer = setTimeout(() => {
-        setShowLogisticsSection(true);
-      }, 500);
-      return () => clearTimeout(timer);
+    const hasDesiredOutcome = !!metadata.desiredOutcome?.trim();
+    const hasAudience = !!(metadata.audienceId || metadata.audienceName);
+
+    if (hasDesiredOutcome && hasAudience && !showLogisticsSection) {
+      setShowLogisticsSection(true);
     }
-  }, [showTopicsSection, metadata.topics, showLogisticsSection]);
+  }, [metadata.desiredOutcome, metadata.audienceId, metadata.audienceName, showLogisticsSection]);
 
   const handleFillTestData = () => {
     const testData = generateTestData();
@@ -775,28 +771,10 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           <p className="text-sm text-slate-600 mt-1">
             {isClassic
               ? 'Select the topics you will cover in this session. Choose items from your library or add new custom topics.'
-              : 'You can skip this section and let AI generate topics for you, OR select topics from your library or create custom ones'}
+              : 'This entire section is optional. If you want me to take certain topics into consideration when generating content'}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Optional Callout */}
-          {!isClassic && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-0.5">
-                  <svg className="h-5 w-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-blue-900">Not sure what to include?</h4>
-                  <p className="text-xs text-blue-800 mt-1">
-                    This entire section is optional. Skip it and continue to the next step if you want AI to suggest topics based on your objective. You can always come back and add specific topics later.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Simple Topic List */}
           {!isClassic && (
@@ -823,32 +801,6 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               {isClassic ? 'Add detailed topics' : 'Add detailed topics (optional)'}
             </label>
 
-            {/* Structure Templates */}
-            {!isClassic && structureTemplates.length > 0 && (
-              <div className="bg-white border border-slate-200 rounded-md p-4 space-y-3">
-                <p className="text-sm text-slate-600">
-                  Want a head start? Pick a structure to load sample topics and trainer tasks, then customize anything you like.
-                </p>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {structureTemplates.map((template) => (
-                    <div key={template.id} className="bg-slate-50 border border-slate-200 rounded-md p-3 space-y-2 shadow-sm">
-                      <div>
-                        <h4 className="text-sm font-semibold text-slate-900">{template.name}</h4>
-                        <p className="text-xs text-slate-600">{template.description}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onChange({ topics: template.topics })}
-                      >
-                        Use this structure
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Topic Repeater */}
             <TopicInputRepeater

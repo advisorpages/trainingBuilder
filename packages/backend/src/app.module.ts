@@ -24,7 +24,6 @@ import { AudiencesModule } from './modules/audiences/audiences.module';
 import { TonesModule } from './modules/tones/tones.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AIInteractionsModule } from './modules/ai-interactions/ai-interactions.module';
-import { VariantConfigsModule } from './modules/variant-configs/variant-configs.module';
 import { RagSettingsModule } from './modules/rag-settings/rag-settings.module';
 import { AiPromptsModule } from './modules/ai-prompts/ai-prompts.module';
 import { entities } from './entities';
@@ -73,7 +72,6 @@ import { SnakeNamingStrategy } from './config/snake-naming.strategy';
     TonesModule,
     AdminModule,
     AIInteractionsModule,
-    VariantConfigsModule,
     RagSettingsModule,
     AiPromptsModule,
   ],

@@ -8,10 +8,18 @@ import { Session, SessionStatus } from '@leadership-training/shared';
 
 interface SessionWithRelations extends Session {
   trainerAssignments?: Array<{
-    trainer: {
-      id: string;
-      name: string;
+    trainer?: {
+      id: number | string;
+      name?: string;
     };
+    trainerId?: number | string;
+  }>;
+  sessionTopicTrainers?: Array<{
+    trainer?: {
+      id: number | string;
+      name?: string;
+    };
+    trainerId?: number | string;
   }>;
   incentives?: Array<{
     id: string;
@@ -69,16 +77,65 @@ const SessionsTable: React.FC<{
   };
 
   // Helper: Get all unique trainers
-  const getAllTrainers = (session: Session) => {
-    if (!session.sessionTopics || session.sessionTopics.length === 0) {
-      return [];
-    }
-    const uniqueTrainers = new Map();
-    session.sessionTopics.forEach(st => {
-      if (st.trainer && st.trainerId) {
-        uniqueTrainers.set(st.trainerId, st.trainer);
+  const getAllTrainers = (session: SessionWithRelations) => {
+    // Aggregate trainers from every supported relation so both classic and new builders display correctly
+    const uniqueTrainers = new Map<string, { id: number | string; name?: string } & Record<string, any>>();
+
+    const addTrainer = (trainer?: Record<string, any>, fallbackId?: number | string, fallbackName?: string) => {
+      const resolvedId = trainer?.id ?? fallbackId;
+      if (resolvedId === undefined || resolvedId === null) {
+        return;
       }
-    });
+
+      const key = String(resolvedId);
+      const resolvedName = trainer?.name ?? fallbackName ?? `Trainer ${resolvedId}`;
+
+      if (uniqueTrainers.has(key)) {
+        const existing = uniqueTrainers.get(key)!;
+        if (!existing.name && resolvedName) {
+          uniqueTrainers.set(key, { ...existing, name: resolvedName });
+        }
+        return;
+      }
+
+      uniqueTrainers.set(
+        key,
+        trainer
+          ? { ...trainer, id: resolvedId, name: resolvedName }
+          : { id: resolvedId, name: resolvedName },
+      );
+    };
+
+    // Collect trainers from sessionTopics (supports single or multiple trainers)
+    if (Array.isArray(session.sessionTopics)) {
+      session.sessionTopics.forEach((sessionTopic: any) => {
+        if (Array.isArray(sessionTopic?.trainers)) {
+          sessionTopic.trainers.forEach((trainer: any) => addTrainer(trainer));
+        } else {
+          addTrainer(sessionTopic?.trainer, sessionTopic?.trainerId, sessionTopic?.trainerName);
+        }
+      });
+    }
+
+    // Collect trainers from explicit sessionTopicTrainers relation if present
+    if (Array.isArray(session.sessionTopicTrainers)) {
+      session.sessionTopicTrainers.forEach((topicTrainer) => {
+        addTrainer(topicTrainer?.trainer, topicTrainer?.trainerId);
+      });
+    }
+
+    // Collect trainers from trainerAssignments
+    if (Array.isArray(session.trainerAssignments)) {
+      session.trainerAssignments.forEach((assignment) => {
+        addTrainer(assignment?.trainer, assignment?.trainerId);
+      });
+    }
+
+    // Include primary trainer as fallback
+    if (session.trainer || session.trainerId) {
+      addTrainer(session.trainer as any, session.trainerId);
+    }
+
     return Array.from(uniqueTrainers.values());
   };
 

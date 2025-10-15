@@ -53,7 +53,6 @@ import { RagIntegrationService } from '../../services/rag-integration.service';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
 import { AIInteractionType, AIInteractionStatus } from '../../entities/ai-interaction.entity';
 import { AnalyticsTelemetryService } from '../../services/analytics-telemetry.service';
-import { VariantConfigService } from '../../services/variant-config.service';
 import {
   AiPromptSettingsService,
   PromptSandboxSettings,
@@ -278,12 +277,10 @@ export class SessionsService {
     private readonly configService: ConfigService,
     private readonly analyticsTelemetry: AnalyticsTelemetryService,
     private readonly promptSettingsService: AiPromptSettingsService,
-    private readonly variantConfigService: VariantConfigService,
     private readonly topicsService: TopicsService,
   ) {
     this.enableVariantGenerationV2 = this.configService.get<boolean>('ENABLE_VARIANT_GENERATION_V2', false);
-    this.variantRolloutPercentage = this.configService.get<number>('VARIANT_GENERATION_ROLLOUT_PERCENTAGE', 0);
-    this.logVariantSelections = this.configService.get<boolean>('LOG_VARIANT_SELECTIONS', true);
+        this.logVariantSelections = this.configService.get<boolean>('LOG_VARIANT_SELECTIONS', true);
   }
 
   private toDate(value: Date | string | null | undefined): Date | null {
@@ -355,6 +352,7 @@ export class SessionsService {
       .leftJoinAndSelect('session.topics', 'topic')
       .leftJoinAndSelect('session.landingPage', 'landingPage')
       .leftJoinAndSelect('session.incentives', 'incentives')
+      .leftJoinAndSelect('session.location', 'location')
       .leftJoinAndSelect('session.trainer', 'primaryTrainer')
       .leftJoinAndSelect('session.trainerAssignments', 'trainerAssignments')
       .leftJoinAndSelect('trainerAssignments.trainer', 'trainer')
@@ -582,8 +580,7 @@ export class SessionsService {
 
   private readonly logger = new Logger(SessionsService.name);
   private readonly enableVariantGenerationV2: boolean;
-  private readonly variantRolloutPercentage: number;
-  private readonly logVariantSelections: boolean;
+    private readonly logVariantSelections: boolean;
 
   private normalizeTopicIds(topicIds?: number[] | null, singleTopicId?: number | null): number[] {
     const collected = [
@@ -2702,80 +2699,18 @@ export class SessionsService {
     };
   }
 
-  private getRolloutSample(payload: SuggestOutlineDto): number {
-    const basis = `${payload.category}|${payload.desiredOutcome}|${payload.audienceId ?? 'none'}|${payload.toneId ?? 'none'}|${payload.sessionType}`;
-    let hash = 0;
-
-    for (let index = 0; index < basis.length; index += 1) {
-      hash = (hash * 31 + basis.charCodeAt(index)) % 100000;
-    }
-
-    return hash % 100;
-  }
-
-  private getVariantRolloutDecision(payload: SuggestOutlineDto): { enabled: boolean; reason: string; rolloutSample: number } {
-    if (!this.enableVariantGenerationV2) {
-      return { enabled: false, reason: 'flag_disabled', rolloutSample: 0 };
-    }
-
-    const rolloutSample = this.getRolloutSample(payload);
-
-    if (this.variantRolloutPercentage >= 100) {
-      return { enabled: true, reason: 'full_rollout', rolloutSample };
-    }
-
-    if (this.variantRolloutPercentage <= 0) {
-      return { enabled: false, reason: 'rollout_zero', rolloutSample };
-    }
-
-    const enabled = rolloutSample < this.variantRolloutPercentage;
-    return {
-      enabled,
-      reason: enabled ? 'rollout_opt_in' : 'rollout_filtered',
-      rolloutSample,
-    };
-  }
-
-  private async buildLegacyVariantResponse(payload: SuggestOutlineDto): Promise<MultiVariantResponse> {
-    const legacyResponse = await this.suggestOutline(payload);
-    const processingTime = legacyResponse.generationMetadata?.processingTime ?? 0;
-    const ragSourcesFound = legacyResponse.generationMetadata?.topicsFound ?? 0;
-
-    return {
-      variants: [
-        {
-          id: 'legacy-variant',
-          outline: legacyResponse.outline,
-          generationSource: legacyResponse.ragAvailable ? 'rag' : 'baseline',
-          ragWeight: legacyResponse.ragAvailable ? 0.5 : 0,
-          ragSourcesUsed: legacyResponse.ragAvailable ? ragSourcesFound : 0,
-          label: 'Standard Outline',
-          description: 'Generated via legacy single-outline workflow',
-        },
-      ],
-      metadata: {
-        processingTime,
-        ragAvailable: legacyResponse.ragAvailable,
-        ragSourcesFound,
-        totalVariants: 1,
-        averageSimilarity: undefined,
-      },
-    };
-  }
-
+  
+  
+  
   /**
    * Generate 4 variants with different RAG weights
    */
   async suggestMultipleOutlines(payload: SuggestOutlineDto): Promise<MultiVariantResponse> {
     const startTime = Date.now();
-    const decision = this.getVariantRolloutDecision(payload);
 
-    this.logger.log('Variant generation v2 request received', {
+    this.logger.log('AI persona-based variant generation request received', {
       category: payload.category,
       sessionType: payload.sessionType,
-      rolloutPercentage: this.variantRolloutPercentage,
-      rolloutSample: decision.rolloutSample,
-      decisionReason: decision.reason,
     });
 
     this.analyticsTelemetry.recordEvent('ai_prompt_submitted', {
@@ -2783,38 +2718,9 @@ export class SessionsService {
       metadata: {
         category: payload.category,
         sessionType: payload.sessionType,
-        rolloutPercentage: this.variantRolloutPercentage,
-        rolloutSample: decision.rolloutSample,
-        decisionReason: decision.reason,
-        variantMode: decision.enabled ? 'multi_variant' : 'legacy',
+        variantMode: 'ai_persona',
       },
     });
-
-    if (!decision.enabled) {
-      this.logger.warn('Variant generation v2 disabled for request, falling back to legacy workflow', {
-        category: payload.category,
-        sessionType: payload.sessionType,
-        rolloutPercentage: this.variantRolloutPercentage,
-        rolloutSample: decision.rolloutSample,
-        decisionReason: decision.reason,
-      });
-
-      const legacyResponse = await this.buildLegacyVariantResponse(payload);
-
-      this.analyticsTelemetry.recordEvent('ai_content_generated', {
-        sessionId: 'session-builder',
-        metadata: {
-          variantMode: 'legacy',
-          processingTime: legacyResponse.metadata.processingTime,
-          totalVariants: legacyResponse.metadata.totalVariants,
-          ragAvailable: legacyResponse.metadata.ragAvailable,
-          rolloutPercentage: this.variantRolloutPercentage,
-          rolloutSample: decision.rolloutSample,
-        },
-      });
-
-      return legacyResponse;
-    }
 
     this.logger.log('Starting multi-variant generation', {
       category: payload.category,
@@ -2953,32 +2859,12 @@ export class SessionsService {
       : 0.0;
 
     const ragSourceCount = ragResults.length;
-    const variantMeta = await Promise.all(
-      [0, 1, 2, 3].map(async index => {
-        const label = await this.getVariantLabel(index);
-        const description = await this.getVariantDescription(index, payload.category);
-        const instruction = await this.getVariantInstruction(
-          index,
-          payload,
-          duration,
-          {
-            label,
-            description,
-            audience,
-            tone,
-            location: locationContext,
-            ragSourceCount,
-          },
-        );
-
-        return {
-          index,
-          label,
-          instruction,
-          description,
-        };
-      })
-    );
+    const variantMeta = sandboxSettings.variantPersonas.slice(0, 4).map((persona, index) => ({
+      index,
+      label: persona.label,
+      description: persona.summary || `${persona.label} variant`,
+      instruction: persona.prompt,
+    }));
 
     // Step 2: Generate 4 variants in parallel with shared RAG weight
     const variantPromises = variantMeta.map(meta => {
@@ -3031,33 +2917,7 @@ export class SessionsService {
         description: result.meta.description,
       }));
 
-    if (variants.length === 0) {
-      this.logger.warn('All variant generation attempts failed, falling back to legacy outline', {
-        category: payload.category,
-        sessionType: payload.sessionType,
-        ragAvailable,
-      });
-
-      const legacyFallback = await this.buildLegacyVariantResponse(payload);
-      const fallbackProcessingTime = Date.now() - startTime;
-
-      this.analyticsTelemetry.recordEvent('ai_content_generated', {
-        sessionId: 'session-builder',
-        metadata: {
-          variantMode: 'legacy_fallback',
-          processingTime: fallbackProcessingTime,
-          totalVariants: legacyFallback.metadata.totalVariants,
-          ragAvailable: legacyFallback.metadata.ragAvailable,
-          rolloutPercentage: this.variantRolloutPercentage,
-          rolloutSample: decision.rolloutSample,
-          locationType: locationContext?.locationType ?? null,
-          meetingPlatform: locationContext?.meetingPlatform ?? null,
-        },
-      });
-
-      return legacyFallback;
-    }
-
+    
     const avgSimilarity = ragResults.length > 0
       ? ragResults.reduce((sum, r) => sum + r.similarity, 0) / ragResults.length
       : undefined;
@@ -3080,9 +2940,7 @@ export class SessionsService {
         ragAvailable,
         ragSourcesFound: ragResults.length,
         averageSimilarity: avgSimilarity,
-        rolloutPercentage: this.variantRolloutPercentage,
-        rolloutSample: decision.rolloutSample,
-        locationType: locationContext?.locationType ?? null,
+                locationType: locationContext?.locationType ?? null,
         meetingPlatform: locationContext?.meetingPlatform ?? null,
       },
     });
@@ -3720,73 +3578,7 @@ export class SessionsService {
     });
   }
 
-  /**
-   * Get variant label from database
-   */
-  private async getVariantLabel(index: number): Promise<string> {
-    try {
-      return await this.variantConfigService.getVariantLabel(index);
-    } catch (error) {
-      // Fallback to hardcoded labels if database lookup fails
-      const labels = [
-        'Knowledge Base-Driven',
-        'Recommended Mix',
-        'Creative Approach',
-        'Alternative Structure'
-      ];
-      return labels[index] || `Variant ${index + 1}`;
-    }
-  }
-
-  /**
-   * Get variant description from database
-   */
-  private async getVariantDescription(index: number, category: string): Promise<string> {
-    try {
-      const description = await this.variantConfigService.getVariantDescription(index);
-      // Replace {{category}} placeholder if present
-      return description.replace(/\{\{category\}\}/g, category);
-    } catch (error) {
-      // Fallback to hardcoded descriptions if database lookup fails
-      const descriptions = [
-        `Proven frameworks and trusted playbook approach for ${category}`,
-        `Balanced mix of teaching and hands-on practice for ${category}`,
-        `High-energy, imaginative approach to ${category}`,
-        `Fast-paced, action-focused ${category} session`
-      ];
-      return descriptions[index] || `Variant ${index + 1} for ${category}`;
-    }
-  }
-
-  /**
-   * Get variant instruction from database
-   */
-  private async getVariantInstruction(
-    index: number,
-    payload: SuggestOutlineDto,
-    duration: number,
-    context: {
-      label?: string;
-      description?: string;
-      audience?: Audience | null;
-      tone?: Tone | null;
-      location?: LocationPromptContext | undefined;
-      ragSourceCount?: number;
-    },
-  ): Promise<string> {
-    const category = payload.category;
-    let instruction: string;
-
-    try {
-      instruction = await this.variantConfigService.getVariantInstruction(index);
-    } catch (error) {
-      instruction = this.buildFallbackVariantInstruction(index, category, duration);
-    }
-
-    const replacements = this.buildInstructionReplacements(payload, duration, context);
-    return this.applyInstructionTokens(instruction, replacements);
-  }
-
+  
   private buildFallbackVariantInstruction(index: number, category: string, duration: number): string {
     const instructions = [
       `Craft a precision-focused outline for ${category}. Use clearly labeled segments, sequential steps, and detailed trainer guidance so the flow feels predictable and easy to follow across ${duration} minutes.`,

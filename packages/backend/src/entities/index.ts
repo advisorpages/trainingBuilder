@@ -18,7 +18,6 @@ import { Location } from './location.entity';
 import { Audience } from './audience.entity';
 import { Tone } from './tone.entity';
 import { AIInteraction } from './ai-interaction.entity';
-import { VariantConfig } from './variant-config.entity';
 import { RagSettings } from './rag-settings.entity';
 import { AiPromptSetting } from './ai-prompt-setting.entity';
 
@@ -43,7 +42,6 @@ export * from './location.entity';
 export * from './audience.entity';
 export * from './tone.entity';
 export * from './ai-interaction.entity';
-export * from './variant-config.entity';
 export * from './rag-settings.entity';
 export * from './ai-prompt-setting.entity';
 
@@ -68,7 +66,6 @@ export const entities = [
   Audience,
   Tone,
   AIInteraction,
-  VariantConfig,
   RagSettings,
   AiPromptSetting,
 ];

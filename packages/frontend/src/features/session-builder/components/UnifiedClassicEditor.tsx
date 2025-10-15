@@ -183,17 +183,46 @@ export const UnifiedClassicEditor: React.FC<UnifiedClassicEditorProps> = ({
       }));
     });
 
+    const primaryTrainer = trainers[0] ?? null;
+    const trainerIds = trainers.map(t => t.id);
+
     // Update the topic with multiple trainer IDs
     const updatedTopics = [...topics];
     if (updatedTopics[topicIndex]) {
       updatedTopics[topicIndex] = {
         ...updatedTopics[topicIndex],
-        trainerIds: trainers.map(t => t.id),
-        trainerId: undefined, // Clear legacy single trainer when using multiple
+        trainerIds,
+        trainerId: primaryTrainer?.id ?? undefined, // Maintain primary trainer for compatibility
       };
       onTopicsChange(updatedTopics);
+
+      // Update associated outline sections so primary trainer persists server-side
+      const targetTopic = updatedTopics[topicIndex];
+      const matchingSections = outline.sections.filter((section) => {
+        if (section.type !== 'topic') return false;
+        if (targetTopic.topicId && section.associatedTopic?.id) {
+          return section.associatedTopic.id === targetTopic.topicId;
+        }
+        if (targetTopic.title) {
+          const normalizedTitle = targetTopic.title.trim().toLowerCase();
+          if (section.associatedTopic?.name) {
+            return section.associatedTopic.name.trim().toLowerCase() === normalizedTitle;
+          }
+          if (section.title) {
+            return section.title.trim().toLowerCase() === normalizedTitle;
+          }
+        }
+        return false;
+      });
+
+      matchingSections.forEach((section) => {
+        onUpdateSection(section.id, {
+          trainerId: primaryTrainer?.id ?? undefined,
+          trainerName: primaryTrainer?.name ?? undefined,
+        });
+      });
     }
-  }, [topics, onTopicsChange]);
+  }, [topics, outline.sections, onTopicsChange, onUpdateSection]);
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) {
@@ -285,12 +314,22 @@ export const UnifiedClassicEditor: React.FC<UnifiedClassicEditorProps> = ({
       setEditingSection(null);
     };
 
-    const parseBulletList = (value?: string | null): string[] => (
-      (String(value || '') || '')
+    const parseBulletList = (value?: string | string[] | null): string[] => {
+      if (!value) {
+        return [];
+      }
+
+      if (Array.isArray(value)) {
+        return value
+          .map((item) => String(item || '').replace(/^•\s*/, '').trim())
+          .filter(Boolean);
+      }
+
+      return String(value || '')
         .split('\n')
         .map((item) => item.replace(/^•\s*/, '').trim())
-        .filter(Boolean)
-    );
+        .filter(Boolean);
+    };
 
     const trainerTasks = parseBulletList(section?.trainerNotes || topic.trainerNotes);
     const materials = parseBulletList(section?.materialsNeeded || topic.materialsNeeded);
