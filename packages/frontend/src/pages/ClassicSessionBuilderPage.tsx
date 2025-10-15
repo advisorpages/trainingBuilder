@@ -11,7 +11,7 @@ import {
   SessionPreview,
   StepIndicator,
   QuickAddModal,
-  TrainerAssignmentPanel,
+  UnifiedClassicEditor,
 } from '../features/session-builder/components';
 import type { BuilderStepConfig } from '../features/session-builder/components';
 import { useBuilderSteps } from '../features/session-builder/components/StepIndicator';
@@ -503,36 +503,17 @@ const ClassicSessionBuilderScreen: React.FC = () => {
       case 'generate':
         return (
           <div className="space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-2 max-w-2xl">
-                  <h3 className="text-lg font-semibold text-slate-900">Assign trainers and fine-tune your outline</h3>
-                  <p className="text-sm text-slate-600">
-                    Start by assigning trainers to each topic using the panel below. Once everyone has coverage,
-                    adjust the session outline, reorder sections, or add new activities.
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => setQuickAddOpen(true)}>
-                  Add Section
-                </Button>
-              </div>
-            </div>
-            <TrainerAssignmentPanel
-              topics={draft.metadata.topics ?? []}
-              sections={resolvedOutline.sections}
-              onAssignTrainer={handleAssignTrainer}
-            />
-            <SessionSectionEditor
+            <UnifiedClassicEditor
               outline={resolvedOutline}
+              topics={draft.metadata.topics ?? []}
               onUpdateSection={handleUpdateSection}
               onAddSection={handleAddSection}
               onDeleteSection={handleDeleteSection}
               onMoveSection={handleMoveSection}
               onDuplicateSection={handleDuplicateSection}
-              metadata={draft.metadata}
               onUpdateMetadata={updateMetadata}
               onOpenQuickAdd={() => setQuickAddOpen(true)}
-              showInlineTrainerSelector={false}
+              onAssignTrainer={handleAssignTrainer}
             />
           </div>
         );
