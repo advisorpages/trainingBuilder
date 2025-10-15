@@ -369,16 +369,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
       await updateOutlineSection(section.id, updates);
     }
 
-    const metadataChanged = topicsWithSectionIds.some((mappedTopic, index) => {
-      const original = topics[index];
-      if (!original) return true;
-      return mappedTopic.sectionId !== original.sectionId ||
-        mappedTopic.trainerName !== original.trainerName;
-    });
-
-    if (metadataChanged) {
-      updateMetadata({ topics: topicsWithSectionIds });
-    }
+    updateMetadata({ topics: topicsWithSectionIds });
   }, [draft, updateOutlineSection, updateMetadata]);
 
   const renderVariantGenerator = () => {

@@ -1,9 +1,11 @@
 import * as React from 'react';
-import { Button, Card, CardContent, CardHeader, CardTitle } from '../../../ui';
+import { Button } from '../../../ui';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Trainer } from '@leadership-training/shared';
-import { SessionTopicDraft } from '../state/types';
+import type { SessionTopicDraft } from '../state/types';
 import { FlexibleSessionSection } from '../../../services/session-builder.service';
 import { cn } from '../../../lib/utils';
+import type { DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 
 interface TrainerAndTopicAssignmentStepProps {
   topics: SessionTopicDraft[];
@@ -82,8 +84,8 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
         bio: '',
         isActive: true,
         expertiseTags: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: new Date(),
+        updatedAt: new Date()
       } as Trainer));
 
       console.log('✅ Full trainers created:', fullTrainers);
@@ -196,12 +198,45 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
     }
   };
 
-  const handleTopicReorder = (fromIndex: number, toIndex: number) => {
+  const handleTopicReorder = React.useCallback(async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) {
+      return;
+    }
+
     const updatedTopics = [...topics];
     const [movedTopic] = updatedTopics.splice(fromIndex, 1);
     updatedTopics.splice(toIndex, 0, movedTopic);
-    void Promise.resolve(onTopicsChange(updatedTopics));
-  };
+
+    if (movedTopic?.sectionId) {
+      const steps = Math.abs(toIndex - fromIndex);
+      const direction: 'up' | 'down' = toIndex > fromIndex ? 'down' : 'up';
+      for (let step = 0; step < steps; step += 1) {
+        try {
+          await Promise.resolve(onMoveSection(movedTopic.sectionId!, direction));
+        } catch (error) {
+          console.error('[TrainerAndTopicAssignmentStep] Failed to reorder section', { error, movedTopic, direction });
+          break;
+        }
+      }
+    } else {
+      console.warn('[TrainerAndTopicAssignmentStep] Topic missing sectionId during reorder', { movedTopic });
+    }
+
+    const realignedTopics = updatedTopics.map((topic, index) => ({
+      ...topic,
+      position: index + 1,
+    }));
+
+    await Promise.resolve(onTopicsChange(realignedTopics));
+  }, [topics, onMoveSection, onTopicsChange]);
+
+  const handleDragEnd = React.useCallback((result: DropResult) => {
+    const { destination, source } = result;
+    if (!destination || destination.index === source.index) {
+      return;
+    }
+    void handleTopicReorder(source.index, destination.index);
+  }, [handleTopicReorder]);
 
   const handleTopicDelete = (topicIndex: number) => {
     const updatedTopics = topics.filter((_, index) => index !== topicIndex);
@@ -319,33 +354,34 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
     return `topic-${index}`;
   };
 
-  // Memoized TopicCard Component
-  const TopicCard = React.memo<{
-    topic: SessionTopicDraft;
-    topicIndex: number;
-    topicKey: string;
-    isExpanded: boolean;
-    isEditing: boolean;
-    trainerName: string | undefined;
-    currentTrainerId: number | undefined;
-    localTrainerId: number | undefined;
-    isAssigned: boolean;
-    onToggleExpansion: (index: number) => void;
-    onEdit: (index: number) => void;
-    onDelete: (index: number) => void;
-    onReorder: (fromIndex: number, toIndex: number) => void;
-    onAssignTrainer: (index: number, trainer: Trainer | null) => void;
-    onTopicFieldChange: (field: keyof SessionTopicDraft, value: any) => void;
-    onTopicSave: () => void;
-    onTopicCancel: () => void;
-    editingTopic: SessionTopicDraft | null;
-    topicsLength: number;
-  }>(({
-    topic,
-    topicIndex,
-    topicKey,
-    isExpanded,
-    isEditing,
+interface TopicCardProps {
+  topic: SessionTopicDraft;
+  topicIndex: number;
+  topicKey: string;
+  isExpanded: boolean;
+  isEditing: boolean;
+  trainerName: string | undefined;
+  currentTrainerId: number | undefined;
+  localTrainerId: number | undefined;
+  isAssigned: boolean;
+  onToggleExpansion: (index: number) => void;
+  onEdit: (index: number) => void;
+  onDelete: (index: number) => void;
+  onAssignTrainer: (index: number, trainer: Trainer | null) => void;
+  onTopicFieldChange: (field: keyof SessionTopicDraft, value: any) => void;
+  onTopicSave: () => void;
+  onTopicCancel: () => void;
+  editingTopic: SessionTopicDraft | null;
+  dragHandleProps?: DraggableProvidedDragHandleProps | null;
+  isDragging?: boolean;
+}
+
+const TopicCardComponent: React.FC<TopicCardProps> = ({
+  topic,
+  topicIndex,
+  topicKey,
+  isExpanded,
+  isEditing,
     trainerName,
     currentTrainerId,
     localTrainerId,
@@ -353,13 +389,13 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
     onToggleExpansion,
     onEdit,
     onDelete,
-    onReorder,
     onAssignTrainer,
     onTopicFieldChange,
     onTopicSave,
     onTopicCancel,
     editingTopic,
-    topicsLength
+    dragHandleProps,
+    isDragging
   }) => {
     // Use the passed isAssigned prop instead of recalculating
     const isComplete = !!(
@@ -373,167 +409,252 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
 
     return (
       <div className="space-y-4">
-        {/* Topic Number Badge */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
-            {topicIndex + 1}
+        <div className="flex items-stretch gap-3">
+          <div
+            className={cn(
+              'flex flex-col items-center justify-center gap-2 self-stretch rounded-lg border border-slate-200 bg-slate-50 px-3',
+              isDragging && 'border-blue-300 bg-blue-50 text-blue-600'
+            )}
+          >
+            {dragHandleProps && (
+              <button
+                type="button"
+                className={cn(
+                  'p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-white transition-colors cursor-grab active:cursor-grabbing',
+                  isDragging && 'text-blue-600 bg-white shadow-sm'
+                )}
+                aria-label="Drag to reorder topic"
+                {...dragHandleProps}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 20 20" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 5h6M7 9h6M7 13h6M7 17h6" />
+                </svg>
+              </button>
+            )}
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700 border border-blue-200">
+              {topicIndex + 1}
+            </div>
           </div>
-        </div>
 
-        {/* Topic Card */}
-        <div className="rounded-lg border-2 border-slate-300 bg-white shadow-md hover:shadow-lg hover:border-blue-400 transition-all">
-          {/* Main Content Grid - 80/20 Split */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-0">
-            {/* Left Column - Topic Content (80%) */}
-            <div className="lg:col-span-4 p-5">
-              {/* Header with Title, Status, Duration and Actions */}
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div className="flex-1">
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={editingTopic?.title || ''}
-                      onChange={(e) => onTopicFieldChange('title', e.target.value)}
-                      className="w-full text-lg font-bold text-slate-900 bg-transparent border-b-2 border-blue-400 focus:outline-none focus:border-blue-600"
-                      placeholder="Topic title"
-                    />
-                  ) : (
-                    <h4 className="text-lg font-bold text-slate-900 mb-2 cursor-pointer hover:text-blue-600" onClick={() => onEdit(topicIndex)}>
-                      {topic.title || <span className="text-slate-400 italic">Untitled Topic</span>}
-                    </h4>
-                  )}
-                  <div className="flex items-center gap-2 text-sm flex-wrap">
-                    <span className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-                      isComplete
-                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                        : 'bg-slate-100 text-slate-600 border border-slate-200'
-                    )}>
-                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        {isComplete ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        )}
-                      </svg>
-                      {isComplete ? 'Complete' : 'Incomplete'}
-                    </span>
-                    {isAssigned && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded">
+          <div
+            className={cn(
+              'flex-1 rounded-lg border-2 border-slate-300 bg-white shadow-md hover:shadow-lg hover:border-blue-400 transition-all',
+              isDragging && 'border-blue-400 shadow-lg ring-2 ring-blue-200 ring-offset-1'
+            )}
+          >
+            {/* Main Content Grid - 80/20 Split */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-0">
+              {/* Left Column - Topic Content (80%) */}
+              <div className="lg:col-span-4 p-5">
+                {/* Header with Title, Status, Duration and Actions */}
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1">
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editingTopic?.title || ''}
+                        onChange={(e) => onTopicFieldChange('title', e.target.value)}
+                        className="w-full text-lg font-bold text-slate-900 bg-transparent border-b-2 border-blue-400 focus:outline-none focus:border-blue-600"
+                        placeholder="Topic title"
+                      />
+                    ) : (
+                      <h4 className="text-lg font-bold text-slate-900 mb-2">
+                        {topic.title || <span className="text-slate-400 italic">Untitled Topic</span>}
+                      </h4>
+                    )}
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+                        isComplete
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                      )}>
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          {isComplete ? (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          ) : (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          )}
                         </svg>
-                        1 trainer assigned
+                        {isComplete ? 'Complete' : 'Incomplete'}
                       </span>
+                      {isAssigned && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          1 trainer assigned
+                        </span>
+                      )}
+                      {isEditing ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={editingTopic?.durationMinutes || 30}
+                            onChange={(e) => onTopicFieldChange('durationMinutes', parseInt(e.target.value) || 30)}
+                            className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            min="5"
+                            max="180"
+                          />
+                          <span className="text-sm text-slate-600">min</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md border border-blue-200">
+                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                          </svg>
+                          <span className="font-semibold">{getDurationLabel(topic.durationMinutes)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isEditing && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onEdit(topicIndex)}
+                        className="p-1 text-slate-500 hover:text-slate-700"
+                        title="Edit topic details"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.364 5.636a2 2 0 000-2.828l-1.172-1.172a2 2 0 00-2.828 0L7 9v4h4l7.364-7.364z" />
+                        </svg>
+                      </Button>
                     )}
                     {isEditing ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={editingTopic?.durationMinutes || 30}
-                          onChange={(e) => onTopicFieldChange('durationMinutes', parseInt(e.target.value) || 30)}
-                          className="w-20 px-2 py-1 text-sm border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          min="5"
-                          max="180"
-                        />
-                        <span className="text-sm text-slate-600">min</span>
+                      <div className="flex gap-1">
+                        <Button size="sm" onClick={onTopicSave} className="p-1 text-green-600">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={onTopicCancel} className="p-1 text-slate-600">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </Button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md border border-blue-200">
-                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                        </svg>
-                        <span className="font-semibold">{getDurationLabel(topic.durationMinutes)}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {topicIndex > 0 && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onReorder(topicIndex, topicIndex - 1)}
-                      className="p-1"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
-                    </Button>
-                  )}
-                  {topicIndex < topicsLength - 1 && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onReorder(topicIndex, topicIndex + 1)}
-                      className="p-1"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </Button>
-                  )}
-                  {isEditing ? (
-                    <div className="flex gap-1">
-                      <Button size="sm" onClick={onTopicSave} className="p-1 text-green-600">
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={onTopicCancel} className="p-1 text-slate-600">
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onToggleExpansion(topicIndex)}
-                      className="text-slate-400 hover:text-slate-600 p-2"
-                    >
-                      <svg
-                        className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-180')}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleExpansion(topicIndex)}
+                        className="text-slate-400 hover:text-slate-600 p-2"
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        <svg
+                          className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-180')}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onDelete(topicIndex)}
+                      className="p-1 text-red-600 hover:text-red-800"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onDelete(topicIndex)}
-                    className="p-1 text-red-600 hover:text-red-800"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Topic Description */}
-              {isEditing ? (
-                <textarea
-                  value={editingTopic?.description || ''}
-                  onChange={(e) => onTopicFieldChange('description', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-3"
-                  placeholder="Topic description"
-                  rows={3}
-                />
-              ) : (
-                topic.description && (
-                  <div className="mb-3">
-                    <p className="text-sm text-slate-700 leading-relaxed">
-                      {topic.description}
-                    </p>
                   </div>
-                )
-              )}
+                </div>
+
+                {/* Topic Description */}
+                {isEditing ? (
+                  <textarea
+                    value={editingTopic?.description || ''}
+                    onChange={(e) => onTopicFieldChange('description', e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 mb-3"
+                    placeholder="Topic description"
+                    rows={3}
+                  />
+                ) : (
+                  topic.description && (
+                    <div className="mb-3">
+                      <p className="text-sm text-slate-700 leading-relaxed">
+                        {topic.description}
+                      </p>
+                    </div>
+                  )
+                )}
+
+                {isEditing && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Learning Outcomes
+                        </label>
+                        <textarea
+                          value={editingTopic?.learningOutcomes || ''}
+                          onChange={(e) => onTopicFieldChange('learningOutcomes', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="List each outcome on a new line or use bullets"
+                          rows={4}
+                        />
+                        <p className="mt-1 text-xs text-slate-500">Use a new line for each bullet point.</p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Materials Needed
+                        </label>
+                        <textarea
+                          value={editingTopic?.materialsNeeded || ''}
+                          onChange={(e) => onTopicFieldChange('materialsNeeded', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="List materials (one per line)"
+                          rows={4}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Trainer Notes
+                        </label>
+                        <textarea
+                          value={editingTopic?.trainerNotes || ''}
+                          onChange={(e) => onTopicFieldChange('trainerNotes', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Notes, reminders, or talking points"
+                          rows={4}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                          Delivery Guidance
+                        </label>
+                        <textarea
+                          value={editingTopic?.deliveryGuidance || ''}
+                          onChange={(e) => onTopicFieldChange('deliveryGuidance', e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="Share facilitation guidance or setup tips"
+                          rows={4}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                        Activities & Call To Action
+                      </label>
+                      <textarea
+                        value={editingTopic?.callToAction || ''}
+                        onChange={(e) => onTopicFieldChange('callToAction', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Outline follow-up activities or participant actions"
+                        rows={4}
+                      />
+                    </div>
+                  </div>
+                )}
 
               {/* Incomplete Topic Indicator */}
               {!isComplete && !isEditing && (
@@ -729,10 +850,12 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
           </div>
         </div>
       </div>
+      </div>
     );
-  }); // Temporarily removed React.memo comparison function to debug
+  }; // Temporarily removed React.memo comparison function to debug
 
-  TopicCard.displayName = 'TopicCard';
+const TopicCard = React.memo(TopicCardComponent);
+TopicCard.displayName = 'TopicCard';
 
   return (
     <div className="space-y-6">
@@ -802,65 +925,87 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
             </Button>
           </div>
         ) : (
-          topics.map((topic, index) => {
-            const topicKey = getTopicKey(topic, index);
-            const stateKey = getTopicStateKey(topic, index);
-            const isExpanded = expandedTopics.has(index);
-            const isEditing = editingTopicIndex === index;
-            // Get trainer ID from local state first, then fall back to topic state
-            const storedTrainerId = topicTrainers[stateKey];
-            const currentTrainerId = storedTrainerId ?? topic.trainerId;
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="trainer-topics">
+              {(droppableProvided) => (
+                <div
+                  ref={droppableProvided.innerRef}
+                  {...droppableProvided.droppableProps}
+                  className="space-y-6"
+                >
+                  {topics.map((topic, index) => {
+                    const topicKey = getTopicKey(topic, index);
+                    const stateKey = getTopicStateKey(topic, index);
+                    const isExpanded = expandedTopics.has(index);
+                    const isEditing = editingTopicIndex === index;
+                    // Get trainer ID from local state first, then fall back to topic state
+                    const storedTrainerId = topicTrainers[stateKey];
+                    const currentTrainerId = storedTrainerId ?? topic.trainerId;
 
-            // Get trainer name from topic metadata, resolved names cache, or simplified trainer list
-            const trainerName = topic.trainerName ?? (
-              currentTrainerId
-                ? resolvedTrainerNames[currentTrainerId] ||
-                  allTrainers.find(t => t.id === currentTrainerId)?.name
-                : undefined
-            );
+                    // Get trainer name from topic metadata, resolved names cache, or simplified trainer list
+                    const trainerName = topic.trainerName ?? (
+                      currentTrainerId
+                        ? resolvedTrainerNames[currentTrainerId] ||
+                          allTrainers.find(t => t.id === currentTrainerId)?.name
+                        : undefined
+                    );
 
-            // Update isAssigned based on currentTrainerId
-            const isAssigned = Boolean(currentTrainerId);
+                    // Update isAssigned based on currentTrainerId
+                    const isAssigned = Boolean(currentTrainerId);
 
-            // Debug logging for trainer name resolution
-            console.log('🔍 Trainer name resolution for topic', index, ':', {
-              topicTrainerId: topic.trainerId,
-              topicTrainerName: topic.trainerName,
-              localTopicTrainerId: storedTrainerId,
-              currentTrainerId: currentTrainerId,
-              stateKey,
-              resolvedNames: resolvedTrainerNames,
-              allTrainersCount: allTrainers.length,
-              foundInCache: currentTrainerId ? resolvedTrainerNames[currentTrainerId] : undefined,
-              foundInAllTrainers: currentTrainerId ? allTrainers.find(t => t.id === currentTrainerId)?.name : undefined,
-              finalTrainerName: trainerName
-            });
+                    // Debug logging for trainer name resolution
+                    console.log('🔍 Trainer name resolution for topic', index, ':', {
+                      topicTrainerId: topic.trainerId,
+                      topicTrainerName: topic.trainerName,
+                      localTopicTrainerId: storedTrainerId,
+                      currentTrainerId: currentTrainerId,
+                      stateKey,
+                      resolvedNames: resolvedTrainerNames,
+                      allTrainersCount: allTrainers.length,
+                      foundInCache: currentTrainerId ? resolvedTrainerNames[currentTrainerId] : undefined,
+                      foundInAllTrainers: currentTrainerId ? allTrainers.find(t => t.id === currentTrainerId)?.name : undefined,
+                      finalTrainerName: trainerName
+                    });
 
-            return (
-              <TopicCard
-                key={topicKey}
-                topic={topic}
-                topicIndex={index}
-                topicKey={topicKey}
-                isExpanded={isExpanded}
-                isEditing={isEditing}
-                trainerName={trainerName}
-                currentTrainerId={currentTrainerId}
-                localTrainerId={storedTrainerId}
-                isAssigned={isAssigned}
-                onToggleExpansion={toggleTopicExpansion}
-                onEdit={handleTopicEdit}
-                onDelete={handleTopicDelete}
-                onReorder={handleTopicReorder}
-                onAssignTrainer={handleAssignTrainer}
-                onTopicFieldChange={handleTopicFieldChange}
-                onTopicSave={handleTopicSave}
-                onTopicCancel={handleTopicCancel}
-                editingTopic={editingTopic}
-                topicsLength={topics.length}
-              />
-            );
-          })
+                    return (
+                      <Draggable key={topicKey} draggableId={topicKey} index={index}>
+                        {(draggableProvided, snapshot) => (
+                          <div
+                            ref={draggableProvided.innerRef}
+                            {...draggableProvided.draggableProps}
+                            style={draggableProvided.draggableProps.style as React.CSSProperties}
+                          >
+                            <TopicCard
+                              topic={topic}
+                              topicIndex={index}
+                              topicKey={topicKey}
+                              isExpanded={isExpanded}
+                              isEditing={isEditing}
+                              trainerName={trainerName}
+                              currentTrainerId={currentTrainerId}
+                              localTrainerId={storedTrainerId}
+                              isAssigned={isAssigned}
+                              onToggleExpansion={toggleTopicExpansion}
+                              onEdit={handleTopicEdit}
+                              onDelete={handleTopicDelete}
+                              onAssignTrainer={handleAssignTrainer}
+                              onTopicFieldChange={handleTopicFieldChange}
+                              onTopicSave={handleTopicSave}
+                              onTopicCancel={handleTopicCancel}
+                              editingTopic={editingTopic}
+                              dragHandleProps={draggableProvided.dragHandleProps}
+                              isDragging={snapshot.isDragging}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    );
+                  })}
+                  {droppableProvided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
         )}
       </div>
 
