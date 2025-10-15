@@ -16,6 +16,7 @@ import { LandingPage } from './landing-page.entity';
 import { SessionAgendaItem } from './session-agenda-item.entity';
 import { SessionContentVersion } from './session-content-version.entity';
 import { SessionTopic } from './session-topic.entity';
+import { SessionTopicTrainer } from './session-topic-trainer.entity';
 import { TrainerAssignment } from './trainer-assignment.entity';
 import { Trainer } from './trainer.entity';
 import { SessionStatusLog } from './session-status-log.entity';
@@ -120,6 +121,9 @@ export class Session extends BaseEntity {
     cascade: false,
   })
   sessionTopics: SessionTopic[];
+
+  @OneToMany(() => SessionTopicTrainer, (sessionTopicTrainer) => sessionTopicTrainer.session)
+  sessionTopicTrainers: SessionTopicTrainer[];
 
   @ManyToMany(() => Incentive, (incentive) => incentive.sessions)
   incentives: Incentive[];

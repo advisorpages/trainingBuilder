@@ -1,6 +1,8 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, OneToMany, ManyToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { TrainerAssignment } from './trainer-assignment.entity';
 import { Session } from './session.entity';
+import { SessionTopic } from './session-topic.entity';
+import { SessionTopicTrainer } from './session-topic-trainer.entity';
 
 @Entity({ name: 'trainers' })
 export class Trainer {
@@ -39,4 +41,10 @@ export class Trainer {
 
   @OneToMany(() => Session, (session) => session.trainer)
   sessions: Session[];
+
+  // Note: Multiple session topics are handled through the SessionTopicTrainer entity
+  // Direct many-to-many relationship is complex due to composite key
+
+  @OneToMany(() => SessionTopicTrainer, (sessionTopicTrainer) => sessionTopicTrainer.trainer)
+  sessionTopicTrainers: SessionTopicTrainer[];
 }

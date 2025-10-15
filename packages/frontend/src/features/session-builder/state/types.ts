@@ -16,7 +16,8 @@ export interface SessionTopicDraft {
   deliveryGuidance?: string;
   callToAction?: string;
   topicId?: number;
-  trainerId?: number;
+  trainerId?: number; // Legacy single trainer (for backward compatibility)
+  trainerIds?: number[]; // New multiple trainers support
 }
 
 export interface SessionMetadata {

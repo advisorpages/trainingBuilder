@@ -1,6 +1,7 @@
 import { Column, Entity, JoinColumn, ManyToMany, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Session } from './session.entity';
 import { SessionTopic } from './session-topic.entity';
+import { SessionTopicTrainer } from './session-topic-trainer.entity';
 import { Category } from './category.entity';
 
 @Entity({ name: 'topics' })
@@ -52,4 +53,7 @@ export class Topic {
     cascade: false,
   })
   sessionTopics: SessionTopic[];
+
+  @OneToMany(() => SessionTopicTrainer, (sessionTopicTrainer) => sessionTopicTrainer.topic)
+  sessionTopicTrainers: SessionTopicTrainer[];
 }

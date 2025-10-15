@@ -8,10 +8,10 @@ import {
   AutosaveIndicator,
   SessionMetadataForm,
   SessionSectionEditor,
-  SessionPreview,
   StepIndicator,
   QuickAddModal,
   UnifiedClassicEditor,
+  UnifiedReviewEditor,
 } from '../features/session-builder/components';
 import type { BuilderStepConfig } from '../features/session-builder/components';
 import { useBuilderSteps } from '../features/session-builder/components/StepIndicator';
@@ -155,6 +155,11 @@ const ClassicSessionBuilderScreen: React.FC = () => {
   const handleDuplicateSection = React.useCallback((sectionId: string) => {
     void duplicateOutlineSection(sectionId);
   }, [duplicateOutlineSection]);
+
+  const handleTopicsChange = React.useCallback((topics: any[]) => {
+    if (!draft) return;
+    updateMetadata({ topics });
+  }, [draft, updateMetadata]);
 
   const handleAssignTrainer = React.useCallback(async (topicIndex: number, trainer: { id: number; name: string } | null) => {
     if (!draft) return;
@@ -514,33 +519,56 @@ const ClassicSessionBuilderScreen: React.FC = () => {
               onUpdateMetadata={updateMetadata}
               onOpenQuickAdd={() => setQuickAddOpen(true)}
               onAssignTrainer={handleAssignTrainer}
+              onTopicsChange={handleTopicsChange}
             />
           </div>
         );
       case 'review':
         return draft.outline ? (
-          <SessionPreview
-            outline={draft.outline}
-            metadata={draft.metadata}
-            readinessScore={readinessScore}
-            onEdit={() => goToStep('generate')}
-            isPublishing={false}
-            isPublished={false}
-          />
+          <div className="space-y-6">
+            <UnifiedReviewEditor
+              outline={resolvedOutline}
+              topics={draft.metadata.topics ?? []}
+              metadata={draft.metadata}
+              readinessScore={readinessScore}
+              onEdit={() => goToStep('generate')}
+              onUpdateSection={handleUpdateSection}
+              onAddSection={handleAddSection}
+              onDeleteSection={handleDeleteSection}
+              onMoveSection={handleMoveSection}
+              onDuplicateSection={handleDuplicateSection}
+              onUpdateMetadata={updateMetadata}
+              onOpenQuickAdd={() => setQuickAddOpen(true)}
+              onTopicsChange={handleTopicsChange}
+              isFinalStep={false}
+            />
+          </div>
         ) : (
           <EmptyState message="Add sections to build an outline before reviewing." />
         );
       case 'finalize':
         return draft.outline ? (
-          <SessionPreview
-            outline={draft.outline}
-            metadata={draft.metadata}
-            readinessScore={readinessScore}
-            onEdit={() => goToStep('generate')}
-            onPublish={() => void publishSession()}
-            isPublishing={isPublishing}
-            isPublished={publishStatus === 'success'}
-          />
+          <div className="space-y-6">
+            <UnifiedReviewEditor
+              outline={resolvedOutline}
+              topics={draft.metadata.topics ?? []}
+              metadata={draft.metadata}
+              readinessScore={readinessScore}
+              onEdit={() => goToStep('generate')}
+              onPublish={() => void publishSession()}
+              onUpdateSection={handleUpdateSection}
+              onAddSection={handleAddSection}
+              onDeleteSection={handleDeleteSection}
+              onMoveSection={handleMoveSection}
+              onDuplicateSection={handleDuplicateSection}
+              onUpdateMetadata={updateMetadata}
+              onOpenQuickAdd={() => setQuickAddOpen(true)}
+              onTopicsChange={handleTopicsChange}
+              isPublishing={isPublishing}
+              isPublished={publishStatus === 'success'}
+              isFinalStep={true}
+            />
+          </div>
         ) : (
           <EmptyState message="Your outline is empty. Add sections to finalize the session." />
         );

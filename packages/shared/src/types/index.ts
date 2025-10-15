@@ -31,10 +31,12 @@ export interface SessionTopicLink {
   topicId: number;
   sequenceOrder: number;
   durationMinutes?: number | null;
-  trainerId?: number | null;
+  trainerId?: number | null; // Legacy single trainer (for backward compatibility)
+  trainerIds?: number[]; // New multiple trainers support
   notes?: string | null;
   topic?: Topic;
-  trainer?: Trainer;
+  trainer?: Trainer; // Legacy single trainer
+  trainers?: Trainer[]; // New multiple trainers
 }
 
 export interface Session {

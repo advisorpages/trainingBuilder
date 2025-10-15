@@ -11,6 +11,7 @@ interface TrainerSelectProps {
   className?: string;
   disabled?: boolean;
   excludeIds?: number[]; // IDs to exclude from the list (e.g., already assigned trainers)
+  allowUnassigned?: boolean; // Whether to show "Not Assigned" option
 }
 
 export const TrainerSelect: React.FC<TrainerSelectProps> = ({
@@ -21,6 +22,7 @@ export const TrainerSelect: React.FC<TrainerSelectProps> = ({
   className,
   disabled = false,
   excludeIds = [],
+  allowUnassigned = false,
 }) => {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -118,6 +120,12 @@ export const TrainerSelect: React.FC<TrainerSelectProps> = ({
     setSearchTerm('');
   };
 
+  const handleSelectUnassigned = () => {
+    onChange(null);
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
   const handleClearSelection = () => {
     onChange(null);
     setSearchTerm('');
@@ -177,27 +185,57 @@ export const TrainerSelect: React.FC<TrainerSelectProps> = ({
             <div className="px-3 py-2 text-sm text-slate-500">Loading trainers…</div>
           ) : error ? (
             <div className="px-3 py-2 text-sm text-red-600">{error}</div>
-          ) : filteredTrainers.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-slate-500">No trainers found</div>
           ) : (
-            filteredTrainers.map((trainer) => (
-              <button
-                key={trainer.id}
-                type="button"
-                onClick={() => handleSelectTrainer(trainer)}
-                className={cn(
-                  'w-full px-3 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none',
-                  value === trainer.id ? 'bg-blue-50 text-blue-700' : '',
-                )}
-              >
-                <div className="font-medium text-slate-900">{trainer.name}</div>
-                {trainer.expertiseTags && trainer.expertiseTags.length > 0 && (
-                  <div className="text-xs text-slate-500">
-                    {trainer.expertiseTags.join(', ')}
+            <>
+              {allowUnassigned && (
+                <button
+                  type="button"
+                  onClick={handleSelectUnassigned}
+                  className={cn(
+                    'w-full px-3 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none border-b border-slate-100',
+                    !value ? 'bg-slate-50 text-slate-700' : ''
+                  )}
+                >
+                  <div className="font-medium text-slate-900">
+                    <span className="inline-flex items-center gap-2">
+                      <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Not Assigned
+                    </span>
                   </div>
-                )}
-              </button>
-            ))
+                  <div className="text-xs text-slate-500">
+                    Leave this topic without a trainer
+                  </div>
+                </button>
+              )}
+              {filteredTrainers.length === 0 && !allowUnassigned ? (
+                <div className="px-3 py-2 text-sm text-slate-500">No trainers found</div>
+              ) : filteredTrainers.length === 0 && allowUnassigned ? (
+                <div className="px-3 py-2 text-xs text-slate-400 text-center">
+                  No trainers match your search
+                </div>
+              ) : (
+                filteredTrainers.map((trainer) => (
+                  <button
+                    key={trainer.id}
+                    type="button"
+                    onClick={() => handleSelectTrainer(trainer)}
+                    className={cn(
+                      'w-full px-3 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none',
+                      value === trainer.id ? 'bg-blue-50 text-blue-700' : '',
+                    )}
+                  >
+                    <div className="font-medium text-slate-900">{trainer.name}</div>
+                    {trainer.expertiseTags && trainer.expertiseTags.length > 0 && (
+                      <div className="text-xs text-slate-500">
+                        {trainer.expertiseTags.join(', ')}
+                      </div>
+                    )}
+                  </button>
+                ))
+              )}
+            </>
           )}
         </div>
       )}

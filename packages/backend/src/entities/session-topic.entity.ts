@@ -4,10 +4,13 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryColumn,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
 import { Session } from './session.entity';
 import { Topic } from './topic.entity';
 import { Trainer } from './trainer.entity';
+import { SessionTopicTrainer } from './session-topic-trainer.entity';
 
 @Entity({ name: 'session_topics' })
 export class SessionTopic {
@@ -43,4 +46,7 @@ export class SessionTopic {
   @ManyToOne(() => Trainer, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'trainer_id' })
   trainer?: Trainer;
+
+  // Note: Multiple trainers are handled through the SessionTopicTrainer entity
+  // Direct many-to-many relationship is complex due to composite key, so we'll use custom repository methods
 }
