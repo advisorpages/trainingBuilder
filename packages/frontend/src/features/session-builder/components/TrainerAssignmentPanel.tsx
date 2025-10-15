@@ -45,34 +45,51 @@ export const TrainerAssignmentPanel: React.FC<TrainerAssignmentPanelProps> = ({
   const trainerCache = React.useRef(new Map<number, Trainer>());
   const [resolvedTrainerNames, setResolvedTrainerNames] = React.useState<Record<number, string>>({});
 
+  const sectionsById = React.useMemo(() => {
+    const map = new Map<string, FlexibleSessionSection>();
+    (sections ?? []).forEach(section => {
+      if (section?.id) {
+        map.set(section.id, section);
+      }
+    });
+    return map;
+  }, [sections]);
+
   const assignments = React.useMemo<TopicAssignmentInfo[]>(() => {
     return (topics ?? []).map((topic, index) => {
-      const associatedSection = sections.find((section) => {
-        if (section.type !== 'topic') return false;
-        if (topic.topicId && section.associatedTopic?.id) {
-          return section.associatedTopic.id === topic.topicId;
-        }
-        if (section.associatedTopic?.name && topic.title) {
-          return section.associatedTopic.name.trim().toLowerCase() === topic.title.trim().toLowerCase();
-        }
-        if (section.title && topic.title) {
-          return section.title.trim().toLowerCase() === topic.title.trim().toLowerCase();
-        }
-        return false;
-      });
+      const normalizedTitle = topic.title?.trim().toLowerCase();
+      let associatedSection: FlexibleSessionSection | undefined =
+        (topic.sectionId ? sectionsById.get(topic.sectionId) : undefined) ?? undefined;
+
+      if (!associatedSection) {
+        associatedSection = sections.find((section) => {
+          if (section.type !== 'topic') return false;
+          if (topic.topicId && section.associatedTopic?.id) {
+            return section.associatedTopic.id === topic.topicId;
+          }
+          if (!normalizedTitle) {
+            return false;
+          }
+          const associatedTitle = section.associatedTopic?.name?.trim().toLowerCase();
+          const sectionTitle = section.title?.trim().toLowerCase();
+          return associatedTitle === normalizedTitle || sectionTitle === normalizedTitle;
+        });
+      }
 
       const trainerId = topic.trainerId ?? associatedSection?.trainerId ?? undefined;
-      const trainerName = associatedSection?.trainerName ?? (trainerId ? resolvedTrainerNames[trainerId] : undefined);
+      const trainerName = topic.trainerName
+        ?? associatedSection?.trainerName
+        ?? (trainerId ? resolvedTrainerNames[trainerId] : undefined);
 
       return {
         index,
         topic,
         trainerId,
         trainerName,
-        sectionId: associatedSection?.id,
+        sectionId: associatedSection?.id ?? topic.sectionId,
       };
     });
-  }, [topics, sections, resolvedTrainerNames]);
+  }, [topics, sections, sectionsById, resolvedTrainerNames]);
 
   const totalTopics = assignments.length;
   const assignedCount = assignments.filter((item) => Boolean(item.trainerId)).length;

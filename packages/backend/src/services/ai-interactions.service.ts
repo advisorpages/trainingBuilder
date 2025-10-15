@@ -310,10 +310,12 @@ export class AIInteractionsService {
       return acc;
     }, {} as Record<UserFeedback, number>);
 
-    const qualityScores = data.filter((i) => i.qualityScore !== null && i.qualityScore !== undefined);
+    const qualityScores = data
+      .map((i) => i.qualityScore)
+      .filter((score): score is number => score !== null && score !== undefined);
     const averageQualityScore =
       qualityScores.length > 0
-        ? qualityScores.reduce((sum, i) => sum + i.qualityScore!, 0) / qualityScores.length
+        ? qualityScores.reduce((sum, score) => sum + score, 0) / qualityScores.length
         : 0;
 
     const withAllVariables = data.filter((i) => i.allVariablesPresent).length;

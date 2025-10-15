@@ -4,13 +4,10 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryColumn,
-  ManyToMany,
-  JoinTable,
 } from 'typeorm';
 import { Session } from './session.entity';
 import { Topic } from './topic.entity';
 import { Trainer } from './trainer.entity';
-import { SessionTopicTrainer } from './session-topic-trainer.entity';
 
 @Entity({ name: 'session_topics' })
 export class SessionTopic {

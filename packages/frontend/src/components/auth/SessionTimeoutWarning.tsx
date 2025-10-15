@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface SessionTimeoutWarningProps {
@@ -11,6 +11,14 @@ const SessionTimeoutWarning: React.FC<SessionTimeoutWarningProps> = ({
   const { user, isAuthenticated, refreshToken, logout } = useAuth();
   const [showWarning, setShowWarning] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [isExtending, setIsExtending] = useState(false);
+  const [extendError, setExtendError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const handleExpiry = useCallback(async () => {
+    setShowWarning(false);
+    await logout();
+  }, [logout]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -44,40 +52,42 @@ const SessionTimeoutWarning: React.FC<SessionTimeoutWarningProps> = ({
       }
     };
 
-    const handleExpiry = async () => {
-      setShowWarning(false);
-      await logout();
-    };
-
-    const handleExtendSession = async () => {
-      try {
-        const success = await refreshToken();
-        if (success) {
-          setShowWarning(false);
-        }
-      } catch (error) {
-        console.error('Failed to refresh token:', error);
-        await logout();
-      }
-    };
-
     // Check immediately and then every minute
     checkTokenExpiry();
     const interval = setInterval(checkTokenExpiry, 60000);
 
     // Cleanup interval on unmount
     return () => clearInterval(interval);
-  }, [isAuthenticated, user, warningThreshold, refreshToken, logout]);
+  }, [isAuthenticated, user, warningThreshold, handleExpiry]);
 
   const handleExtendSession = async () => {
+    if (isExtending) return; // Prevent multiple simultaneous attempts
+
+    setIsExtending(true);
+    setExtendError(null);
+
     try {
       const success = await refreshToken();
       if (success) {
         setShowWarning(false);
+        setRetryCount(0); // Reset retry count on success
+      } else {
+        // If refresh returned false but didn't throw, it might be a temporary issue
+        throw new Error('Token refresh returned false');
       }
     } catch (error) {
       console.error('Failed to refresh token:', error);
-      await logout();
+      setExtendError('Failed to extend session. Please try again.');
+
+      // Only logout if we've exceeded retry attempts or it's a clear auth error
+      if (retryCount >= 2 || (error as any)?.response?.status === 401) {
+        console.log('Max retries exceeded or auth error, logging out');
+        await logout();
+      } else {
+        setRetryCount(prev => prev + 1);
+      }
+    } finally {
+      setIsExtending(false);
     }
   };
 
@@ -101,20 +111,38 @@ const SessionTimeoutWarning: React.FC<SessionTimeoutWarningProps> = ({
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             Session Expiring Soon
           </h3>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 mb-4">
             Your session will expire in approximately {timeLeft} minute{timeLeft !== 1 ? 's' : ''}.
             Would you like to extend your session?
           </p>
+
+          {extendError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{extendError}</p>
+              {retryCount > 0 && retryCount < 3 && (
+                <p className="text-xs text-red-500 mt-1">
+                  Attempt {retryCount} of 3
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex space-x-3">
             <button
               onClick={handleExtendSession}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              disabled={isExtending}
+              className={`flex-1 px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                isExtending
+                  ? 'bg-blue-400 text-white cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+              }`}
             >
-              Extend Session
+              {isExtending ? 'Extending...' : 'Extend Session'}
             </button>
             <button
               onClick={handleLogoutNow}
-              className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              disabled={isExtending}
+              className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Logout Now
             </button>

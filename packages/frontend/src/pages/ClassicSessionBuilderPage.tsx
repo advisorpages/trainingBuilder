@@ -173,6 +173,7 @@ const ClassicSessionBuilderScreen: React.FC = () => {
     updatedTopics[topicIndex] = {
       ...updatedTopics[topicIndex],
       trainerId: trainer?.id ?? undefined,
+      trainerName: trainer?.name ?? undefined,
     };
     updateMetadata({ topics: updatedTopics });
 
@@ -180,23 +181,34 @@ const ClassicSessionBuilderScreen: React.FC = () => {
       return;
     }
 
-    const sectionsToUpdate = draft.outline.sections.filter((section) => {
-      if (section.type !== 'topic') return false;
-      const targetTopic = updatedTopics[topicIndex];
-      if (targetTopic.topicId && section.associatedTopic?.id) {
-        return section.associatedTopic.id === targetTopic.topicId;
+    const targetTopic = updatedTopics[topicIndex];
+
+    let sectionsToUpdate: FlexibleSessionSection[] = [];
+    if (targetTopic.sectionId) {
+      const matchedSection = draft.outline.sections.find(section => section.id === targetTopic.sectionId);
+      if (matchedSection) {
+        sectionsToUpdate = [matchedSection];
       }
-      if (targetTopic.title) {
-        const normalizedTitle = targetTopic.title.trim().toLowerCase();
-        if (section.associatedTopic?.name) {
-          return section.associatedTopic.name.trim().toLowerCase() === normalizedTitle;
+    }
+
+    if (sectionsToUpdate.length === 0) {
+      sectionsToUpdate = draft.outline.sections.filter((section) => {
+        if (section.type !== 'topic') return false;
+        if (targetTopic.topicId && section.associatedTopic?.id) {
+          return section.associatedTopic.id === targetTopic.topicId;
         }
-        if (section.title) {
-          return section.title.trim().toLowerCase() === normalizedTitle;
+        if (targetTopic.title) {
+          const normalizedTitle = targetTopic.title.trim().toLowerCase();
+          if (section.associatedTopic?.name) {
+            return section.associatedTopic.name.trim().toLowerCase() === normalizedTitle;
+          }
+          if (section.title) {
+            return section.title.trim().toLowerCase() === normalizedTitle;
+          }
         }
-      }
-      return false;
-    });
+        return false;
+      });
+    }
 
     if (sectionsToUpdate.length === 0) {
       return;
@@ -305,6 +317,8 @@ const ClassicSessionBuilderScreen: React.FC = () => {
     }
 
     let changed = false;
+    let topicsUpdated = false;
+    const topicsWithSectionIds = topics.map(topic => ({ ...topic }));
     let nextPosition = sections.length;
 
     topics.forEach((topic, index) => {
@@ -348,6 +362,18 @@ const ClassicSessionBuilderScreen: React.FC = () => {
                 updates.trainerName = trainerName;
                 needsUpdate = true;
               }
+              if (topicsWithSectionIds[index].trainerName !== trainerName) {
+                topicsWithSectionIds[index].trainerName = trainerName;
+                topicsUpdated = true;
+              }
+            } else if (!topic.trainerId && (existing.trainerId || existing.trainerName)) {
+              updates.trainerId = undefined;
+              updates.trainerName = undefined;
+              needsUpdate = true;
+              if (topicsWithSectionIds[index].trainerName) {
+                topicsWithSectionIds[index].trainerName = undefined;
+                topicsUpdated = true;
+              }
             } else if (existing.trainerId || existing.trainerName) {
               updates.trainerId = undefined;
               updates.trainerName = undefined;
@@ -361,6 +387,13 @@ const ClassicSessionBuilderScreen: React.FC = () => {
               };
               changed = true;
             }
+
+            if (topicsWithSectionIds[index].sectionId !== existing.id) {
+              topicsWithSectionIds[index].sectionId = existing.id;
+              topicsUpdated = true;
+            }
+
+            return;
           }
 
           return;
@@ -411,6 +444,19 @@ const ClassicSessionBuilderScreen: React.FC = () => {
 
       sections.push(newSection);
       changed = true;
+
+      if (topicsWithSectionIds[index].sectionId !== newSection.id) {
+        topicsWithSectionIds[index].sectionId = newSection.id;
+        topicsUpdated = true;
+      }
+
+      if (topicsWithSectionIds[index].trainerId && trainerMap.has(topicsWithSectionIds[index].trainerId!)) {
+        const resolvedName = trainerMap.get(topicsWithSectionIds[index].trainerId!);
+        if (resolvedName && topicsWithSectionIds[index].trainerName !== resolvedName) {
+          topicsWithSectionIds[index].trainerName = resolvedName;
+          topicsUpdated = true;
+        }
+      }
     });
 
     if (!changed) {
@@ -431,7 +477,11 @@ const ClassicSessionBuilderScreen: React.FC = () => {
       suggestedSessionTitle: outline.suggestedSessionTitle || draft.metadata.title || '',
       suggestedDescription: outline.suggestedDescription || draft.metadata.desiredOutcome || '',
     });
-  }, [draft, parseBulletList, updateOutline]);
+
+    if (topicsUpdated) {
+      updateMetadata({ topics: topicsWithSectionIds });
+    }
+  }, [draft, parseBulletList, updateOutline, updateMetadata]);
 
   React.useEffect(() => {
     if (currentStep === 'generate') {

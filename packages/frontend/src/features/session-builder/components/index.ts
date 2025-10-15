@@ -13,5 +13,6 @@ export * from './TopicLibraryModal';
 export * from './SessionSectionEditor';
 export * from './SessionPreview';
 export * from './TrainerAssignmentPanel';
+export * from './TrainerAndTopicAssignmentStep';
 export * from './UnifiedClassicEditor';
 export * from './UnifiedReviewEditor';

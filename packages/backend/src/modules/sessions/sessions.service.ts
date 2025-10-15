@@ -2858,7 +2858,6 @@ export class SessionsService {
         : 0.35
       : 0.0;
 
-    const ragSourceCount = ragResults.length;
     const variantMeta = sandboxSettings.variantPersonas.slice(0, 4).map((persona, index) => ({
       index,
       label: persona.label,

@@ -1,7 +1,6 @@
-import { Column, Entity, OneToMany, ManyToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { TrainerAssignment } from './trainer-assignment.entity';
 import { Session } from './session.entity';
-import { SessionTopic } from './session-topic.entity';
 import { SessionTopicTrainer } from './session-topic-trainer.entity';
 
 @Entity({ name: 'trainers' })

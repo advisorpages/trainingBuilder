@@ -110,12 +110,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const success = await authService.refreshToken();
       if (!success) {
-        await logout();
+        // Don't automatically logout on refresh failure
+        // Let the calling component decide what to do based on the error
+        console.warn('Token refresh returned false, but not logging out');
+        return false;
       }
       return success;
     } catch (error) {
       console.error('Token refresh error:', error);
-      await logout();
+      // Only logout if it's a clear authentication error (401)
+      // For network errors or server errors, let the component retry
+      if ((error as any)?.response?.status === 401) {
+        console.log('Authentication error during refresh, logging out');
+        await logout();
+      } else {
+        console.warn('Non-auth error during refresh, not logging out:', error);
+      }
       return false;
     }
   };

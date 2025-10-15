@@ -14,12 +14,13 @@ import {
   VersionComparison,
   DebugPanel,
   useApiDebugger,
-  SessionSectionEditor,
-  SessionPreview
+  UnifiedReviewEditor,
+  TrainerAndTopicAssignmentStep
 } from '../features/session-builder/components';
 import { VariantSelector } from '../components/session-builder/VariantSelector';
 import { SessionBuilderProvider, useSessionBuilder } from '../features/session-builder/state/SessionBuilderContext';
 import { sessionBuilderService, SectionType, FlexibleSessionSection } from '../services/session-builder.service';
+import { SessionTopicDraft } from '../features/session-builder/state/types';
 import { cn } from '../lib/utils';
 import {
   areRequiredItemsComplete,
@@ -31,6 +32,46 @@ const EmptyState: React.FC<{ message: string }> = ({ message }) => (
     <p className="text-sm text-slate-500">{message}</p>
   </div>
 );
+
+// Utility function to transform flexible sections to topic-based structure for UnifiedReviewEditor
+const transformFlexibleSectionsToTopics = (outline: any, metadata: any): SessionTopicDraft[] => {
+  if (!outline?.sections || !Array.isArray(outline.sections)) {
+    return [];
+  }
+
+  const topics: SessionTopicDraft[] = [];
+  const sortedSections = sessionBuilderService.sortSectionsByPosition(outline.sections);
+
+  sortedSections.forEach((section: FlexibleSessionSection, index: number) => {
+    // Transform each section into a topic structure
+    const topic: SessionTopicDraft = {
+      sectionId: section.id,
+      title: section.title || `Section ${index + 1}`,
+      description: section.description || '',
+      durationMinutes: section.duration || 15,
+      learningOutcomes: section.learningObjectives?.join('\n') || '',
+      trainerNotes: section.trainerNotes || '',
+      materialsNeeded: section.materialsNeeded?.join('\n') || '',
+      deliveryGuidance: section.deliveryGuidance || '',
+      callToAction: section.suggestedActivities?.join('\n') || '',
+      trainerName: section.trainerName,
+    };
+
+    // Add topic ID if available
+    if (section.associatedTopic?.id) {
+      topic.topicId = section.associatedTopic.id;
+    }
+
+    // Add trainer assignment if available
+    if (section.trainerId) {
+      topic.trainerId = section.trainerId;
+    }
+
+    topics.push(topic);
+  });
+
+  return topics;
+};
 
 const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?: any[] | null }> = ({ routeSessionId, prefilledTopics }) => {
   const {
@@ -248,6 +289,98 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     }
   }, []);
 
+  // Handlers for UnifiedReviewEditor
+  const handleTopicsChange = React.useCallback(async (topics: SessionTopicDraft[]) => {
+    if (!draft?.outline) return;
+
+    const existingSections = sessionBuilderService.sortSectionsByPosition(draft.outline.sections ?? []);
+    const sectionsById = new Map(existingSections.map(section => [section.id, section]));
+
+    const normalizeList = (value?: string | string[] | null): string[] => {
+      if (!value) return [];
+      const source = Array.isArray(value) ? value : value.split('\n');
+      return source.map(item => String(item || '').replace(/^•\s*/, '').trim()).filter(Boolean);
+    };
+
+    const sectionUpdates: Array<{ section: FlexibleSessionSection; updates: Partial<FlexibleSessionSection> }> = [];
+
+    const topicsWithSectionIds = topics.map((topic, index) => {
+      const normalizedTitle = topic.title?.trim().toLowerCase();
+
+      let section: FlexibleSessionSection | undefined = topic.sectionId
+        ? sectionsById.get(topic.sectionId)
+        : undefined;
+
+      if (!section && topic.topicId) {
+        section = existingSections.find(s => s.associatedTopic?.id === topic.topicId);
+      }
+
+      if (!section && normalizedTitle) {
+        section = existingSections.find(s => {
+          const sectionTitle = s.title?.trim().toLowerCase();
+          const associatedTitle = s.associatedTopic?.name?.trim().toLowerCase();
+          return sectionTitle === normalizedTitle || associatedTitle === normalizedTitle;
+        });
+      }
+
+      if (!section) {
+        console.warn('[SessionBuilder] Unable to resolve section for topic update', { topic });
+        return { ...topic };
+      }
+
+      const learningObjectives = normalizeList(topic.learningOutcomes);
+      const materialsNeeded = normalizeList(topic.materialsNeeded);
+      const suggestedActivities = normalizeList(topic.callToAction);
+      const trainerName = topic.trainerId
+        ? topic.trainerName ?? section.trainerName
+        : undefined;
+
+      const updates: Partial<FlexibleSessionSection> = {
+        title: topic.title,
+        description: topic.description ?? '',
+        duration: topic.durationMinutes ?? section.duration,
+        learningObjectives: learningObjectives.length ? learningObjectives : undefined,
+        trainerNotes: topic.trainerNotes,
+        materialsNeeded: materialsNeeded.length ? materialsNeeded : undefined,
+        suggestedActivities: suggestedActivities.length ? suggestedActivities : undefined,
+        deliveryGuidance: topic.deliveryGuidance,
+        trainerId: topic.trainerId,
+        trainerName,
+        position: index + 1,
+        associatedTopic: topic.topicId
+          ? {
+              id: topic.topicId,
+              name: topic.title ?? section.associatedTopic?.name ?? '',
+              description: topic.description ?? section.associatedTopic?.description,
+            }
+          : undefined,
+      };
+
+      sectionUpdates.push({ section, updates });
+
+      return {
+        ...topic,
+        sectionId: section.id,
+        trainerName,
+      };
+    });
+
+    for (const { section, updates } of sectionUpdates) {
+      await updateOutlineSection(section.id, updates);
+    }
+
+    const metadataChanged = topicsWithSectionIds.some((mappedTopic, index) => {
+      const original = topics[index];
+      if (!original) return true;
+      return mappedTopic.sectionId !== original.sectionId ||
+        mappedTopic.trainerName !== original.trainerName;
+    });
+
+    if (metadataChanged) {
+      updateMetadata({ topics: topicsWithSectionIds });
+    }
+  }, [draft, updateOutlineSection, updateMetadata]);
+
   const renderVariantGenerator = () => {
     if (variantsStatus === 'pending') {
       return (
@@ -354,7 +487,8 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
   const primaryButtonLabel = React.useMemo(() => {
     switch (currentStep) {
       case 'setup': return 'Continue to Generate Outline';
-      case 'generate': return 'Continue to Review';
+      case 'generate': return 'Continue to Trainers & Topics';
+      case 'trainers-topics': return 'Continue to Review';
       case 'review': return 'Continue to Finalize';
       case 'finalize':
         if (publishStatus === 'success') return 'Published';
@@ -462,7 +596,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-semibold text-green-900">Outline Selected</h4>
                     <p className="text-xs sm:text-sm text-green-700 mt-1">
-                      Your outline is ready. Click "Next" to review and refine the content, or regenerate to see new options.
+                      Your outline is ready. Click "Next" to assign trainers and refine topics.
                     </p>
                   </div>
                 </div>
@@ -470,18 +604,50 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
             )}
           </div>
         );
+      case 'trainers-topics':
+        return draft.outline ? (
+          <TrainerAndTopicAssignmentStep
+            topics={transformFlexibleSectionsToTopics(draft.outline, draft.metadata)}
+            sections={draft.outline.sections}
+            onTopicsChange={handleTopicsChange}
+            onUpdateSection={handleUpdateSection}
+            onAddSection={handleAddSection}
+            onDeleteSection={handleDeleteSection}
+            onMoveSection={handleMoveSection}
+          />
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">No Outline Selected</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Please go back to the Generate step and select an outline to assign trainers.
+            </p>
+            <Button onClick={() => goToStep('generate')} variant="outline">
+              Back to Generate
+            </Button>
+          </div>
+        );
       case 'review':
         return draft.outline ? (
-          <SessionSectionEditor
+          <UnifiedReviewEditor
             outline={draft.outline}
+            topics={transformFlexibleSectionsToTopics(draft.outline, draft.metadata)}
+            metadata={draft.metadata}
+            readinessScore={draft.readinessScore}
+            onEdit={() => goToStep('trainers-topics')}
             onUpdateSection={handleUpdateSection}
             onAddSection={handleAddSection}
             onDeleteSection={handleDeleteSection}
             onMoveSection={handleMoveSection}
             onDuplicateSection={handleDuplicateSection}
-            metadata={draft.metadata}
             onUpdateMetadata={updateMetadata}
             onOpenQuickAdd={() => setQuickAddOpen(true)}
+            onTopicsChange={handleTopicsChange}
+            isFinalStep={false}
           />
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
@@ -501,13 +667,24 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
         );
       case 'finalize':
         return draft.outline ? (
-          <SessionPreview
+          <UnifiedReviewEditor
             outline={draft.outline}
+            topics={transformFlexibleSectionsToTopics(draft.outline, draft.metadata)}
             metadata={draft.metadata}
             readinessScore={draft.readinessScore}
             onEdit={() => goToStep('review')}
+            onPublish={() => void publishSession()}
+            onUpdateSection={handleUpdateSection}
+            onAddSection={handleAddSection}
+            onDeleteSection={handleDeleteSection}
+            onMoveSection={handleMoveSection}
+            onDuplicateSection={handleDuplicateSection}
+            onUpdateMetadata={updateMetadata}
+            onOpenQuickAdd={() => setQuickAddOpen(true)}
+            onTopicsChange={handleTopicsChange}
             isPublishing={isPublishing}
             isPublished={publishStatus === 'success'}
+            isFinalStep={true}
           />
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
@@ -538,6 +715,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     switch (currentStep) {
       case 'setup': return 'Guided Session Builder ';
       case 'generate': return 'Create Outline';
+      case 'trainers-topics': return 'Assign Trainers & Refine Topics';
       case 'review': return 'Review & Edit';
       case 'finalize': return 'Publish Session';
       default: return 'AI Session Builder';
@@ -548,6 +726,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     switch (currentStep) {
       case 'setup': return 'Instantly generate a complete session outline based on your chosen topic and objectives.';
       case 'generate': return 'Generate AI-powered outlines and select your favorite';
+      case 'trainers-topics': return 'Match topics with trainers and fine-tune topic details';
       case 'review': return 'Review and refine your session content';
       case 'finalize': return 'Your session is ready to publish';
       default: return 'Design, iterate, and preview training sessions with AI assist.';

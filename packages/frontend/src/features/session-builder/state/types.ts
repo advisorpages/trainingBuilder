@@ -18,6 +18,8 @@ export interface SessionTopicDraft {
   topicId?: number;
   trainerId?: number; // Legacy single trainer (for backward compatibility)
   trainerIds?: number[]; // New multiple trainers support
+  trainerName?: string;
+  sectionId?: string;
 }
 
 export interface SessionMetadata {

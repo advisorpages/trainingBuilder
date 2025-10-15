@@ -189,7 +189,6 @@ export class OpenAIService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      let lastError: Error;
       for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
         try {
           const response = await fetch(`${this.baseURL}/chat/completions`, {
@@ -228,7 +227,6 @@ export class OpenAIService {
             // Retry on server errors, not client errors
             if (response.status >= 500 && attempt < this.maxRetries) {
               this.logger.warn(`Attempt ${attempt} failed with server error, retrying...`, error);
-              lastError = error;
               continue;
             }
 

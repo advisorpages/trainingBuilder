@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { cn } from '../../../lib/utils';
 
-export type BuilderStep = 'setup' | 'generate' | 'review' | 'finalize';
+export type BuilderStep = 'setup' | 'generate' | 'trainers-topics' | 'review' | 'finalize';
 
 export type BuilderStepConfig = { key: BuilderStep; label: string; description: string };
 
@@ -23,6 +23,11 @@ const defaultSteps: BuilderStepConfig[] = [
     key: 'generate',
     label: 'Create Outline',
     description: 'Generate and select outline'
+  },
+  {
+    key: 'trainers-topics',
+    label: 'Trainers & Topics',
+    description: 'Assign trainers and refine topics'
   },
   {
     key: 'review',

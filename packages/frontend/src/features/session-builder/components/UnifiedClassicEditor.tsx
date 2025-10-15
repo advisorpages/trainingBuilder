@@ -21,7 +21,7 @@ interface UnifiedClassicEditorProps {
   onUpdateMetadata: (updates: Partial<SessionMetadata>) => void;
   onOpenQuickAdd?: () => void;
   onAssignTrainer: (topicIndex: number, trainer: { id: number; name: string } | null) => Promise<void> | void;
-  onTopicsChange: (topics: SessionTopicDraft[]) => void;
+  onTopicsChange: (topics: SessionTopicDraft[]) => Promise<void> | void;
 }
 
 interface TopicWithSection {
@@ -64,22 +64,37 @@ export const UnifiedClassicEditor: React.FC<UnifiedClassicEditorProps> = ({
 
   const handleQuickAdd = React.useMemo(() => onOpenQuickAdd || (() => undefined), [onOpenQuickAdd]);
 
+  const sectionsById = React.useMemo(() => {
+    const map = new Map<string, FlexibleSessionSection>();
+    outline.sections.forEach(section => {
+      if (section?.id) {
+        map.set(section.id, section);
+      }
+    });
+    return map;
+  }, [outline.sections]);
+
   // Combine topics with their corresponding sections
   const topicsWithSections = React.useMemo<TopicWithSection[]>(() => {
     return (topics ?? []).map((topic, index) => {
-      const associatedSection = outline.sections.find((section) => {
-        if (section.type !== 'topic') return false;
-        if (topic.topicId && section.associatedTopic?.id) {
-          return section.associatedTopic.id === topic.topicId;
-        }
-        if (section.associatedTopic?.name && topic.title) {
-          return section.associatedTopic.name.trim().toLowerCase() === topic.title.trim().toLowerCase();
-        }
-        if (section.title && topic.title) {
-          return section.title.trim().toLowerCase() === topic.title.trim().toLowerCase();
-        }
-        return false;
-      });
+      const normalizedTitle = topic.title?.trim().toLowerCase();
+      let associatedSection: FlexibleSessionSection | undefined =
+        (topic.sectionId ? sectionsById.get(topic.sectionId) : undefined) ?? undefined;
+
+      if (!associatedSection) {
+        associatedSection = outline.sections.find((section) => {
+          if (section.type !== 'topic') return false;
+          if (topic.topicId && section.associatedTopic?.id) {
+            return section.associatedTopic.id === topic.topicId;
+          }
+          if (!normalizedTitle) {
+            return false;
+          }
+          const associatedTitle = section.associatedTopic?.name?.trim().toLowerCase();
+          const sectionTitle = section.title?.trim().toLowerCase();
+          return associatedTitle === normalizedTitle || sectionTitle === normalizedTitle;
+        });
+      }
 
       // Support both legacy single trainer and new multiple trainers
       const trainerIds = topic.trainerIds || [];
@@ -89,7 +104,9 @@ export const UnifiedClassicEditor: React.FC<UnifiedClassicEditorProps> = ({
       const allTrainerIds = trainerIds.length > 0 ? trainerIds : (trainerId ? [trainerId] : []);
 
       const trainerNames = allTrainerIds.map(id => resolvedTrainerNames[id]).filter(Boolean);
-      const trainerName = associatedSection?.trainerName ?? (trainerId ? resolvedTrainerNames[trainerId] : undefined);
+      const trainerName = topic.trainerName
+        ?? associatedSection?.trainerName
+        ?? (trainerId ? resolvedTrainerNames[trainerId] : undefined);
 
       return {
         topic,
@@ -102,7 +119,7 @@ export const UnifiedClassicEditor: React.FC<UnifiedClassicEditorProps> = ({
         isAssigned: allTrainerIds.length > 0,
       };
     });
-  }, [topics, outline.sections, resolvedTrainerNames]);
+  }, [topics, outline.sections, sectionsById, resolvedTrainerNames]);
 
   // Calculate assignment statistics
   const totalTopics = topicsWithSections.length;
@@ -193,27 +210,38 @@ export const UnifiedClassicEditor: React.FC<UnifiedClassicEditorProps> = ({
         ...updatedTopics[topicIndex],
         trainerIds,
         trainerId: primaryTrainer?.id ?? undefined, // Maintain primary trainer for compatibility
+        trainerName: primaryTrainer?.name ?? undefined,
       };
-      onTopicsChange(updatedTopics);
+      void Promise.resolve(onTopicsChange(updatedTopics));
 
       // Update associated outline sections so primary trainer persists server-side
       const targetTopic = updatedTopics[topicIndex];
-      const matchingSections = outline.sections.filter((section) => {
-        if (section.type !== 'topic') return false;
-        if (targetTopic.topicId && section.associatedTopic?.id) {
-          return section.associatedTopic.id === targetTopic.topicId;
+      let matchingSections: FlexibleSessionSection[] = [];
+      if (targetTopic.sectionId) {
+        const matched = outline.sections.find(section => section.id === targetTopic.sectionId);
+        if (matched) {
+          matchingSections = [matched];
         }
-        if (targetTopic.title) {
-          const normalizedTitle = targetTopic.title.trim().toLowerCase();
-          if (section.associatedTopic?.name) {
-            return section.associatedTopic.name.trim().toLowerCase() === normalizedTitle;
+      }
+
+      if (matchingSections.length === 0) {
+        matchingSections = outline.sections.filter((section) => {
+          if (section.type !== 'topic') return false;
+          if (targetTopic.topicId && section.associatedTopic?.id) {
+            return section.associatedTopic.id === targetTopic.topicId;
           }
-          if (section.title) {
-            return section.title.trim().toLowerCase() === normalizedTitle;
+          if (targetTopic.title) {
+            const normalizedTitle = targetTopic.title.trim().toLowerCase();
+            if (section.associatedTopic?.name) {
+              return section.associatedTopic.name.trim().toLowerCase() === normalizedTitle;
+            }
+            if (section.title) {
+              return section.title.trim().toLowerCase() === normalizedTitle;
+            }
           }
-        }
-        return false;
-      });
+          return false;
+        });
+      }
 
       matchingSections.forEach((section) => {
         onUpdateSection(section.id, {
@@ -237,7 +265,7 @@ export const UnifiedClassicEditor: React.FC<UnifiedClassicEditorProps> = ({
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
-    onTopicsChange(items);
+    void Promise.resolve(onTopicsChange(items));
   };
 
   const toggleTopicExpansion = (topicIndex: number) => {

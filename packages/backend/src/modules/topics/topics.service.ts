@@ -949,9 +949,9 @@ Respond with JSON that matches this exact schema:
       name: this.polishName(topic.name, topic.category?.name),
       description: this.polishDescription(topic.description, topic.name, topic.category?.name),
       learningOutcomes: this.polishLearningOutcomes(topic.learningOutcomes, topic.name),
-      trainerNotes: this.polishTrainerNotes(topic.trainerNotes, topic.name),
-      materialsNeeded: this.polishMaterialsNeeded(topic.materialsNeeded, topic.name),
-      deliveryGuidance: this.polishDeliveryGuidance(topic.deliveryGuidance, topic.name),
+      trainerNotes: this.polishTrainerNotes(topic.trainerNotes),
+      materialsNeeded: this.polishMaterialsNeeded(topic.materialsNeeded),
+      deliveryGuidance: this.polishDeliveryGuidance(topic.deliveryGuidance),
     };
 
     return {
@@ -1042,7 +1042,7 @@ Respond with JSON that matches this exact schema:
       .join('\n');
   }
 
-  private polishTrainerNotes(notes: string | null | undefined, topicName: string): string {
+  private polishTrainerNotes(notes: string | null | undefined): string {
     if (!notes || notes.trim().length === 0) {
       // Generate default trainer notes
       return `• Review all materials and prep examples before session\n• Create a welcoming, inclusive environment for participation\n• Use real-world scenarios relevant to participants\n• Monitor engagement and adjust pacing as needed\n• Facilitate discussion rather than lecturing throughout\n• Encourage questions and peer-to-peer learning`;
@@ -1076,7 +1076,7 @@ Respond with JSON that matches this exact schema:
       .join('\n');
   }
 
-  private polishMaterialsNeeded(materials: string | null | undefined, topicName: string): string {
+  private polishMaterialsNeeded(materials: string | null | undefined): string {
     if (!materials || materials.trim().length === 0) {
       // Generate default materials
       return `• Presentation slides or visual aids\n• Handouts or worksheets for activities\n• Flip chart and markers for group work\n• Timer for time-bound exercises\n• Participant materials (notebooks, pens)`;
@@ -1102,7 +1102,7 @@ Respond with JSON that matches this exact schema:
       .join('\n');
   }
 
-  private polishDeliveryGuidance(guidance: string | null | undefined, topicName: string): string {
+  private polishDeliveryGuidance(guidance: string | null | undefined): string {
     if (!guidance || guidance.trim().length === 0) {
       // Generate default delivery guidance
       return `Start by creating psychological safety and setting clear expectations. Use the 70/30 rule: 30% presentation and 70% interactive application. Break content into digestible 10-15 minute segments with activities between each. Check for understanding frequently through questions and quick assessments. Adapt pace based on participant engagement and comprehension. End with clear next steps and action planning.`;

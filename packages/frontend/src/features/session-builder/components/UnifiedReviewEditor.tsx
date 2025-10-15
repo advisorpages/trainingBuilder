@@ -19,7 +19,7 @@ interface UnifiedReviewEditorProps {
   onDuplicateSection: (sectionId: string) => void;
   onUpdateMetadata: (updates: Partial<SessionMetadata>) => void;
   onOpenQuickAdd?: () => void;
-  onTopicsChange: (topics: SessionTopicDraft[]) => void;
+  onTopicsChange: (topics: SessionTopicDraft[]) => Promise<void> | void;
   isPublishing?: boolean;
   isPublished?: boolean;
   isFinalStep?: boolean;
@@ -72,22 +72,37 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
 
   const handleQuickAdd = React.useMemo(() => onOpenQuickAdd || (() => undefined), [onOpenQuickAdd]);
 
+  const sectionsById = React.useMemo(() => {
+    const map = new Map<string, FlexibleSessionSection>();
+    outline.sections.forEach(section => {
+      if (section?.id) {
+        map.set(section.id, section);
+      }
+    });
+    return map;
+  }, [outline.sections]);
+
   // Combine topics with their corresponding sections
   const topicsWithSections = React.useMemo<TopicWithSection[]>(() => {
     return (topics ?? []).map((topic, index) => {
-      const associatedSection = outline.sections.find((section) => {
-        if (section.type !== 'topic') return false;
-        if (topic.topicId && section.associatedTopic?.id) {
-          return section.associatedTopic.id === topic.topicId;
-        }
-        if (section.associatedTopic?.name && topic.title) {
-          return section.associatedTopic.name.trim().toLowerCase() === topic.title.trim().toLowerCase();
-        }
-        if (section.title && topic.title) {
-          return section.title.trim().toLowerCase() === topic.title.trim().toLowerCase();
-        }
-        return false;
-      });
+      const normalizedTitle = topic.title?.trim().toLowerCase();
+      let associatedSection: FlexibleSessionSection | undefined =
+        (topic.sectionId ? sectionsById.get(topic.sectionId) : undefined) ?? undefined;
+
+      if (!associatedSection) {
+        associatedSection = outline.sections.find((section) => {
+          if (section.type !== 'topic') return false;
+          if (topic.topicId && section.associatedTopic?.id) {
+            return section.associatedTopic.id === topic.topicId;
+          }
+          if (!normalizedTitle) {
+            return false;
+          }
+          const associatedTitle = section.associatedTopic?.name?.trim().toLowerCase();
+          const sectionTitle = section.title?.trim().toLowerCase();
+          return associatedTitle === normalizedTitle || sectionTitle === normalizedTitle;
+        });
+      }
 
       // Support both legacy single trainer and new multiple trainers
       const trainerIds = topic.trainerIds || [];
@@ -97,7 +112,9 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
       const allTrainerIds = trainerIds.length > 0 ? trainerIds : (trainerId ? [trainerId] : []);
 
       const trainerNames = allTrainerIds.map(id => resolvedTrainerNames[id]).filter(Boolean);
-      const trainerName = associatedSection?.trainerName ?? (trainerId ? resolvedTrainerNames[trainerId] : undefined);
+      const trainerName = topic.trainerName
+        ?? associatedSection?.trainerName
+        ?? (trainerId ? resolvedTrainerNames[trainerId] : undefined);
 
       // Check if topic is complete (has description, duration, and trainer)
       // Note: Trainer assignment is nice to have but not required for completion
