@@ -17,6 +17,7 @@ export enum AIInteractionType {
   TRAINING_KIT = 'training_kit',
   MARKETING_KIT = 'marketing_kit',
   VARIANT_SELECTION = 'variant_selection',
+  VARIANT_CACHE_HIT = 'variant_cache_hit',
 }
 
 export enum UserFeedback {

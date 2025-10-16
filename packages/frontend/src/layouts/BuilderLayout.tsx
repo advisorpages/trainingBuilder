@@ -59,6 +59,13 @@ const allNavItems: NavItem[] = [
     icon: '📋',
   },
   {
+    label: 'Saved Ideas',
+    description: 'Manage your AI-generated session outlines',
+    to: '/sessions/saved-variants',
+    roles: ['content_developer', 'broker'],
+    icon: '💡',
+  },
+  {
     label: 'Topics',
     description: 'Maintain topic catalog and references',
     to: '/topics',

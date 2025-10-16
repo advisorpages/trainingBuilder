@@ -2,36 +2,42 @@ import { MigrationInterface, QueryRunner, TableColumn, TableForeignKey, TableInd
 
 export class AddCategoryIdToTopics1729800000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add category_id column to topics table
-    await queryRunner.addColumn(
-      'topics',
-      new TableColumn({
-        name: 'category_id',
-        type: 'integer',
-        isNullable: true,
-      })
-    );
+    // Check if column already exists
+    const table = await queryRunner.getTable('topics');
+    const columnExists = table?.columns.find(column => column.name === 'category_id');
 
-    // Add foreign key constraint
-    await queryRunner.createForeignKey(
-      'topics',
-      new TableForeignKey({
-        name: 'fk_topics_category',
-        columnNames: ['category_id'],
-        referencedColumnNames: ['id'],
-        referencedTableName: 'categories',
-        onDelete: 'SET NULL',
-      })
-    );
+    if (!columnExists) {
+      // Add category_id column to topics table
+      await queryRunner.addColumn(
+        'topics',
+        new TableColumn({
+          name: 'category_id',
+          type: 'integer',
+          isNullable: true,
+        })
+      );
 
-    // Add index for better query performance
-    await queryRunner.createIndex(
-      'topics',
-      new TableIndex({
-        name: 'idx_topics_category_id',
-        columnNames: ['category_id'],
-      })
-    );
+      // Add foreign key constraint
+      await queryRunner.createForeignKey(
+        'topics',
+        new TableForeignKey({
+          name: 'fk_topics_category',
+          columnNames: ['category_id'],
+          referencedColumnNames: ['id'],
+          referencedTableName: 'categories',
+          onDelete: 'SET NULL',
+        })
+      );
+
+      // Add index for better query performance
+      await queryRunner.createIndex(
+        'topics',
+        new TableIndex({
+          name: 'idx_topics_category_id',
+          columnNames: ['category_id'],
+        })
+      );
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

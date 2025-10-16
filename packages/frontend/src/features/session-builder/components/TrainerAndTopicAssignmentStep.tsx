@@ -2,19 +2,22 @@ import * as React from 'react';
 import { Button } from '../../../ui';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Trainer } from '@leadership-training/shared';
-import type { SessionTopicDraft } from '../state/types';
+import type { SessionTopicDraft, SessionMetadata } from '../state/types';
 import { FlexibleSessionSection } from '../../../services/session-builder.service';
 import { cn } from '../../../lib/utils';
 import type { DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
+import { SessionDetailsSection } from './SessionDetailsSection';
 
 interface TrainerAndTopicAssignmentStepProps {
   topics: SessionTopicDraft[];
   sections: FlexibleSessionSection[];
+  metadata: SessionMetadata;
   onTopicsChange: (topics: SessionTopicDraft[]) => Promise<void> | void;
   onUpdateSection: (sectionId: string, updates: Partial<FlexibleSessionSection>) => void;
   onAddSection: (type: string) => void;
   onDeleteSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, direction: 'up' | 'down') => void;
+  onUpdateMetadata: (updates: Partial<SessionMetadata>) => void;
 }
 
 const getDurationLabel = (minutes?: number) => {
@@ -29,11 +32,13 @@ const getDurationLabel = (minutes?: number) => {
 export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentStepProps> = ({
   topics,
   sections,
+  metadata,
   onTopicsChange,
   onUpdateSection,
   onAddSection,
   onDeleteSection,
   onMoveSection,
+  onUpdateMetadata,
 }) => {
   const [editingTopicIndex, setEditingTopicIndex] = React.useState<number | null>(null);
   const [editingTopic, setEditingTopic] = React.useState<SessionTopicDraft | null>(null);
@@ -463,29 +468,6 @@ const TopicCardComponent: React.FC<TopicCardProps> = ({
                       </h4>
                     )}
                     <div className="flex items-center gap-2 text-sm flex-wrap">
-                      <span className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-                        isComplete
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                          : 'bg-slate-100 text-slate-600 border border-slate-200'
-                      )}>
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          {isComplete ? (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          ) : (
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          )}
-                        </svg>
-                        {isComplete ? 'Complete' : 'Incomplete'}
-                      </span>
-                      {isAssigned && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded">
-                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          1 trainer assigned
-                        </span>
-                      )}
                       {isEditing ? (
                         <div className="flex items-center gap-2">
                           <input
@@ -803,21 +785,7 @@ const TopicCardComponent: React.FC<TopicCardProps> = ({
                       ))}
                     </select>
 
-                    {/* Debug info */}
-                    <div className="text-xs text-slate-500 mt-1">
-                      Debug: {allTrainers.length} trainers loaded, current: {currentTrainerId || 'none'} (local: {localTrainerId || 'none'}, topic: {topic.trainerId || 'none'})
                     </div>
-                    <button
-                      onClick={fetchAllTrainers}
-                      className="w-full px-2 py-1 text-xs text-slate-600 hover:text-slate-800 transition-colors"
-                      title="Refresh trainer list"
-                    >
-                      <svg className="w-3 h-3 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Refresh
-                    </button>
-                  </div>
                 )}
 
                 {trainerName && (
@@ -859,55 +827,12 @@ TopicCard.displayName = 'TopicCard';
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">
-              Assign Trainers & Refine Topics
-            </h2>
-            <p className="text-sm text-slate-700 mb-4">
-              Match topics with trainers and fine-tune topic details before the final review.
-            </p>
-
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <svg className="h-4 w-4 text-slate-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-                <span className="font-medium text-slate-700">
-                  {topics.length} topic{topics.length === 1 ? '' : 's'}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-emerald-100 text-emerald-700">
-                <svg className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                <span className="text-xs font-medium">
-                  {assignedCount}/{totalTopics} trainers assigned
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        {assignedCount < totalTopics && (
-          <div className="mt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-slate-700">Trainer Assignment Progress</span>
-              <span className="text-sm text-slate-600">{assignedCount}/{totalTopics} topics assigned</span>
-            </div>
-            <div className="w-full bg-slate-200 rounded-full h-2">
-              <div
-                className="bg-emerald-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${completionProgress}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Session Details Section */}
+      <SessionDetailsSection
+        metadata={metadata}
+        topics={topics}
+        onUpdateMetadata={onUpdateMetadata}
+      />
 
       {/* Topic Cards */}
       <div className="space-y-6">

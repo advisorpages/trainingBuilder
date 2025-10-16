@@ -20,6 +20,8 @@ import { Tone } from './tone.entity';
 import { AIInteraction } from './ai-interaction.entity';
 import { RagSettings } from './rag-settings.entity';
 import { AiPromptSetting } from './ai-prompt-setting.entity';
+import { VariantCache } from './variant-cache.entity';
+import { SavedVariant } from './saved-variant.entity';
 
 export * from './base.entity';
 export * from './session.entity';
@@ -44,6 +46,8 @@ export * from './tone.entity';
 export * from './ai-interaction.entity';
 export * from './rag-settings.entity';
 export * from './ai-prompt-setting.entity';
+export * from './variant-cache.entity';
+export * from './saved-variant.entity';
 
 export const entities = [
   Session,
@@ -68,4 +72,6 @@ export const entities = [
   AIInteraction,
   RagSettings,
   AiPromptSetting,
+  VariantCache,
+  SavedVariant,
 ];

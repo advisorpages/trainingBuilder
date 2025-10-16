@@ -48,6 +48,7 @@ import {
   OpenAISessionSection,
   OutlineGenerationContext,
 } from '../../services/openai.service';
+import { VariantCacheService } from '../../services/variant-cache.service';
 import { PromptRegistryService } from '../../services/prompt-registry.service';
 import { RagIntegrationService } from '../../services/rag-integration.service';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
@@ -278,6 +279,7 @@ export class SessionsService {
     private readonly analyticsTelemetry: AnalyticsTelemetryService,
     private readonly promptSettingsService: AiPromptSettingsService,
     private readonly topicsService: TopicsService,
+    private readonly variantCacheService: VariantCacheService,
   ) {
     this.enableVariantGenerationV2 = this.configService.get<boolean>('ENABLE_VARIANT_GENERATION_V2', false);
         this.logVariantSelections = this.configService.get<boolean>('LOG_VARIANT_SELECTIONS', true);
@@ -3045,12 +3047,45 @@ export class SessionsService {
       quickDirectives,
     });
 
-    const aiOutline = await this.openAIService.generateSessionOutline(
-      openAIRequest,
-      ragResults,
+    // Check cache first
+    const cacheKeyParams = {
+      title: payload.title,
+      category: payload.category,
+      sessionType: payload.sessionType,
+      duration,
+      desiredOutcome: payload.desiredOutcome,
+      currentProblem: payload.currentProblem,
+      specificTopics: payload.specificTopics,
+      audienceSize: payload.audienceSize || '8-20',
+      audienceId: payload.audienceId,
+      toneId: payload.toneId,
+      locationId: location?.id ?? payload.locationId,
+      meetingPlatform: location?.meetingPlatform ?? payload.meetingPlatform,
+      variantIndex: meta.index,
+      variantInstruction: combinedInstruction,
       ragWeight,
-      outlineContext
-    );
+      ragSourcesHash: this.variantCacheService.generateRagSourcesHash(ragResults),
+    };
+
+    const cacheResult = await this.variantCacheService.getCachedVariant(cacheKeyParams, openAIRequest);
+
+    let aiOutline;
+    if (cacheResult.hit && cacheResult.outline) {
+      aiOutline = cacheResult.outline;
+      this.logger.log(`Cache hit for variant ${meta.index + 1} (${meta.label})`);
+    } else {
+      // Generate new outline
+      aiOutline = await this.openAIService.generateSessionOutline(
+        openAIRequest,
+        ragResults,
+        ragWeight,
+        outlineContext
+      );
+
+      // Cache the result for future use
+      await this.variantCacheService.cacheVariant(cacheKeyParams, openAIRequest, aiOutline);
+      this.logger.log(`Generated and cached variant ${meta.index + 1} (${meta.label})`);
+    }
 
     // Log AI outline structure for debugging and monitoring field coverage
     this.logger.debug(`Variant ${meta.index + 1} AI outline structure:`, {

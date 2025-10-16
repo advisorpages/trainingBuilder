@@ -25,6 +25,7 @@ import IncentiveWorksheetPage from './pages/IncentiveWorksheetPage'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import SessionAITunerPage from './pages/SessionAITunerPage'
 import HomePage from './pages/HomePage'
+import { SavedVariantsPage } from './pages/SavedVariantsPage'
 import './App.css'
 
 
@@ -88,6 +89,14 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <ManageSessionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sessions/saved-variants"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <SavedVariantsPage />
               </ProtectedRoute>
             }
           />

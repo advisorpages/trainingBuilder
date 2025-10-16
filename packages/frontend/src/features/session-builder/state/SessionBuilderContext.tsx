@@ -8,7 +8,7 @@ import {
   FlexibleSessionSection,
 } from '../../../services/session-builder.service';
 import { useToast } from '../../../ui';
-import { AIContentVersion, BuilderState, SessionDraftData, SessionMetadata } from './types';
+import { AIContentVersion, BuilderState, SessionDraftData, SessionMetadata, SessionTopicDraft } from './types';
 import { builderReducer, initialBuilderState } from './builderReducer';
 import {
   calculateReadinessScore,
@@ -197,6 +197,40 @@ function calculateReadiness(draft: SessionDraftData): number {
   return calculateReadinessScore(items);
 }
 
+function normalizeCategoryId(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function deriveTopicsFromOutline(outline: SessionOutline | null | undefined): SessionTopicDraft[] {
+  if (!outline?.sections || !Array.isArray(outline.sections)) {
+    return [];
+  }
+
+  const sortedSections = sessionBuilderService.sortSectionsByPosition(outline.sections);
+
+  return sortedSections.map((section: FlexibleSessionSection, index: number) => ({
+    sectionId: section.id,
+    title: section.title || `Section ${index + 1}`,
+    description: section.description || '',
+    durationMinutes: section.duration || 15,
+    learningOutcomes: section.learningObjectives?.join('\n') || '',
+    trainerNotes: section.trainerNotes || '',
+    materialsNeeded: section.materialsNeeded?.join('\n') || '',
+    deliveryGuidance: section.deliveryGuidance || '',
+    callToAction: section.suggestedActivities?.join('\n') || '',
+    trainerName: section.trainerName,
+    ...(section.associatedTopic?.id ? { topicId: section.associatedTopic.id } : {}),
+    ...(section.trainerId ? { trainerId: section.trainerId } : {}),
+  }));
+}
+
 function outlineToVersion(outline: SessionOutline, prompt: string): AIContentVersion {
   const blocks = outline.sections.map((section) => ({
     id: section.id,
@@ -376,8 +410,9 @@ function convertAutosavePayload(draft: SessionDraftData) {
 export const SessionBuilderProvider: React.FC<{
   sessionId?: string;
   prefilledTopics?: any[] | null;
+  savedVariant?: any | null;
   children: React.ReactNode;
-}> = ({ sessionId = 'new', prefilledTopics = null, children }) => {
+}> = ({ sessionId = 'new', prefilledTopics = null, savedVariant = null, children }) => {
   const [state, dispatch] = React.useReducer(builderReducer, initialBuilderState);
   const { publish } = useToast();
   const lastSavedRef = React.useRef<SessionDraftData | null>(null);
@@ -429,6 +464,102 @@ export const SessionBuilderProvider: React.FC<{
   }, [dispatch]);
 
   const loadDraft = React.useCallback(async (): Promise<SessionDraftData> => {
+    // Handle saved variant first (highest priority)
+    if (savedVariant) {
+      console.log('[Session Builder Context] Loading saved variant:', savedVariant);
+
+      // Extract metadata from saved variant
+      const metadataFromVariant = savedVariant.metadata?.sessionMetadata;
+      const categoryIdFromVariant =
+        normalizeCategoryId(metadataFromVariant?.categoryId) ??
+        normalizeCategoryId(savedVariant.categoryId);
+
+      const metadata: SessionMetadata = {
+        title: savedVariant.title || '',
+        sessionType: normalizeSessionType(savedVariant.sessionType || null),
+        category: metadataFromVariant?.category ?? '',
+        categoryId: categoryIdFromVariant,
+        desiredOutcome: metadataFromVariant?.desiredOutcome || '',
+        currentProblem: metadataFromVariant?.currentProblem || '',
+        specificTopics: metadataFromVariant?.specificTopics || '',
+        startDate: metadataFromVariant?.startDate || new Date().toISOString().slice(0, 10),
+        startTime: metadataFromVariant?.startTime || new Date().toISOString(),
+        endTime: metadataFromVariant?.endTime || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        timezone: metadataFromVariant?.timezone || DEFAULT_TIMEZONE,
+        location: metadataFromVariant?.location || '',
+        locationId: metadataFromVariant?.locationId,
+        locationType: metadataFromVariant?.locationType,
+        meetingPlatform: metadataFromVariant?.meetingPlatform,
+        locationCapacity: metadataFromVariant?.locationCapacity,
+        locationTimezone: metadataFromVariant?.locationTimezone || DEFAULT_TIMEZONE,
+        locationNotes: metadataFromVariant?.locationNotes,
+        audienceId: metadataFromVariant?.audienceId,
+        audienceName: metadataFromVariant?.audienceName,
+        toneId: metadataFromVariant?.toneId,
+        toneName: metadataFromVariant?.toneName,
+        topics: metadataFromVariant?.topics || [],
+      };
+
+      // Apply prefilled topics if they exist and metadata doesn't already have topics
+      if (prefilledTopics && Array.isArray(prefilledTopics) && prefilledTopics.length > 0) {
+        if (!metadata.topics || metadata.topics.length === 0) {
+          console.log('[Session Builder Context] Applying prefilled topics to saved variant:', prefilledTopics);
+          metadata.topics = prefilledTopics;
+          metadata.specificTopics = prefilledTopics.map(t => t.title).join(', ');
+
+          // If all topics have the same category, set that as the category
+          const categories = [...new Set(prefilledTopics.map((t: any) => t.category).filter(Boolean))];
+          if (categories.length === 1 && !metadata.category) {
+            metadata.category = categories[0];
+          }
+
+          // Clear sessionStorage after successfully applying topics
+          try {
+            sessionStorage.removeItem('sessionBuilder_prefilledTopics');
+            sessionStorage.removeItem('sessionBuilder_prefilledTopics_timestamp');
+            console.log('[Session Builder Context] Cleared topics from sessionStorage');
+          } catch (error) {
+            console.error('[Session Builder Context] Failed to clear sessionStorage:', error);
+          }
+        }
+      }
+
+      if (!metadata.topics || metadata.topics.length === 0) {
+        const derivedTopics = deriveTopicsFromOutline(savedVariant.outline);
+        if (derivedTopics.length > 0) {
+          console.log('[Session Builder Context] Derived topics from outline:', derivedTopics);
+          metadata.topics = derivedTopics;
+          if (!metadata.specificTopics) {
+            metadata.specificTopics = derivedTopics.map(topic => topic.title).join(', ');
+          }
+        }
+      }
+
+      return {
+        sessionId,
+        metadata,
+        outline: savedVariant.outline || createEmptyOutline(),
+        aiPrompt: buildPrompt(metadata),
+        aiVersions: [],
+        acceptedVersionId: undefined,
+        selectedVersionId: undefined,
+        readinessScore: calculateReadiness({
+          sessionId,
+          metadata,
+          outline: savedVariant.outline || createEmptyOutline(),
+          aiPrompt: buildPrompt(metadata),
+          aiVersions: [],
+          acceptedVersionId: undefined,
+          selectedVersionId: undefined,
+          readinessScore: 0,
+          lastAutosaveAt: undefined,
+          isDirty: false,
+        }),
+        lastAutosaveAt: undefined,
+        isDirty: false,
+      };
+    }
+
     if (sessionId && sessionId !== 'new') {
       try {
         const serverDraft = await sessionBuilderService.getCompleteSessionData(sessionId);
@@ -575,7 +706,7 @@ export const SessionBuilderProvider: React.FC<{
       lastAutosaveAt: undefined,
       isDirty: false,
     };
-  }, [sessionId, prefilledTopics]);
+  }, [sessionId, prefilledTopics, savedVariant]);
 
   React.useEffect(() => {
     let isMounted = true;

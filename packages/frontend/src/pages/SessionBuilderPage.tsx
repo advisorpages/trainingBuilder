@@ -10,6 +10,7 @@ import {
   QuickAddModal,
   SessionMetadataForm,
   StepIndicator,
+  BuilderStep,
   useBuilderSteps,
   VersionComparison,
   DebugPanel,
@@ -20,6 +21,7 @@ import {
 import { VariantSelector } from '../components/session-builder/VariantSelector';
 import { SessionBuilderProvider, useSessionBuilder } from '../features/session-builder/state/SessionBuilderContext';
 import { sessionBuilderService, SectionType, FlexibleSessionSection } from '../services/session-builder.service';
+import { savedVariantsService } from '../services/saved-variants.service';
 import { SessionTopicDraft } from '../features/session-builder/state/types';
 import { cn } from '../lib/utils';
 import {
@@ -32,6 +34,17 @@ const EmptyState: React.FC<{ message: string }> = ({ message }) => (
     <p className="text-sm text-slate-500">{message}</p>
   </div>
 );
+
+const toNumeric = (value: unknown, fallback = 0): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+};
 
 // Utility function to transform flexible sections to topic-based structure for UnifiedReviewEditor
 const transformFlexibleSectionsToTopics = (outline: any, metadata: any): SessionTopicDraft[] => {
@@ -73,11 +86,24 @@ const transformFlexibleSectionsToTopics = (outline: any, metadata: any): Session
   return topics;
 };
 
-const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?: any[] | null }> = ({ routeSessionId, prefilledTopics }) => {
+interface SessionBuilderScreenProps {
+  routeSessionId: string;
+  prefilledTopics?: any[] | null;
+  savedVariant?: any | null;
+  initialStep?: BuilderStep;
+}
+
+const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
+  routeSessionId,
+  prefilledTopics,
+  savedVariant,
+  initialStep,
+}) => {
   const {
     state,
     updateMetadata,
     updatePrompt,
+    updateOutline,
     addOutlineSection,
     updateOutlineSection,
     removeOutlineSection,
@@ -111,6 +137,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
   }, [prefilledTopics, state.status]);
 
   // Step management
+  const startingStep: BuilderStep = savedVariant ? (initialStep ?? 'review') : (initialStep ?? 'setup');
   const {
     currentStep,
     completedSteps,
@@ -120,13 +147,15 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     prevStep,
     canGoNext,
     canGoPrev
-  } = useBuilderSteps('setup');
+  } = useBuilderSteps(startingStep);
 
   const [isQuickAddOpen, setQuickAddOpen] = React.useState(false);
   const [isVersionCompareOpen, setIsVersionCompareOpen] = React.useState(false);
   const [compareVersionIds, setCompareVersionIds] = React.useState<[string, string]>(['', '']);
   const [isDebugOpen, setIsDebugOpen] = React.useState(false);
   const [selectedVariantId, setSelectedVariantId] = React.useState<string | undefined>(undefined);
+  const [hasChosenCreateOwn, setHasChosenCreateOwn] = React.useState(false);
+  const [hasAppliedSavedVariantSteps, setHasAppliedSavedVariantSteps] = React.useState(false);
   const hasBootstrappedVariants = React.useRef(false);
   const hasRedirectedAfterPublish = React.useRef(false);
 
@@ -138,6 +167,33 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
   const isPublishing = publishStatus === 'pending';
   const readinessItems = React.useMemo(() => getDraftReadinessItems(draft ?? null), [draft]);
   const canPublish = !!draft && areRequiredItemsComplete(readinessItems);
+
+  React.useEffect(() => {
+    if (!savedVariant || state.status !== 'ready' || hasAppliedSavedVariantSteps) {
+      return;
+    }
+
+    const stepOrder: BuilderStep[] = ['setup', 'generate', 'trainers-topics', 'review', 'finalize'];
+    const targetStep: BuilderStep = initialStep ?? 'review';
+
+    for (const step of stepOrder) {
+      if (step === targetStep) {
+        goToStep(step);
+        break;
+      }
+      completeStep(step);
+    }
+
+    setHasChosenCreateOwn(true);
+    setHasAppliedSavedVariantSteps(true);
+  }, [
+    savedVariant,
+    state.status,
+    hasAppliedSavedVariantSteps,
+    completeStep,
+    goToStep,
+    initialStep,
+  ]);
 
   // Check if required setup fields are populated
   const hasRequiredSetupFields = React.useMemo(() => {
@@ -164,7 +220,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     }
   }, [navigate, state.publishStatus]);
 
-  // Auto-complete steps only when users move forward
+  // Auto-complete and advance steps only when users move forward
   // This prevents confusing auto-completion while users are still working on a step
   React.useEffect(() => {
     if (!draft) return;
@@ -172,9 +228,19 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     // Only mark generate as complete when a version is accepted
     // This ensures users have selected an outline before proceeding
     if (draft.acceptedVersionId && !completedSteps.includes('generate')) {
+      console.log('[Auto-advance] Effect triggered, completing generate step', {
+        acceptedVersionId: draft.acceptedVersionId,
+        completedSteps,
+        currentStep
+      });
       completeStep('generate');
+      // Auto-advance to trainers-topics step when variant is selected
+      if (currentStep === 'generate') {
+        console.log('[Auto-advance] Moving to trainers-topics step');
+        goToStep('trainers-topics');
+      }
     }
-  }, [draft?.acceptedVersionId, completedSteps, completeStep]);
+  }, [draft?.acceptedVersionId, completedSteps, completeStep, currentStep, goToStep]);
 
   // Define variant generation functions before they are used in effects
   const triggerVariantGeneration = React.useCallback(async () => {
@@ -194,53 +260,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     return success;
   }, [triggerVariantGeneration, generateAIContent]);
 
-  // Trigger AI generation when entering the generate step for the first time
-  React.useEffect(() => {
-    if (!draft || state.status !== 'ready') {
-      return;
-    }
-
-    if (draft.aiVersions.length > 0) {
-      hasBootstrappedVariants.current = true;
-      return;
-    }
-
-    if (currentStep !== 'generate') {
-      return;
-    }
-
-    if (!draft.metadata.desiredOutcome) {
-      return;
-    }
-
-    if (variantsStatus === 'pending') {
-      return;
-    }
-
-    if (variantsStatus === 'error') {
-      return;
-    }
-
-    if (variantsStatus === 'success' && variants.length > 0) {
-      hasBootstrappedVariants.current = true;
-      return;
-    }
-
-    if (hasBootstrappedVariants.current) {
-      return;
-    }
-
-    void (async () => {
-      await startVariantGeneration();
-    })();
-  }, [
-    currentStep,
-    draft,
-    state.status,
-    variantsStatus,
-    variants.length,
-    startVariantGeneration,
-  ]);
+  // Removed automatic variant generation - user now chooses between generating variants or creating own
 
   React.useEffect(() => {
     if (variantsStatus === 'idle') {
@@ -277,17 +297,167 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     }
   };
 
+  const handleCreateOwnOutline = () => {
+    console.log('[handleCreateOwnOutline] called', { draft, currentStep });
+
+    // Skip variant generation and go directly to step 3
+    // Create a basic empty outline for the user to build upon
+    if (!draft) {
+      console.log('[handleCreateOwnOutline] No draft available, returning early');
+      return;
+    }
+
+    const basicOutline = {
+      sections: [],
+      totalDuration: 0,
+      suggestedSessionTitle: draft.metadata.title || 'Custom Session',
+      suggestedDescription: '',
+      difficulty: 'Intermediate' as const,
+      recommendedAudienceSize: '10-25' as const,
+      fallbackUsed: false,
+      generatedAt: new Date().toISOString(),
+    };
+
+    console.log('[handleCreateOwnOutline] Creating basic outline:', basicOutline);
+
+    // Update the outline with the basic structure
+    updateOutline(basicOutline);
+
+    // Set flag that user chose to create their own outline
+    setHasChosenCreateOwn(true);
+
+    console.log('[handleCreateOwnOutline] About to complete step and navigate');
+
+    // Complete the generate step and advance to trainers-topics
+    completeStep('generate');
+    goToStep('trainers-topics');
+
+    console.log('[handleCreateOwnOutline] Function completed');
+  };
+
   const handleVariantSelect = React.useCallback(async (variantId: string) => {
+    console.log('[handleVariantSelect] Starting variant selection', { variantId });
     setSelectedVariantId(variantId);
     await selectVariant(variantId);
-    // Don't auto-jump to review - let user click Next when ready
-  }, [selectVariant]);
+    console.log('[handleVariantSelect] Variant selected, acceptedVersionId should be set');
 
-  const handleSaveVariantForLater = React.useCallback((variantId: string) => {
+    // Extract title from the selected variant and update metadata
+    const selectedVariant = variants.find(v => v.id === variantId);
+    if (selectedVariant) {
+      let variantTitle = '';
+
+      // First, try to get the AI-generated title from the variant's outline
+      if (selectedVariant.outline?.suggestedSessionTitle) {
+        variantTitle = selectedVariant.outline.suggestedSessionTitle;
+      }
+
+      // If no suggested title, try to get title from summary
+      if (!variantTitle && selectedVariant.summary) {
+        // Take first sentence or first 60 characters of summary
+        const firstSentence = selectedVariant.summary.split('.')[0];
+        variantTitle = firstSentence.length > 60
+          ? firstSentence.substring(0, 60).trim() + '...'
+          : firstSentence;
+      }
+
+      // If still no title, try to generate from first section
+      if (!variantTitle && selectedVariant.outline?.sections && selectedVariant.outline.sections.length > 0) {
+        const firstSection = selectedVariant.outline.sections[0];
+        if (firstSection.title) {
+          variantTitle = firstSection.title;
+        } else if (firstSection.description) {
+          // Take first 60 characters of first section description
+          variantTitle = firstSection.description.substring(0, 60).trim() + '...';
+        }
+      }
+
+      // If still no title, create a default one based on category
+      if (!variantTitle && draft?.metadata.category) {
+        variantTitle = `${draft.metadata.category} Session`;
+      }
+
+      // Update metadata with the variant title
+      if (variantTitle) {
+        updateMetadata({ title: variantTitle });
+        console.log('[handleVariantSelect] Updated session title to:', variantTitle);
+      }
+    }
+
+    console.log('[handleVariantSelect] Variant selection completed');
+
+    // Auto-advance to trainers-topics step after variant selection
+    if (currentStep === 'generate') {
+      console.log('[handleVariantSelect] Auto-advancing to trainers-topics step');
+      // Small delay to ensure state has updated
+      setTimeout(() => {
+        completeStep('generate');
+        goToStep('trainers-topics');
+      }, 100);
+    }
+  }, [selectVariant, variants, draft?.metadata, updateMetadata, currentStep, completeStep, goToStep]);
+
+  const handleSaveVariantForLater = React.useCallback(async (variantId: string) => {
     if (process.env.NODE_ENV === 'development') {
       console.log('[Session Builder v2] Save for later requested', { variantId });
     }
-  }, []);
+
+    const variant = variants.find(v => v.id === variantId);
+    if (!variant) {
+      console.error('[Session Builder v2] Variant not found:', variantId);
+      return;
+    }
+
+    try {
+      // Create the saved variant data
+      const savedVariantData = {
+        variantId: variant.id,
+        outline: variant.outline,
+        title: variant.outline?.suggestedSessionTitle || variant.label || 'Untitled Session',
+        description: variant.description || variant.outline?.suggestedDescription || '',
+        categoryId: draft?.metadata.categoryId ? draft.metadata.categoryId.toString() : undefined,
+        sessionType: draft?.metadata.sessionType ?? undefined,
+        totalDuration: toNumeric(variant.outline?.totalDuration),
+        ragWeight: toNumeric(variant.ragWeight),
+        ragSourcesUsed: Math.max(0, Math.round(toNumeric(variant.ragSourcesUsed))),
+        ragSources: variant.ragSources,
+        generationSource: variant.generationSource || 'ai',
+        variantLabel: variant.label,
+        metadata: {
+          originalGenerationTime: new Date().toISOString(),
+          sessionMetadata: draft?.metadata,
+        },
+        tags: [], // User can add tags later in the management UI
+      };
+
+      const savedVariant = await savedVariantsService.createSavedVariant(savedVariantData);
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Session Builder v2] Variant saved successfully:', savedVariant);
+      }
+
+      // Show success feedback - you could add a toast notification here
+      alert(`"${savedVariant.title}" has been saved to your library!`);
+
+    } catch (error) {
+      const responseData = (error as any)?.response?.data;
+      console.error('[Session Builder v2] Error saving variant:', {
+        error,
+        responseData,
+        status: (error as any)?.response?.status,
+      });
+
+      // Show error feedback
+      if (error instanceof Error) {
+        if (error.message.includes('already saved')) {
+          alert('This variant is already in your saved library.');
+        } else {
+          alert(`Failed to save variant: ${error.message}`);
+        }
+      } else {
+        alert('Failed to save variant. Please try again.');
+      }
+    }
+  }, [variants, draft]);
 
   // Handlers for UnifiedReviewEditor
   const handleTopicsChange = React.useCallback(async (topics: SessionTopicDraft[]) => {
@@ -388,14 +558,57 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     if (variantsStatus === 'success') {
       if (!variants.length) {
         return (
-          <div className="space-y-4 text-center">
-            <p className="text-sm text-slate-600">
-              We couldn&rsquo;t build outlines this time. Try again to fetch fresh ideas.
-            </p>
-            <div className="flex justify-center">
-              <Button variant="outline" onClick={() => void startVariantGeneration()}>
-                Regenerate Variants
-              </Button>
+          <div className="space-y-6 text-center">
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900 mb-3">Create your session outline</h3>
+              <p className="text-sm text-slate-600 max-w-2xl mx-auto">
+                We couldn't generate variants this time. You can try again or create your own outline from scratch.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              {/* Retry Generation */}
+              <div className="flex flex-col items-center p-6 border border-slate-200 rounded-lg bg-white max-w-sm">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-semibold text-slate-900 mb-2">Try Again</h4>
+                <p className="text-sm text-slate-600 mb-4 text-center">
+                  Give variant generation another attempt with different AI approaches.
+                </p>
+                <Button
+                  onClick={() => void startVariantGeneration()}
+                  disabled={!hasRequiredSetupFields}
+                  className="w-full"
+                >
+                  Regenerate Variants
+                </Button>
+              </div>
+
+              {/* Create Own Option */}
+              <div className="flex flex-col items-center p-6 border border-slate-200 rounded-lg bg-white max-w-sm">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-semibold text-slate-900 mb-2">I'll Create My Own</h4>
+                <p className="text-sm text-slate-600 mb-4 text-center">
+                  Skip AI generation and build your outline from scratch with full creative control.
+                </p>
+                <Button
+                  onClick={() => {
+                    console.log('[Create from Scratch] Button clicked (error state)');
+                    handleCreateOwnOutline();
+                  }}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Create from Scratch
+                </Button>
+              </div>
             </div>
           </div>
         );
@@ -405,7 +618,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
         variantSelectionTime > 0 ? (variantSelectionTime / 1000).toFixed(1) : null;
 
       return (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Choose a session outline</h3>
@@ -415,9 +628,17 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
                 </p>
               )}
             </div>
-            <Button variant="outline" size="sm" onClick={() => void startVariantGeneration()}>
-              Regenerate
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => {
+                console.log('[Create My Own] Button clicked (variant selector)');
+                handleCreateOwnOutline();
+              }}>
+                Create My Own
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void startVariantGeneration()}>
+                Regenerate
+              </Button>
+            </div>
           </div>
           <VariantSelector
             variants={variants}
@@ -453,24 +674,69 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     }
 
     return (
-      <div className="space-y-3 text-center">
-        <h3 className="text-lg font-semibold text-slate-900">Generate multiple session outlines</h3>
-        <p className="text-sm text-slate-600 max-w-xl mx-auto">
-          Compare four AI-crafted variants — including RAG-powered blends — so you can pick the best starting point.
-        </p>
-        <div className="flex flex-col items-center gap-2">
-          <Button
-            onClick={() => void startVariantGeneration()}
-            disabled={!hasRequiredSetupFields}
-          >
-            Generate Variants
-          </Button>
-          {!hasRequiredSetupFields && (
-            <span className="text-xs text-slate-500">
-              Add the desired outcome, category, and location to enable variant generation.
-            </span>
-          )}
+      <div className="space-y-6 text-center">
+        <div>
+          <h3 className="text-xl font-semibold text-slate-900 mb-3">Create your session outline</h3>
+          <p className="text-sm text-slate-600 max-w-2xl mx-auto">
+            Choose how you want to build your session outline. You can generate AI-powered variants to compare different approaches, or create your own from scratch.
+          </p>
         </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          {/* Generate Variants Option */}
+          <div className="flex flex-col items-center p-6 border border-slate-200 rounded-lg bg-white max-w-sm">
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h4 className="text-lg font-semibold text-slate-900 mb-2">Generate 4 Variants</h4>
+            <p className="text-sm text-slate-600 mb-4 text-center">
+              Compare four AI-crafted outlines — including RAG-powered blends — to pick the best starting point.
+            </p>
+            <Button
+              onClick={() => void startVariantGeneration()}
+              disabled={!hasRequiredSetupFields}
+              className="w-full"
+            >
+              Generate Variants
+            </Button>
+          </div>
+
+          {/* Create Own Option */}
+          <div className="flex flex-col items-center p-6 border border-slate-200 rounded-lg bg-white max-w-sm">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <h4 className="text-lg font-semibold text-slate-900 mb-2">I'll Create My Own</h4>
+            <p className="text-sm text-slate-600 mb-4 text-center">
+              Skip AI generation and build your outline from scratch with full creative control.
+            </p>
+            <Button
+              onClick={() => {
+                console.log('[Create from Scratch] Button clicked');
+                handleCreateOwnOutline();
+              }}
+              variant="outline"
+              className="w-full"
+            >
+              Create from Scratch
+            </Button>
+          </div>
+        </div>
+
+        {!hasRequiredSetupFields && (
+          <div className="mt-4 text-center">
+            <p className="text-xs text-amber-600">
+              <svg className="inline-block w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              Add the desired outcome, category, and location to enable variant generation.
+            </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -495,7 +761,13 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     }
 
     if (currentStep === 'generate') {
-      return !draft?.acceptedVersionId;
+      const isDisabled = !draft?.acceptedVersionId && !hasChosenCreateOwn;
+      console.log('[primaryButtonDisabled] Generate step check', {
+        acceptedVersionId: draft?.acceptedVersionId,
+        hasChosenCreateOwn,
+        isDisabled
+      });
+      return isDisabled;
     }
 
     if (currentStep === 'review') {
@@ -507,7 +779,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
     }
 
     return false;
-  }, [currentStep, hasRequiredSetupFields, draft?.acceptedVersionId, canGoNext, isPublishing, publishStatus, canPublish]);
+  }, [currentStep, hasRequiredSetupFields, draft?.acceptedVersionId, hasChosenCreateOwn, canGoNext, isPublishing, publishStatus, canPublish]);
 
   const handlePrimaryAction = React.useCallback(() => {
     if (currentStep === 'finalize') {
@@ -600,11 +872,13 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
           <TrainerAndTopicAssignmentStep
             topics={transformFlexibleSectionsToTopics(draft.outline, draft.metadata)}
             sections={draft.outline.sections}
+            metadata={draft.metadata}
             onTopicsChange={handleTopicsChange}
             onUpdateSection={handleUpdateSection}
             onAddSection={handleAddSection}
             onDeleteSection={handleDeleteSection}
             onMoveSection={handleMoveSection}
+            onUpdateMetadata={updateMetadata}
           />
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
@@ -814,6 +1088,7 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
                 <Button
                   variant="ghost"
                   onClick={prevStep}
+                  disabled={variantsStatus === 'pending'}
                   className="w-full sm:w-auto"
                 >
                   <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -824,17 +1099,19 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
               )}
 
               {/* Right: Primary Action */}
-              <Button
-                onClick={handlePrimaryAction}
-                disabled={primaryButtonDisabled}
-                className="w-full sm:w-auto sm:ml-auto"
-                size="lg"
-              >
-                {primaryButtonLabel}
-                <svg className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Button>
+              {!(currentStep === 'generate' && !draft?.acceptedVersionId && !hasChosenCreateOwn) && (
+                <Button
+                  onClick={handlePrimaryAction}
+                  disabled={primaryButtonDisabled || variantsStatus === 'pending'}
+                  className="w-full sm:w-auto sm:ml-auto"
+                  size="lg"
+                >
+                  {primaryButtonLabel}
+                  <svg className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Button>
+              )}
             </div>
 
             {/* Validation message for disabled state */}
@@ -845,10 +1122,20 @@ const SessionBuilderScreen: React.FC<{ routeSessionId: string; prefilledTopics?:
                 </p>
               </div>
             )}
-            {currentStep === 'generate' && !draft.acceptedVersionId && (
+            {currentStep === 'generate' && !draft.acceptedVersionId && !hasChosenCreateOwn && (
               <div className="mt-3 text-center">
                 <p className="text-sm text-amber-600">
-                  Please select an outline to continue
+                  Please select an outline or create your own to continue
+                </p>
+              </div>
+            )}
+            {variantsStatus === 'pending' && (
+              <div className="mt-3 text-center">
+                <p className="text-sm text-blue-600">
+                  <svg className="inline-block w-4 h-4 mr-1 animate-spin" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                  Generating variants... Navigation is disabled during generation.
                 </p>
               </div>
             )}
@@ -916,7 +1203,20 @@ export const SessionBuilderPage: React.FC = () => {
     return null;
   }, [location.state]);
 
+  // Extract saved variant from navigation state
+  const getSavedVariant = React.useCallback(() => {
+    const stateSavedVariant = (location.state as any)?.savedVariant;
+    if (stateSavedVariant) {
+      console.log('[Session Builder Page] Found saved variant in location.state:', stateSavedVariant);
+      return stateSavedVariant;
+    }
+    return null;
+  }, [location.state]);
+
   const prefilledTopics = getPrefilledTopics();
+  const savedVariant = getSavedVariant();
+  const initialStep = (location.state as any)?.initialStep as BuilderStep | undefined;
+  const isEditingSavedVariant = (location.state as any)?.isEditing;
 
   React.useEffect(() => {
     console.log('[Session Builder Page] Received prefilled topics:', prefilledTopics);
@@ -934,9 +1234,24 @@ export const SessionBuilderPage: React.FC = () => {
       // They will be cleared after successful load in SessionBuilderProvider
 
       // Preserve the prefilled topics when navigating to the new draft
+      const nextState: Record<string, unknown> = {};
+
+      if (prefilledTopics) {
+        nextState.prefilledTopics = prefilledTopics;
+      }
+      if (savedVariant) {
+        nextState.savedVariant = savedVariant;
+      }
+      if (typeof isEditingSavedVariant !== 'undefined') {
+        nextState.isEditing = isEditingSavedVariant;
+      }
+      if (initialStep) {
+        nextState.initialStep = initialStep;
+      }
+
       navigate(`/sessions/builder/${response.draftId}`, {
         replace: true,
-        state: prefilledTopics ? { prefilledTopics } : undefined
+        state: Object.keys(nextState).length > 0 ? nextState : undefined
       });
     } catch (error) {
       console.error('Failed to create builder draft', error);
@@ -945,7 +1260,7 @@ export const SessionBuilderPage: React.FC = () => {
     } finally {
       setIsCreatingDraft(false);
     }
-  }, [navigate, prefilledTopics]);
+  }, [navigate, prefilledTopics, savedVariant, isEditingSavedVariant, initialStep]);
 
   React.useEffect(() => {
     if (sessionId === 'new') {
@@ -1010,8 +1325,17 @@ export const SessionBuilderPage: React.FC = () => {
 
   return (
     <ToastProvider>
-      <SessionBuilderProvider sessionId={sessionId} prefilledTopics={prefilledTopics}>
-        <SessionBuilderScreen routeSessionId={sessionId} prefilledTopics={prefilledTopics} />
+      <SessionBuilderProvider
+        sessionId={sessionId}
+        prefilledTopics={prefilledTopics}
+        savedVariant={savedVariant}
+      >
+        <SessionBuilderScreen
+          routeSessionId={sessionId}
+          prefilledTopics={prefilledTopics}
+          savedVariant={savedVariant}
+          initialStep={initialStep}
+        />
       </SessionBuilderProvider>
     </ToastProvider>
   );

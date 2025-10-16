@@ -216,6 +216,16 @@ const DashboardPage: React.FC = () => {
           </Button>
 
           <Button asChild variant="outline" className="h-auto p-4 justify-start">
+            <Link to="/sessions/saved-variants">
+              <div className="text-left">
+                <div className="text-lg mb-1">💡</div>
+                <div className="font-medium">Saved Ideas</div>
+                <div className="text-xs text-slate-500">AI-generated outlines</div>
+              </div>
+            </Link>
+          </Button>
+
+          <Button asChild variant="outline" className="h-auto p-4 justify-start">
             <Link to="/topics">
               <div className="text-left">
                 <div className="text-lg mb-1">🏷️</div>

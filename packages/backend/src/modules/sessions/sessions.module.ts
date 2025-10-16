@@ -8,6 +8,7 @@ import { RagIntegrationService } from '../../services/rag-integration.service';
 import { PromptsModule } from '../prompts/prompts.module';
 import { AiPromptsModule } from '../ai-prompts/ai-prompts.module';
 import { AIInteractionsService } from '../../services/ai-interactions.service';
+import { VariantCacheService } from '../../services/variant-cache.service';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { VariantConfigsModule } from '../variant-configs/variant-configs.module';
 import { TopicsModule } from '../topics/topics.module';
@@ -25,6 +26,7 @@ import {
   SessionTopic,
   TrainerAssignment,
   Trainer,
+  VariantCache,
 } from '../../entities';
 
 @Module({
@@ -43,6 +45,7 @@ import {
       TrainerAssignment,
       Trainer,
       AIInteraction,
+      VariantCache,
     ]),
     PromptsModule,
     AiPromptsModule,
@@ -51,7 +54,7 @@ import {
     TopicsModule,
   ],
   controllers: [SessionsController],
-  providers: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService],
+  providers: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService, VariantCacheService],
   exports: [SessionsService, ReadinessScoringService, OpenAIService, RagIntegrationService, AIInteractionsService],
 })
 export class SessionsModule {}
