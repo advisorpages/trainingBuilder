@@ -20,6 +20,7 @@ export interface SessionTopicDraft {
   trainerIds?: number[]; // New multiple trainers support
   trainerName?: string;
   sectionId?: string;
+  position?: number;
 }
 
 export interface SessionMetadata {

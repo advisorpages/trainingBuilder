@@ -649,7 +649,7 @@ export const ManageSessionsPage: React.FC = () => {
   };
 
   const handleEditSession = (sessionId: string) => {
-    navigate(`/sessions/edit/${sessionId}`);
+    navigate(`/sessions/builder/edit/${sessionId}`);
   };
 
   const handleNewGuidedSession = () => {

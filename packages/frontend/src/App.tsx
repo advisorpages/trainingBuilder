@@ -68,6 +68,14 @@ function App() {
             }
           />
           <Route
+            path="/sessions/builder/edit/:sessionId"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <SessionBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/sessions/builder/classic/:sessionId"
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>

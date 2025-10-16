@@ -692,12 +692,15 @@ const SessionEditPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Session Content - Topics */}
+            {/* Session Content - Enhanced Topic Management */}
             <div className="space-y-6">
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold text-slate-900">Session Content</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Topics & Assignments</h2>
                 <div className="h-px bg-slate-200 flex-1"></div>
               </div>
+              <p className="text-slate-600">
+                Drag topics to reorder, click edit to modify details inline, and assign trainers to each topic.
+              </p>
 
               {/* Warning message for trainer/topic loading issues */}
               {loadError && (
@@ -719,7 +722,7 @@ const SessionEditPage: React.FC = () => {
                 </div>
               )}
 
-              {/* New Session Flow Summary - CENTERPIECE */}
+              {/* Enhanced Session Flow Summary - CENTERPIECE */}
               <SessionFlowSummary
                 sessionTitle={formData.title}
                 sessionTopics={formData.sessionTopics}
@@ -730,6 +733,23 @@ const SessionEditPage: React.FC = () => {
                 onEditTopic={handleEditTopicDetails}
                 onRemoveTopic={handleRemoveTopic}
                 onReorder={handleReorderTopics}
+                onUpdateTopic={(topicId, updates) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    sessionTopics: prev.sessionTopics.map(topic =>
+                      topic.topicId === topicId ? { ...topic, ...updates } : topic
+                    )
+                  }));
+                }}
+                onAssignTrainer={(topicId, trainerId) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    sessionTopics: prev.sessionTopics.map(topic =>
+                      topic.topicId === topicId ? { ...topic, assignedTrainerId: trainerId || undefined } : topic
+                    )
+                  }));
+                }}
+                editMode="edit"
               />
             </div>
 
