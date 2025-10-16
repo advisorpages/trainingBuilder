@@ -112,6 +112,10 @@ export class ImportSessionItemDto {
   toneId?: number;
 
   @IsOptional()
+  @IsInt()
+  marketingToneId?: number;
+
+  @IsOptional()
   @IsString()
   objective?: string;
 

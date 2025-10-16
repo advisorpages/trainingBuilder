@@ -116,3 +116,8 @@ export const DEFAULTS = {
   MAX_REGISTRATIONS_PER_SESSION: 50,
   LOCATION_CAPACITY: 30,
 } as const;
+
+export const TONE_DEFAULTS = {
+  INSTRUCTIONAL: 'Instructional',
+  MARKETING: 'Conversational',
+} as const;

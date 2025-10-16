@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { aiPromptService, PromptTemplate } from '../../services/ai-prompt.service';
 import { aiContentService, AIContentResponse } from '../../services/ai-content.service';
+import { TONE_DEFAULTS } from '@leadership-training/shared';
+
+const DEFAULT_MARKETING_TONE_NAME = TONE_DEFAULTS.MARKETING;
 
 interface AIContentSectionProps {
   sessionData: any;
   audiences: any[]; // Loaded audiences data
-  tones: any[]; // Loaded tones data
+  marketingTones: any[]; // Loaded marketing tones
   categories: any[]; // Loaded categories data
   topics: any[]; // Loaded topics data
   isExpanded: boolean;
@@ -16,7 +19,7 @@ interface AIContentSectionProps {
 export const AIContentSection: React.FC<AIContentSectionProps> = ({
   sessionData,
   audiences,
-  tones,
+  marketingTones,
   categories,
   topics,
   isExpanded,
@@ -68,7 +71,8 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
 
       // Look up actual names from loaded dropdown data
       const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
-      const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+      const selectedMarketingTone = sessionData.marketingToneId ? marketingTones.find(t => t.id === Number(sessionData.marketingToneId)) : undefined;
+      const marketingToneForPrompt = selectedMarketingTone ?? { name: DEFAULT_MARKETING_TONE_NAME };
       const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
       const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
 
@@ -81,7 +85,7 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
           startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
           endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000),
           audience: selectedAudience,
-          tone: selectedTone,
+          tone: marketingToneForPrompt,
           category: selectedCategory,
           topics: selectedTopics,
           maxRegistrations: sessionData.maxRegistrations || 50,
@@ -112,7 +116,8 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
       if (generationMode === 'automated') {
         // Look up actual names from loaded dropdown data
         const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
-        const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+        const selectedMarketingTone = sessionData.marketingToneId ? marketingTones.find(t => t.id === Number(sessionData.marketingToneId)) : undefined;
+        const marketingToneForPrompt = selectedMarketingTone ?? { name: DEFAULT_MARKETING_TONE_NAME };
         const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
         const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
 
@@ -126,7 +131,7 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
             endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000),
             maxRegistrations: sessionData.maxRegistrations || 50,
             audience: selectedAudience,
-            tone: selectedTone,
+            tone: marketingToneForPrompt,
             category: selectedCategory,
             topics: selectedTopics,
           }
@@ -317,7 +322,8 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
         try {
           // Look up actual names from loaded dropdown data
           const selectedAudience = sessionData.audienceId ? audiences.find(a => a.id === Number(sessionData.audienceId)) : undefined;
-          const selectedTone = sessionData.toneId ? tones.find(t => t.id === Number(sessionData.toneId)) : undefined;
+          const selectedMarketingTone = sessionData.marketingToneId ? marketingTones.find(t => t.id === Number(sessionData.marketingToneId)) : undefined;
+          const marketingToneForPrompt = selectedMarketingTone ?? { name: DEFAULT_MARKETING_TONE_NAME };
           const selectedCategory = sessionData.categoryId ? categories.find(c => c.id === Number(sessionData.categoryId)) : undefined;
           const selectedTopics = sessionData.topicIds?.length > 0 ? topics.filter(t => sessionData.topicIds.includes(t.id.toString())) : undefined;
 
@@ -330,7 +336,7 @@ export const AIContentSection: React.FC<AIContentSectionProps> = ({
               startTime: sessionData.startTime ? new Date(sessionData.startTime) : new Date(),
               endTime: sessionData.endTime ? new Date(sessionData.endTime) : new Date(Date.now() + 2 * 60 * 60 * 1000),
               audience: selectedAudience,
-              tone: selectedTone,
+              tone: marketingToneForPrompt,
               category: selectedCategory,
               topics: selectedTopics,
               maxRegistrations: sessionData.maxRegistrations || 50,

@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/auth/ProtectedRoute'
-import SessionTimeoutWarning from './components/auth/SessionTimeoutWarning'
 import ErrorBoundary from './components/ErrorBoundary'
 import { UserRole } from './types/auth.types'
 import PublicHomepage from './pages/PublicHomepage'
@@ -204,7 +203,6 @@ function App() {
           </Routes>
         </main>
 
-      <SessionTimeoutWarning warningThreshold={5} />
     </div>
     </ErrorBoundary>
   )

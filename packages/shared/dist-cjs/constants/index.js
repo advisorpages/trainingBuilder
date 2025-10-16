@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DEFAULTS = exports.ENV_KEYS = exports.PAGINATION = exports.VALIDATION = exports.SESSION_STATUSES = exports.USER_ROLES = exports.API_ENDPOINTS = exports.APP_CONFIG = void 0;
+exports.TONE_DEFAULTS = exports.DEFAULTS = exports.ENV_KEYS = exports.PAGINATION = exports.VALIDATION = exports.SESSION_STATUSES = exports.USER_ROLES = exports.API_ENDPOINTS = exports.APP_CONFIG = void 0;
 // Application constants
 exports.APP_CONFIG = {
     NAME: 'Leadership Training App',
@@ -104,4 +104,9 @@ exports.DEFAULTS = {
     SESSION_DURATION_MINUTES: 120,
     MAX_REGISTRATIONS_PER_SESSION: 50,
     LOCATION_CAPACITY: 30,
+};
+
+exports.TONE_DEFAULTS = {
+    INSTRUCTIONAL: 'Instructional',
+    MARKETING: 'Conversational',
 };

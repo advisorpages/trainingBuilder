@@ -1,10 +1,11 @@
-import { IsString, IsOptional, IsNotEmpty, MaxLength, IsEnum, IsInt, Min, Max, IsArray } from 'class-validator';
-import { ToneStyle, ToneEnergyLevel, ToneSentenceStructure } from '../../../entities/tone.entity';
+import { IsString, IsOptional, IsNotEmpty, MaxLength, IsEnum, IsInt, Min, Max, IsArray, Matches } from 'class-validator';
+import { ToneStyle, ToneEnergyLevel, ToneSentenceStructure, ToneUsageType } from '../../../entities/tone.entity';
 
 export class CreateToneDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
+  @Matches(/^[A-Za-z]+$/, { message: 'Tone name must be a single word using letters only' })
   name: string;
 
   @IsString()
@@ -49,4 +50,8 @@ export class CreateToneDto {
   @IsOptional()
   @MaxLength(2000)
   promptInstructions?: string;
+
+  @IsEnum(ToneUsageType)
+  @IsOptional()
+  usageType?: ToneUsageType;
 }

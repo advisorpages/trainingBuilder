@@ -31,8 +31,8 @@ export class TonesController {
   }
 
   @Get('active')
-  async findActive(): Promise<Tone[]> {
-    return await this.tonesService.findActive();
+  async findActive(@Query() query: ToneQueryDto): Promise<Tone[]> {
+    return await this.tonesService.findActive(query);
   }
 
   @Get(':id')

@@ -3,7 +3,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SessionMetadataForm } from '../SessionMetadataForm';
 import { SessionMetadata } from '../../state/types';
-import { LocationType, MeetingPlatform } from '@leadership-training/shared';
+import { LocationType, MeetingPlatform, TONE_DEFAULTS } from '@leadership-training/shared';
 
 vi.mock('@/components/ui/CategorySelect', () => {
   const Component: React.FC<any> = ({ value, onChange, onCategoryChange, placeholder }) => (
@@ -65,23 +65,15 @@ vi.mock('@/components/ui/AudienceSelect', () => {
   return { __esModule: true, default: Component, AudienceSelect: Component };
 });
 
-vi.mock('@/components/ui/ToneSelect', () => {
-  const Component: React.FC<any> = ({ value, onChange }) => (
-    <input
-      data-testid="tone-select"
-      value={value === undefined || value === '' ? '' : String(value)}
-      onChange={(event) => {
-        const rawValue = event.target.value;
-        onChange(rawValue ? { id: Number(rawValue), name: 'Mock Tone' } : null);
-      }}
-    />
-  );
-  return { __esModule: true, default: Component, ToneSelect: Component };
-});
-
 vi.mock('../../../services/location.service', () => ({
   locationService: {
     getLocations: vi.fn().mockResolvedValue({ locations: [] })
+  }
+}));
+
+vi.mock('../../../services/tone.service', () => ({
+  toneService: {
+    getTones: vi.fn().mockResolvedValue({ tones: [] })
   }
 }));
 
@@ -109,8 +101,10 @@ describe('SessionMetadataForm', () => {
   locationNotes: 'Arrive 15 minutes early',
   audienceId: 5,
   audienceName: 'Team Leads',
-  toneId: 3,
-  toneName: 'Inspirational',
+  toneId: undefined,
+  toneName: undefined,
+  marketingToneId: undefined,
+  marketingToneName: TONE_DEFAULTS.MARKETING,
   };
 
   beforeEach(() => {

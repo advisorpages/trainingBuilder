@@ -48,6 +48,7 @@ export interface Session {
     trainerId?: number;
     audienceId?: number;
     toneId?: number;
+    marketingToneId?: number;
     categoryId?: number;
     maxRegistrations: number;
     aiPrompt?: string;
@@ -70,6 +71,7 @@ export interface Session {
     location?: Location;
     audience?: Audience;
     tone?: Tone;
+    marketingTone?: Tone;
     category?: Category;
     topics?: Topic[];
     sessionTopics?: SessionTopicLink[];
@@ -203,6 +205,11 @@ export declare enum ToneSentenceStructure {
     COMPLEX = "complex",
     VARIED = "varied"
 }
+export declare enum ToneUsageType {
+    INSTRUCTIONAL = "instructional",
+    MARKETING = "marketing",
+    BOTH = "both"
+}
 export interface Audience {
     id: number;
     name: string;
@@ -233,9 +240,11 @@ export interface Tone {
     examplePhrases?: string[];
     promptInstructions?: string;
     isActive: boolean;
+    usageType: ToneUsageType;
     createdAt: Date | string;
     updatedAt: Date | string;
     sessions?: Session[];
+    marketingSessions?: Session[];
 }
 export interface Category {
     id: number;

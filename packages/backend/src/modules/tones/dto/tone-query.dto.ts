@@ -1,5 +1,6 @@
-import { IsOptional, IsString, IsBoolean, IsInt, Min } from 'class-validator';
+import { IsOptional, IsString, IsBoolean, IsInt, Min, IsEnum } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { ToneUsageType } from '../../../entities/tone.entity';
 
 export class ToneQueryDto {
   @IsOptional()
@@ -22,4 +23,8 @@ export class ToneQueryDto {
   @IsInt()
   @Min(1)
   limit?: number = 20;
+
+  @IsOptional()
+  @IsEnum(ToneUsageType)
+  usageType?: ToneUsageType;
 }

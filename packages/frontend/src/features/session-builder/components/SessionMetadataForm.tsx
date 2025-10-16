@@ -4,7 +4,7 @@ import { SessionMetadata, SessionTopicDraft } from '../state/types';
 import { cn } from '../../../lib/utils';
 import { CategorySelect } from '@/components/ui/CategorySelect';
 import { LocationSelect } from '@/components/ui/LocationSelect';
-import { Audience, Tone } from '@leadership-training/shared';
+import { Audience, Tone, ToneUsageType, TONE_DEFAULTS } from '@leadership-training/shared';
 import { audienceService } from '../../../services/audience.service';
 import { toneService } from '../../../services/tone.service';
 
@@ -20,6 +20,9 @@ const sessionTypes: SessionMetadata['sessionType'][] = [
   'event',
   'webinar',
 ];
+
+const DEFAULT_MARKETING_TONE_NAME = TONE_DEFAULTS.MARKETING;
+const DEFAULT_MARKETING_TONE_DESCRIPTION = 'Friendly, relatable voice used when no marketing tone is selected.';
 
 const toDateInputValue = (value: string) => value.slice(0, 10);
 
@@ -69,8 +72,10 @@ const generateTestData = (): SessionMetadata => {
     locationId: 1,
     audienceId: 1,
     audienceName: 'Mid-level Managers',
-    toneId: 1,
-    toneName: 'Professional',
+    toneId: undefined,
+    toneName: undefined,
+    marketingToneId: undefined,
+    marketingToneName: DEFAULT_MARKETING_TONE_NAME,
   };
 };
 
@@ -234,8 +239,10 @@ const generateRecruitingAgentsData = (): SessionMetadata => {
     locationId: 1,
     audienceId: 3,
     audienceName: 'Sales Team Leaders',
-    toneId: 2,
-    toneName: 'Inspiring',
+    toneId: undefined,
+    toneName: undefined,
+    marketingToneId: undefined,
+    marketingToneName: DEFAULT_MARKETING_TONE_NAME,
     topics: [
       {
         title: 'Start With Our Story',
@@ -399,8 +406,8 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
   const [audiences, setAudiences] = React.useState<Audience[]>([]);
   const [audiencesLoading, setAudiencesLoading] = React.useState(false);
   const [selectedPastTopics, setSelectedPastTopics] = React.useState<number[]>([]);
-  const [tones, setTones] = React.useState<Tone[]>([]);
-  const [tonesLoading, setTonesLoading] = React.useState(false);
+  const [marketingTones, setMarketingTones] = React.useState<Tone[]>([]);
+  const [marketingTonesLoading, setMarketingTonesLoading] = React.useState(false);
 
   // Log topics whenever metadata changes
   React.useEffect(() => {
@@ -433,17 +440,17 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
     });
   };
 
-  const handleToneSelect = (tone: Tone) => {
+  const handleMarketingToneSelect = (tone: Tone) => {
     onChange({
-      toneId: tone.id,
-      toneName: tone.name,
+      marketingToneId: tone.id,
+      marketingToneName: tone.name,
     });
   };
 
-  const handleToneClear = () => {
+  const handleMarketingToneClear = () => {
     onChange({
-      toneId: undefined,
-      toneName: undefined,
+      marketingToneId: undefined,
+      marketingToneName: DEFAULT_MARKETING_TONE_NAME,
     });
   };
 
@@ -467,27 +474,27 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
     loadAudiences();
   }, []);
 
-  // Load tones
+  // Load marketing tones
   React.useEffect(() => {
-    const loadTones = async () => {
+    const loadMarketingTones = async () => {
       try {
-        setTonesLoading(true);
+        setMarketingTonesLoading(true);
         const response = await toneService.getTones({
           limit: 20,
           isActive: true,
+          usageType: ToneUsageType.MARKETING,
         });
-        setTones(response.tones || []);
+        setMarketingTones(response.tones || []);
       } catch (error) {
-        console.error('Failed to load tones:', error);
+        console.error('Failed to load marketing tones:', error);
       } finally {
-        setTonesLoading(false);
+        setMarketingTonesLoading(false);
       }
     };
 
-    loadTones();
+    loadMarketingTones();
   }, []);
 
-  
   // Calculate total duration from topics
   const totalDurationMinutes = React.useMemo(() => {
     if (!metadata.topics || metadata.topics.length === 0) return 0;
@@ -942,20 +949,20 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           </CardContent>
       </Card>
 
-      {/* Section 7: What tone should this have? */}
+      {/* Section 7: How should marketing sound? */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <CardTitle className="text-base font-semibold">
-              🎨 What tone should this have?
+              📣 How should the marketing sound?
             </CardTitle>
           </div>
           <p className="text-sm text-slate-600 mt-1">
-            Choose the communication style that best fits your audience and content
+            Pick the voice for promotional content. Leave blank to use our conversational default.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {tonesLoading ? (
+          {marketingTonesLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="p-4 border border-slate-200 rounded-lg animate-pulse">
@@ -964,18 +971,18 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 </div>
               ))}
             </div>
-          ) : tones.length > 0 ? (
+          ) : marketingTones.length > 0 ? (
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {tones.map((tone) => (
+                {marketingTones.map((tone) => (
                   <button
                     key={tone.id}
                     type="button"
-                    onClick={() => handleToneSelect(tone)}
+                    onClick={() => handleMarketingToneSelect(tone)}
                     className={cn(
-                      'p-4 text-left border rounded-lg transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500',
-                      metadata.toneId === tone.id
-                        ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      'p-4 text-left border rounded-lg transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500',
+                      metadata.marketingToneId === tone.id
+                        ? 'border-purple-500 bg-purple-50 text-purple-900'
                         : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50'
                     )}
                   >
@@ -984,10 +991,10 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                   </button>
                 ))}
               </div>
-              {metadata.toneId && (
+              {metadata.marketingToneId && (
                 <button
                   type="button"
-                  onClick={handleToneClear}
+                  onClick={handleMarketingToneClear}
                   className="text-xs text-slate-500 hover:text-slate-700 underline"
                 >
                   Clear selection
@@ -999,12 +1006,15 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
               <svg className="w-12 h-12 text-slate-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
               </svg>
-              <p className="text-sm text-slate-500">No tones available</p>
+              <p className="text-sm text-slate-500">No marketing tones available</p>
             </div>
           )}
-          <p className="text-xs text-slate-500">
-            Optional: This affects how your content sounds and feels
-          </p>
+
+          {!metadata.marketingToneId && (
+            <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Using default: <span className="font-medium text-slate-800">{DEFAULT_MARKETING_TONE_NAME}</span>. {DEFAULT_MARKETING_TONE_DESCRIPTION}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

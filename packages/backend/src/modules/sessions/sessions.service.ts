@@ -15,6 +15,7 @@ import {
   Location,
   Audience,
   Tone,
+  ToneUsageType,
   LocationType,
   MeetingPlatform,
   ContentStatus,
@@ -59,6 +60,9 @@ import {
   PromptSandboxSettings,
   PromptVariantPersona,
 } from '../../services/ai-prompt-settings.service';
+import { TONE_DEFAULTS } from '@leadership-training/shared';
+
+const DEFAULT_MARKETING_TONE_NAME = TONE_DEFAULTS.MARKETING;
 import { ImportSessionsDto, ImportSessionItemDto, ImportSessionTopicDto } from './dto/import-sessions.dto';
 import { recordsToCsv, CsvColumn } from '../../utils/csv.util';
 import { TopicsService } from '../topics/topics.service';
@@ -192,6 +196,8 @@ export interface SessionExportRecord {
   audienceName: string | null;
   toneId: number | null;
   toneName: string | null;
+  marketingToneId: number | null;
+  marketingToneName: string | null;
   objective?: string | null;
   publishedAt: string | null;
   createdAt: string | null;
@@ -393,6 +399,8 @@ export class SessionsService {
         'sessionTopics.topic',
         'contentVersions',
         'agendaItems',
+        'tone',
+        'marketingTone',
       ],
     });
 
@@ -453,6 +461,10 @@ export class SessionsService {
       session.toneId = dto.toneId;
     }
 
+    const marketingTone = await this.resolveMarketingToneEntity(dto.marketingToneId ?? null);
+    session.marketingToneId = marketingTone ? marketingTone.id : null;
+    session.marketingTone = marketingTone ?? null;
+
     if (session.status === SessionStatus.PUBLISHED) {
       session.publishedAt = session.publishedAt ?? new Date();
     }
@@ -502,6 +514,11 @@ export class SessionsService {
     if (dto.locationId !== undefined) session.locationId = dto.locationId;
     if (dto.audienceId !== undefined) session.audienceId = dto.audienceId;
     if (dto.toneId !== undefined) session.toneId = dto.toneId;
+    if (dto.marketingToneId !== undefined) {
+      const marketingTone = await this.resolveMarketingToneEntity(dto.marketingToneId ?? null);
+      session.marketingToneId = marketingTone ? marketingTone.id : null;
+      session.marketingTone = marketingTone ?? null;
+    }
     if (dto.categoryId !== undefined) session.categoryId = dto.categoryId;
 
     if (dto.startTime !== undefined) {
@@ -1544,6 +1561,18 @@ export class SessionsService {
 
     const primaryTopic = session?.topics?.[0];
 
+    const selectedMarketingToneId = metadata.marketingToneId ?? session?.marketingToneId ?? null;
+    let marketingToneName = metadata.marketingToneName ?? session?.marketingTone?.name ?? null;
+
+    if (!marketingToneName) {
+      if (selectedMarketingToneId) {
+        const marketingTone = await this.resolveMarketingToneEntity(selectedMarketingToneId);
+        marketingToneName = marketingTone?.name ?? DEFAULT_MARKETING_TONE_NAME;
+      } else {
+        marketingToneName = DEFAULT_MARKETING_TONE_NAME;
+      }
+    }
+
     return {
       id: session?.id ?? sessionId,
       draftId: sessionId,
@@ -1572,6 +1601,8 @@ export class SessionsService {
       audienceName: metadata.audienceName ?? null,
       toneId: metadata.toneId ?? null,
       toneName: metadata.toneName ?? null,
+      marketingToneId: selectedMarketingToneId,
+      marketingToneName,
       aiGeneratedContent: outline
         ? {
             outline,
@@ -1811,6 +1842,36 @@ export class SessionsService {
     };
   }
 
+  private async resolveMarketingToneEntity(toneId?: number | null): Promise<Tone | null> {
+    const toneRepository = this.sessionsRepository.manager.getRepository(Tone);
+
+    if (toneId) {
+      const tone = await toneRepository.findOne({
+        where: { id: toneId, isActive: true },
+      });
+      if (tone) {
+        return tone;
+      }
+    }
+
+    const defaultTone = await toneRepository.findOne({
+      where: { name: ILike(DEFAULT_MARKETING_TONE_NAME), isActive: true },
+    });
+    if (defaultTone) {
+      return defaultTone;
+    }
+
+    const fallbackTone = await toneRepository.findOne({
+      where: [
+        { usageType: ToneUsageType.MARKETING, isActive: true },
+        { usageType: ToneUsageType.BOTH, isActive: true },
+      ],
+      order: { updatedAt: 'DESC' },
+    });
+
+    return fallbackTone ?? null;
+  }
+
   private ensureOutline(rawOutline?: SessionOutlinePayload | null): SessionOutlinePayload {
     if (!rawOutline) {
       return this.createEmptyOutline();
@@ -1984,7 +2045,7 @@ export class SessionsService {
 
   async exportAllSessionsDetailed(): Promise<SessionExportRecord[]> {
     const sessions = await this.sessionsRepository.find({
-      relations: ['contentVersions', 'category', 'location', 'audience', 'tone', 'topics'],
+      relations: ['contentVersions', 'category', 'location', 'audience', 'tone', 'marketingTone', 'topics'],
       order: { updatedAt: 'DESC' },
     });
 
@@ -2021,6 +2082,8 @@ export class SessionsService {
         audienceName: session.audience?.name ?? null,
         toneId: session.toneId ?? null,
         toneName: session.tone?.name ?? null,
+        marketingToneId: session.marketingToneId ?? null,
+        marketingToneName: session.marketingTone?.name ?? DEFAULT_MARKETING_TONE_NAME,
         objective: session.objective ?? null,
         publishedAt: this.toIsoString(session.publishedAt),
         createdAt: this.toIsoString(session.createdAt),
@@ -2377,6 +2440,12 @@ export class SessionsService {
       session.toneId = sessionDto.toneId ?? null;
     }
 
+    if (sessionDto.marketingToneId !== undefined) {
+      const marketingTone = await this.resolveMarketingToneEntity(sessionDto.marketingToneId ?? null);
+      session.marketingToneId = marketingTone ? marketingTone.id : null;
+      session.marketingTone = marketingTone ?? null;
+    }
+
     if (sessionDto.publishedAt) {
       const publishedDate = new Date(sessionDto.publishedAt);
       if (!Number.isNaN(publishedDate.getTime())) {
@@ -2500,6 +2569,8 @@ export class SessionsService {
         'sessionTopics.topic',
         'landingPage',
         'incentives',
+        'tone',
+        'marketingTone',
       ],
     });
     console.log('Backend service - found sessions:', sessions.map(s => ({ id: s.id, currentStatus: s.status })));
@@ -2571,6 +2642,8 @@ export class SessionsService {
         'sessionTopics.topic',
         'landingPage',
         'incentives',
+        'tone',
+        'marketingTone',
       ],
     });
     console.log('Backend service - found sessions for publish:', sessions.map(s => ({ id: s.id, status: s.status, readinessScore: s.readinessScore })));

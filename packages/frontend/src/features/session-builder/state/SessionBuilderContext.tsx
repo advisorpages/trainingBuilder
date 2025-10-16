@@ -1,3 +1,4 @@
+import { TONE_DEFAULTS } from '@leadership-training/shared';
 import * as React from 'react';
 import {
   sessionBuilderService,
@@ -100,6 +101,8 @@ function buildDefaultMetadata(): SessionMetadata {
     audienceName: undefined,
     toneId: undefined,
     toneName: undefined,
+    marketingToneId: undefined,
+    marketingToneName: TONE_DEFAULTS.MARKETING,
   };
 }
 
@@ -129,6 +132,8 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     audienceName: metadata.audienceName,
     toneId: metadata.toneId,
     toneName: metadata.toneName,
+    marketingToneId: metadata.marketingToneId,
+    marketingToneName: metadata.marketingToneName ?? TONE_DEFAULTS.MARKETING,
   };
 }
 
@@ -161,6 +166,8 @@ function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
     audienceName: input.audienceName ?? undefined,
     toneId: input.toneId,
     toneName: input.toneName ?? undefined,
+    marketingToneId: input.marketingToneId,
+    marketingToneName: input.marketingToneName ?? TONE_DEFAULTS.MARKETING,
   };
 }
 
@@ -497,6 +504,8 @@ export const SessionBuilderProvider: React.FC<{
         audienceName: metadataFromVariant?.audienceName,
         toneId: metadataFromVariant?.toneId,
         toneName: metadataFromVariant?.toneName,
+        marketingToneId: metadataFromVariant?.marketingToneId,
+        marketingToneName: metadataFromVariant?.marketingToneName ?? TONE_DEFAULTS.MARKETING,
         topics: metadataFromVariant?.topics || [],
       };
 
@@ -606,6 +615,8 @@ export const SessionBuilderProvider: React.FC<{
             audienceName: metadataFromDraft?.audienceName ?? serverDraft.audienceName ?? undefined,
             toneId: metadataFromDraft?.toneId ?? serverDraft.toneId,
             toneName: metadataFromDraft?.toneName ?? serverDraft.toneName ?? undefined,
+            marketingToneId: metadataFromDraft?.marketingToneId ?? serverDraft.marketingToneId,
+            marketingToneName: metadataFromDraft?.marketingToneName ?? serverDraft.marketingToneName ?? TONE_DEFAULTS.MARKETING,
             // If topics aren't in the draft metadata, check if we have prefilled topics
             topics: metadataFromDraft?.topics ?? [],
           };

@@ -25,6 +25,12 @@ export enum ToneSentenceStructure {
   VARIED = 'varied',
 }
 
+export enum ToneUsageType {
+  INSTRUCTIONAL = 'instructional',
+  MARKETING = 'marketing',
+  BOTH = 'both',
+}
+
 @Entity('tones')
 export class Tone {
   @PrimaryGeneratedColumn()
@@ -77,6 +83,15 @@ export class Tone {
   @Column({ type: 'text', nullable: true, name: 'prompt_instructions' })
   promptInstructions?: string; // Direct AI instructions
 
+  @Column({
+    type: 'enum',
+    enum: ToneUsageType,
+    enumName: 'tone_usage_type_enum',
+    default: ToneUsageType.INSTRUCTIONAL,
+    name: 'usage_type',
+  })
+  usageType: ToneUsageType;
+
   @Column({ type: 'boolean', default: true, name: 'is_active' })
   isActive: boolean;
 
@@ -88,4 +103,7 @@ export class Tone {
 
   @OneToMany(() => Session, session => session.tone)
   sessions?: Session[];
+
+  @OneToMany(() => Session, session => session.marketingTone)
+  marketingSessions?: Session[];
 }

@@ -45,6 +45,8 @@ export interface SessionMetadata {
   audienceName?: string;
   toneId?: number;
   toneName?: string;
+  marketingToneId?: number;
+  marketingToneName?: string;
   topics?: SessionTopicDraft[];
 }
 

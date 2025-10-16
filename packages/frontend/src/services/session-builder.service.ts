@@ -1,4 +1,5 @@
 
+import { TONE_DEFAULTS } from '@leadership-training/shared';
 import { api } from './api.service';
 import type { LocationType, MeetingPlatform, Session } from '@leadership-training/shared';
 
@@ -31,6 +32,8 @@ export interface SessionBuilderInput {
   audienceName?: string;
   toneId?: number;
   toneName?: string;
+  marketingToneId?: number;
+  marketingToneName?: string;
 }
 
 export interface SessionOutlineSection {
@@ -291,6 +294,7 @@ const sanitizeSessionBuilderInput = (input: SessionBuilderInput) => {
     categoryId: _categoryId,
     categoryName: _categoryName,
     toneName: _toneName,
+    marketingToneName: _marketingToneName,
     ...cleanInput
   } = input;
 
@@ -715,6 +719,10 @@ export class SessionBuilderService {
 
     if (typeof input.toneId === 'number') {
       payload.toneId = input.toneId;
+    }
+
+    if (typeof input.marketingToneId === 'number') {
+      payload.marketingToneId = input.marketingToneId;
     }
 
     // Add sessionTopics with trainer assignments

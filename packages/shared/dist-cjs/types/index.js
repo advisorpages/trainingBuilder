@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.IncentiveStatus = exports.ToneSentenceStructure = exports.ToneEnergyLevel = exports.ToneStyle = exports.AudienceVocabularyLevel = exports.AudienceCommunicationStyle = exports.AudienceExperienceLevel = exports.SettingDataType = exports.MeetingPlatform = exports.LocationType = exports.SessionStatus = exports.UserRole = void 0;
+exports.IncentiveStatus = exports.ToneUsageType = exports.ToneSentenceStructure = exports.ToneEnergyLevel = exports.ToneStyle = exports.AudienceVocabularyLevel = exports.AudienceCommunicationStyle = exports.AudienceExperienceLevel = exports.SettingDataType = exports.MeetingPlatform = exports.LocationType = exports.SessionStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["BROKER"] = "Broker";
@@ -84,6 +84,12 @@ var ToneSentenceStructure;
     ToneSentenceStructure["COMPLEX"] = "complex";
     ToneSentenceStructure["VARIED"] = "varied";
 })(ToneSentenceStructure || (exports.ToneSentenceStructure = ToneSentenceStructure = {}));
+var ToneUsageType;
+(function (ToneUsageType) {
+    ToneUsageType["INSTRUCTIONAL"] = "instructional";
+    ToneUsageType["MARKETING"] = "marketing";
+    ToneUsageType["BOTH"] = "both";
+})(ToneUsageType || (exports.ToneUsageType = ToneUsageType = {}));
 var IncentiveStatus;
 (function (IncentiveStatus) {
     IncentiveStatus["DRAFT"] = "draft";

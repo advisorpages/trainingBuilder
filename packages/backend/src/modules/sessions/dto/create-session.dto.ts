@@ -98,6 +98,11 @@ export class CreateSessionDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  marketingToneId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   categoryId?: number;
 
   @IsOptional()

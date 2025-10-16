@@ -101,6 +101,9 @@ export class SuggestOutlineDto {
   toneId?: number;
 
   @IsOptional()
+  marketingToneId?: number;
+
+  @IsOptional()
   locationId?: number;
 
   @IsOptional()

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tone } from '../../entities/tone.entity';
+import { Tone, ToneUsageType } from '../../entities/tone.entity';
 import { CreateToneDto, UpdateToneDto, ToneQueryDto } from './dto';
 
 export interface PaginatedTonesResponse {
@@ -34,12 +34,15 @@ export class TonesService {
       throw new ConflictException('Tone with this name already exists');
     }
 
-    const tone = this.toneRepository.create(createToneDto);
+    const tone = this.toneRepository.create({
+      ...createToneDto,
+      usageType: createToneDto.usageType ?? ToneUsageType.INSTRUCTIONAL,
+    });
     return await this.toneRepository.save(tone);
   }
 
   async findAll(query: ToneQueryDto): Promise<PaginatedTonesResponse> {
-    const { search, isActive, page = 1, limit = 20 } = query;
+    const { search, isActive, usageType, page = 1, limit = 20 } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.toneRepository.createQueryBuilder('tone');
@@ -53,6 +56,11 @@ export class TonesService {
 
     if (isActive !== undefined) {
       queryBuilder.andWhere('tone.isActive = :isActive', { isActive });
+    }
+
+    const usageTypes = this.resolveUsageTypesFilter(usageType);
+    if (usageTypes) {
+      queryBuilder.andWhere('tone.usageType IN (:...usageTypes)', { usageTypes });
     }
 
     queryBuilder
@@ -71,17 +79,24 @@ export class TonesService {
     };
   }
 
-  async findActive(): Promise<Tone[]> {
-    return await this.toneRepository.find({
-      where: { isActive: true },
-      order: { name: 'ASC' },
-    });
+  async findActive(query: Partial<ToneQueryDto> = {}): Promise<Tone[]> {
+    const queryBuilder = this.toneRepository
+      .createQueryBuilder('tone')
+      .where('tone.isActive = :isActive', { isActive: true })
+      .orderBy('tone.name', 'ASC');
+
+    const usageTypes = this.resolveUsageTypesFilter(query.usageType);
+    if (usageTypes) {
+      queryBuilder.andWhere('tone.usageType IN (:...usageTypes)', { usageTypes });
+    }
+
+    return await queryBuilder.getMany();
   }
 
   async findOne(id: number): Promise<Tone> {
     const tone = await this.toneRepository.findOne({
       where: { id },
-      relations: ['sessions'],
+      relations: ['sessions', 'marketingSessions'],
     });
 
     if (!tone) {
@@ -126,17 +141,31 @@ export class TonesService {
   async checkUsage(id: number): Promise<UsageCheckResponse> {
     const tone = await this.toneRepository.findOne({
       where: { id },
-      relations: ['sessions'],
+      relations: ['sessions', 'marketingSessions'],
     });
 
     if (!tone) {
       throw new NotFoundException(`Tone with ID ${id} not found`);
     }
 
-    const sessionCount = tone.sessions?.length || 0;
+    const instructionalCount = tone.sessions?.length ?? 0;
+    const marketingCount = tone.marketingSessions?.length ?? 0;
+    const sessionCount = instructionalCount + marketingCount;
     return {
       inUse: sessionCount > 0,
       sessionCount,
     };
+  }
+
+  private resolveUsageTypesFilter(usageType?: ToneUsageType): ToneUsageType[] | undefined {
+    if (!usageType) {
+      return undefined;
+    }
+
+    if (usageType === ToneUsageType.BOTH) {
+      return [ToneUsageType.BOTH, ToneUsageType.INSTRUCTIONAL, ToneUsageType.MARKETING];
+    }
+
+    return [usageType, ToneUsageType.BOTH];
   }
 }

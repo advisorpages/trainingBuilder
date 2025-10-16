@@ -86,3 +86,7 @@ export declare const DEFAULTS: {
     readonly MAX_REGISTRATIONS_PER_SESSION: 50;
     readonly LOCATION_CAPACITY: 30;
 };
+export declare const TONE_DEFAULTS: {
+    readonly INSTRUCTIONAL: "Instructional";
+    readonly MARKETING: "Conversational";
+};

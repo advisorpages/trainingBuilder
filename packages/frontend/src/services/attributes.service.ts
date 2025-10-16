@@ -1,5 +1,5 @@
 import { api } from './api.service';
-import { Audience, Tone, Category, Topic } from '@leadership-training/shared';
+import { Audience, Tone, Category, Topic, ToneUsageType } from '@leadership-training/shared';
 
 class AttributesService {
   async getAudiences(): Promise<Audience[]> {
@@ -7,8 +7,9 @@ class AttributesService {
     return response.data;
   }
 
-  async getTones(): Promise<Tone[]> {
-    const response = await api.get<Tone[]>('/admin/tones/active');
+  async getTones(usageType?: ToneUsageType): Promise<Tone[]> {
+    const url = usageType ? `/admin/tones/active?usageType=${usageType}` : '/admin/tones/active';
+    const response = await api.get<Tone[]>(url);
     return response.data;
   }
 

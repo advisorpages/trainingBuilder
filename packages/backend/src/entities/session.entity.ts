@@ -83,6 +83,9 @@ export class Session extends BaseEntity {
   @Column({ type: 'int', name: 'tone_id', nullable: true })
   toneId?: number;
 
+  @Column({ type: 'int', name: 'marketing_tone_id', nullable: true })
+  marketingToneId?: number;
+
   @Column({ type: 'int', name: 'category_id', nullable: true })
   categoryId?: number;
 
@@ -104,6 +107,10 @@ export class Session extends BaseEntity {
   @ManyToOne(() => Tone, (tone) => tone.sessions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'tone_id' })
   tone?: Tone;
+
+  @ManyToOne(() => Tone, (tone) => tone.marketingSessions, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'marketing_tone_id' })
+  marketingTone?: Tone;
 
   @ManyToOne(() => Trainer, (trainer) => trainer.sessions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'trainer_id' })

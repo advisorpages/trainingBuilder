@@ -1,5 +1,5 @@
 import { api } from './api.service';
-import { Tone, ToneStyle, ToneEnergyLevel, ToneSentenceStructure } from '@leadership-training/shared';
+import { Tone, ToneStyle, ToneEnergyLevel, ToneSentenceStructure, ToneUsageType } from '@leadership-training/shared';
 import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateToneRequest {
@@ -13,6 +13,7 @@ export interface CreateToneRequest {
   emotionalResonance?: string[];
   examplePhrases?: string[];
   promptInstructions?: string;
+  usageType?: ToneUsageType;
 }
 
 export interface UpdateToneRequest extends Partial<CreateToneRequest> {
@@ -24,6 +25,7 @@ export interface ToneQueryParams {
   isActive?: boolean;
   page?: number;
   limit?: number;
+  usageType?: ToneUsageType;
 }
 
 export interface PaginatedTonesResponse {
@@ -57,8 +59,9 @@ class ToneService {
     return response.data;
   }
 
-  async getActiveTones(): Promise<Tone[]> {
-    const response = await api.get<Tone[]>(`${this.baseUrl}/active`);
+  async getActiveTones(usageType?: ToneUsageType): Promise<Tone[]> {
+    const url = usageType ? `${this.baseUrl}/active?usageType=${usageType}` : `${this.baseUrl}/active`;
+    const response = await api.get<Tone[]>(url);
     return response.data;
   }
 

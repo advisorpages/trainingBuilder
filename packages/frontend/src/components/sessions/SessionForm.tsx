@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Session, Trainer, Location, Audience, Tone, Category, Topic } from '@leadership-training/shared';
+import { Session, Trainer, Location, Audience, Tone, Category, Topic, ToneUsageType, TONE_DEFAULTS } from '@leadership-training/shared';
 import { CreateSessionRequest, UpdateSessionRequest, sessionService } from '../../services/session.service';
 import { trainerService } from '../../services/trainer.service';
 import { locationService } from '../../services/location.service';
@@ -28,6 +28,7 @@ type SessionFormState = {
   locationId: number | '';
   audienceId: number | '';
   toneId: number | '';
+  marketingToneId: number | '';
   categoryId: number | '';
   topicIds: string[];
   sessionTopics: SessionTopicDetail[];
@@ -92,6 +93,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     locationId: session?.locationId || '',
     audienceId: session?.audienceId || '',
     toneId: session?.toneId || '',
+    marketingToneId: session?.marketingToneId || '',
     categoryId: session?.categoryId || '',
     topicIds: session?.topics?.map(t => t.id.toString()) || ([] as string[]),
     sessionTopics: (session?.sessionTopics || []).map((sessionTopic, index) => ({
@@ -122,6 +124,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
   const [locations, setLocations] = useState<Location[]>([]);
   const [audiences, setAudiences] = useState<Audience[]>([]);
   const [tones, setTones] = useState<Tone[]>([]);
+  const [marketingTones, setMarketingTones] = useState<Tone[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -161,14 +164,16 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           trainersResponse,
           locationsResponse,
           audiencesResponse,
-          tonesResponse,
+          instructionalTonesResponse,
+          marketingTonesResponse,
           categoriesResponse,
           topicsResponse
         ] = await Promise.all([
           trainerService.getActiveTrainers(),
           locationService.getActiveLocations(),
           attributesService.getAudiences(),
-          attributesService.getTones(),
+          attributesService.getTones(ToneUsageType.INSTRUCTIONAL),
+          attributesService.getTones(ToneUsageType.MARKETING),
           attributesService.getCategories(),
           topicService.getActiveTopics()
         ]);
@@ -179,7 +184,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         setTrainers(trainersResponse);
         setLocations(locationsResponse);
         setAudiences(audiencesResponse);
-        setTones(tonesResponse);
+        setTones(instructionalTonesResponse);
+        setMarketingTones(marketingTonesResponse);
         setCategories(categoriesResponse);
         setTopics(topicsResponse);
 
@@ -294,6 +300,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         locationId: formData.locationId ? Number(formData.locationId) : undefined,
         audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
         toneId: formData.toneId ? Number(formData.toneId) : undefined,
+        marketingToneId: formData.marketingToneId ? Number(formData.marketingToneId) : undefined,
         categoryId: formData.categoryId ? Number(formData.categoryId) : undefined,
         topicIds: formData.topicIds.length > 0 ? formData.topicIds.map((id: string) => Number(id)) : undefined,
         sessionTopics: sessionTopicsPayload.length > 0 ? sessionTopicsPayload : undefined,
@@ -490,6 +497,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
         locationId: formData.locationId ? Number(formData.locationId) : undefined,
         audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
         toneId: formData.toneId ? Number(formData.toneId) : undefined,
+        marketingToneId: formData.marketingToneId ? Number(formData.marketingToneId) : undefined,
         categoryId: formData.categoryId ? Number(formData.categoryId) : undefined,
         topicIds: formData.topicIds.length > 0 ? formData.topicIds.map((id: string) => Number(id)) : undefined,
         sessionTopics: sessionTopicsPayload.length > 0 ? sessionTopicsPayload : undefined,
@@ -838,7 +846,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
           {/* Scheduling Section */}
           <div>
             <h3 className="text-md font-medium text-gray-900 mb-4">Scheduling</h3>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-4">
               {/* Start Time */}
               <div>
                 <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
@@ -981,6 +989,29 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                 </select>
               </div>
 
+              {/* Marketing Tone */}
+              <div>
+                <label htmlFor="marketingToneId" className="block text-sm font-medium text-gray-700">
+                  Marketing Tone
+                </label>
+                <select
+                  id="marketingToneId"
+                  value={formData.marketingToneId}
+                  onChange={(e) => handleInputChange('marketingToneId', e.target.value ? parseInt(e.target.value, 10) : '')}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="">{`Use default (${TONE_DEFAULTS.MARKETING})`}</option>
+                  {marketingTones.map((tone) => (
+                    <option key={tone.id} value={tone.id}>
+                      {tone.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Controls the voice for promotional content. Defaults to {TONE_DEFAULTS.MARKETING} when not selected.
+                </p>
+              </div>
+
               {/* Category */}
               <div>
                 <label htmlFor="categoryId" className="block text-sm font-medium text-gray-700">
@@ -1068,7 +1099,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
               <AIContentSection
                 sessionData={formData}
                 audiences={audiences}
-                tones={tones}
+                marketingTones={marketingTones}
                 categories={categories}
                 topics={topics}
                 isExpanded={isAIContentExpanded}

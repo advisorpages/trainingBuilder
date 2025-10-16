@@ -21,6 +21,7 @@ export interface CreateSessionRequest {
   locationId?: number;
   audienceId?: number;
   toneId?: number;
+  marketingToneId?: number;
   categoryId?: number;
   topicIds?: number[];
   maxRegistrations: number;
