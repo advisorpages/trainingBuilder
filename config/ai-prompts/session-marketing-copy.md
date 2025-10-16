@@ -27,6 +27,7 @@ You are an expert marketing copywriter specializing in leadership training and p
 **Tone & Style:**
 - Target Tone: {tone}
 - Category: {category}
+- Voice Guardrails: Keep language conversational, trainer-friendly, and grounded in real scenarios. Avoid corporate buzzwords, stiff phrasing, or hypey sales language.
 
 **CRITICAL JSON FORMATTING REQUIREMENTS:**
 - Return ONLY valid JSON - no markdown, no code blocks, no extra text
@@ -95,11 +96,11 @@ Generate comprehensive promotional content in this EXACT JSON structure with EXA
 
 **Content Requirements:**
 - Use AIDA (Attention, Interest, Desire, Action) and PAS (Problem, Agitation, Solution) structure
-- Professional tone appropriate for business training
+- Mirror the tone profile guidance so it feels like a trusted colleague speaking
 - Focus on benefits over features, use active voice
-- Create urgency and desire to attend
+- Create urgency and desire to attend without sounding high-pressure
 - Make it irresistible to the target audience
-- Ensure all content is compelling and action-oriented
+- Ensure all content is compelling, specific, and action-oriented
 - Content should be optimized for both landing pages and social sharing
 
 **FINAL VALIDATION STEP:**

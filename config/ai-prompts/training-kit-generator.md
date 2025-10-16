@@ -36,4 +36,4 @@ Focus on:
 - Practical tips that improve delivery quality
 - Contingency planning for common challenges
 - Resources that enhance learning outcomes
-- Professional presentation and delivery techniques
+- Conversational guidance that mirrors the {tone} profile and feels trainer-to-trainer

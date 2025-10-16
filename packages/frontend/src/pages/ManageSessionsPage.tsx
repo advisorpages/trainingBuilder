@@ -4,7 +4,7 @@ import { BuilderLayout } from '../layouts/BuilderLayout';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { sessionService } from '../services/session.service';
-import { Session, SessionStatus } from '@leadership-training/shared';
+import { Session, SessionStatus, Topic } from '@leadership-training/shared';
 
 interface SessionWithRelations extends Session {
   trainerAssignments?: Array<{
@@ -80,7 +80,7 @@ const SessionsTable: React.FC<{
     }
 
     if (Array.isArray(session.sessionTopics) && session.sessionTopics.length > 0) {
-      const topicsById = new Map<number, { name: string; description?: string }>(
+      const topicsById = new Map<number, Pick<Topic, 'id' | 'name' | 'description'>>(
         (session.topics ?? []).map((topic) => [topic.id, topic]),
       );
 

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.IncentiveStatus = exports.AudienceVocabularyLevel = exports.AudienceCommunicationStyle = exports.AudienceExperienceLevel = exports.SettingDataType = exports.MeetingPlatform = exports.LocationType = exports.SessionStatus = exports.UserRole = void 0;
+exports.IncentiveStatus = exports.ToneSentenceStructure = exports.ToneEnergyLevel = exports.ToneStyle = exports.AudienceVocabularyLevel = exports.AudienceCommunicationStyle = exports.AudienceExperienceLevel = exports.SettingDataType = exports.MeetingPlatform = exports.LocationType = exports.SessionStatus = exports.UserRole = void 0;
 var UserRole;
 (function (UserRole) {
     UserRole["BROKER"] = "Broker";
@@ -60,6 +60,30 @@ var AudienceVocabularyLevel;
     AudienceVocabularyLevel["EXPERT"] = "expert";
     AudienceVocabularyLevel["INDUSTRY_SPECIFIC"] = "industry_specific";
 })(AudienceVocabularyLevel || (exports.AudienceVocabularyLevel = AudienceVocabularyLevel = {}));
+var ToneStyle;
+(function (ToneStyle) {
+    ToneStyle["PROFESSIONAL"] = "professional";
+    ToneStyle["CASUAL"] = "casual";
+    ToneStyle["MOTIVATIONAL"] = "motivational";
+    ToneStyle["AUTHORITATIVE"] = "authoritative";
+    ToneStyle["EMPOWERING"] = "empowering";
+    ToneStyle["COLLABORATIVE"] = "collaborative";
+    ToneStyle["DIRECTIVE"] = "directive";
+})(ToneStyle || (exports.ToneStyle = ToneStyle = {}));
+var ToneEnergyLevel;
+(function (ToneEnergyLevel) {
+    ToneEnergyLevel["CALM"] = "calm";
+    ToneEnergyLevel["MODERATE"] = "moderate";
+    ToneEnergyLevel["ENERGETIC"] = "energetic";
+    ToneEnergyLevel["PASSIONATE"] = "passionate";
+})(ToneEnergyLevel || (exports.ToneEnergyLevel = ToneEnergyLevel = {}));
+var ToneSentenceStructure;
+(function (ToneSentenceStructure) {
+    ToneSentenceStructure["SIMPLE"] = "simple";
+    ToneSentenceStructure["MODERATE"] = "moderate";
+    ToneSentenceStructure["COMPLEX"] = "complex";
+    ToneSentenceStructure["VARIED"] = "varied";
+})(ToneSentenceStructure || (exports.ToneSentenceStructure = ToneSentenceStructure = {}));
 var IncentiveStatus;
 (function (IncentiveStatus) {
     IncentiveStatus["DRAFT"] = "draft";

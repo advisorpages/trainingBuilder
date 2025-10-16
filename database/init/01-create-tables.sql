@@ -138,10 +138,10 @@ INSERT INTO audiences (name, description) VALUES
 ON CONFLICT DO NOTHING;
 
 INSERT INTO tones (name, description) VALUES
-    ('Professional', 'Formal business tone'),
-    ('Casual', 'Relaxed and approachable'),
-    ('Inspiring', 'Motivational and uplifting'),
-    ('Educational', 'Informative and instructional')
+    ('Friendly Coach', 'Supportive mentor voice with warm, practical direction'),
+    ('Casual Colleague', 'Down-to-earth teammate who keeps guidance real and relatable'),
+    ('Energetic Friend', 'Upbeat motivator who keeps the momentum high without the hype'),
+    ('Storytelling Buddy', 'Narrative guide who connects ideas to lived experiences')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO categories (name, description) VALUES

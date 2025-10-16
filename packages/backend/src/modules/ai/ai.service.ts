@@ -390,21 +390,21 @@ export class AiService {
               type: 'opener',
               title: `Welcome & ${topicName} Context`,
               duration: 10,
-              description: `Set the stage for learning about ${topicName.toLowerCase()} and establish psychological safety.`,
+              description: `Open with a quick story or question about ${topicName.toLowerCase()} so the room feels relaxed and ready to share.`,
             },
             {
               id: 'core-' + Date.now(),
               type: 'content',
               title: `Core ${topicName} Concepts`,
               duration: 25,
-              description: `Introduce key frameworks and principles relevant to ${audienceName}.`,
+              description: `Break down the big ideas with trainer-friendly talking points, relatable examples, and prompts tailored to ${audienceName}.`,
             },
             {
               id: 'practice-' + Date.now(),
               type: 'activity',
               title: 'Practice & Application',
               duration: 20,
-              description: `Hands-on exercises to apply ${topicName.toLowerCase()} concepts.`,
+              description: `Guide pairs or small groups through a real scenario so they can apply ${topicName.toLowerCase()} right away.`,
             },
           ],
           totalDuration: 55,
@@ -413,17 +413,17 @@ export class AiService {
       case 'opener':
         return {
           heading: `Welcome to ${topicName}`,
-          body: `Let's explore how ${topicName.toLowerCase()} can transform your approach to [specific challenge]. Think about a recent situation where this knowledge would have been valuable.`,
+          body: `Kick things off with an easy question or story about ${topicName.toLowerCase()} that sparks nods. Invite folks to recall a recent moment where they wished they had this toolkit.`,
           suggestedQuestions: [
-            `What's your current experience with ${topicName.toLowerCase()}?`,
-            'What specific challenge brought you here today?',
+            `What does ${topicName.toLowerCase()} look like on your best day?`,
+            'Where have you seen this go sideways in real life?',
           ],
         };
 
       case 'activity':
         return {
           heading: `${topicName} in Action`,
-          body: `Work in pairs to apply today's concepts to a real scenario. You'll have 15 minutes to discuss and prepare a brief share-back.`,
+          body: `Have partners or trios tackle a real scenario, jotting down what they would try first and how they'd debrief the group.`,
           instructions: [
             'Form pairs or triads',
             'Choose a current workplace challenge',
@@ -435,7 +435,7 @@ export class AiService {
       default:
         return {
           heading: `${topicName} Content`,
-          body: `Enhanced content about ${topicName.toLowerCase()} tailored for ${audienceName}, incorporating contextual insights and best practices.`,
+          body: `Conversation-ready talking points about ${topicName.toLowerCase()} shaped for ${audienceName}, with prompts that invite real stories and keep the tone grounded.`,
         };
     }
   }
@@ -500,9 +500,40 @@ export class AiService {
   }
 
   private hasInappropriateTone(text: string): boolean {
-    const inappropriateMarkers = ['very', 'extremely', 'absolutely', '!!!', 'amazing', 'incredible', 'unbelievable'];
+    if (!text) return false;
+
     const lowerText = text.toLowerCase();
-    const markerCount = inappropriateMarkers.filter(marker => lowerText.includes(marker)).length;
-    return markerCount > 2; // Allow some enthusiasm, but flag excessive language
+
+    // Guardrail: avoid shouty punctuation or stacked hype
+    const repeatedPunctuation = /(!|\?){3,}/g;
+    if (repeatedPunctuation.test(text)) {
+      return true;
+    }
+
+    const totalExclamations = (text.match(/!/g) || []).length;
+    if (totalExclamations > 4) {
+      return true;
+    }
+
+    const allCapsWords = (text.match(/\b[A-Z]{4,}\b/g) || []).filter(
+      word => !['AI', 'PDF', 'HTML', 'URL'].includes(word),
+    );
+    if (allCapsWords.length > 5) {
+      return true;
+    }
+
+    const spammyPhrases = [
+      'limited time offer',
+      'money-back guarantee',
+      'act now',
+      'buy now',
+      'once in a lifetime',
+    ];
+
+    if (spammyPhrases.some(phrase => lowerText.includes(phrase))) {
+      return true;
+    }
+
+    return false;
   }
 }

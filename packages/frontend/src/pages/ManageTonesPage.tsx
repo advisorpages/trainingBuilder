@@ -26,47 +26,47 @@ const ManageTonesPage: React.FC = () => {
       setTones([
         {
           id: '1',
-          name: 'Professional & Authoritative',
-          description: 'Formal, confident tone for executive audiences',
-          characteristics: ['Direct communication', 'Evidence-based', 'Strategic focus'],
-          voiceAttributes: ['Confident', 'Clear', 'Decisive'],
-          examples: ['Board presentations', 'Strategic planning', 'Policy updates'],
-          suitableFor: ['C-Suite', 'Senior Management', 'Board Members'],
-          colorScheme: 'blue',
-          isActive: true,
-        },
-        {
-          id: '2',
-          name: 'Collaborative & Supportive',
-          description: 'Warm, encouraging tone for team development',
-          characteristics: ['Inclusive language', 'Growth mindset', 'Team-oriented'],
-          voiceAttributes: ['Encouraging', 'Empathetic', 'Motivating'],
-          examples: ['Team building', 'Skill development', 'Mentoring sessions'],
-          suitableFor: ['New Managers', 'Team Leads', 'Individual Contributors'],
+          name: 'Friendly Coach',
+          description: 'Supportive mentor voice with warm, practical direction',
+          characteristics: ['Actionable tips', 'Supportive prompts', 'Warm accountability'],
+          voiceAttributes: ['Encouraging', 'Grounded', 'Practical'],
+          examples: ['Session debrief guides', 'Trainer prep checklists', 'Coaching prompts'],
+          suitableFor: ['Facilitators', 'Lead Trainers', 'Mentors'],
           colorScheme: 'green',
           isActive: true,
         },
         {
+          id: '2',
+          name: 'Casual Colleague',
+          description: 'Down-to-earth teammate voice that keeps guidance real and relatable',
+          characteristics: ['Conversational flow', 'Straight talk', 'Low-friction language'],
+          voiceAttributes: ['Approachable', 'Candid', 'Relaxed'],
+          examples: ['Quick-start guides', 'Slack/Teams updates', 'Trainer nudges'],
+          suitableFor: ['Peer trainers', 'Content creators', 'Session hosts'],
+          colorScheme: 'blue',
+          isActive: true,
+        },
+        {
           id: '3',
-          name: 'Innovative & Dynamic',
-          description: 'Creative, forward-thinking tone for change initiatives',
-          characteristics: ['Future-focused', 'Creative thinking', 'Change-positive'],
-          voiceAttributes: ['Energetic', 'Visionary', 'Adaptable'],
-          examples: ['Innovation workshops', 'Change management', 'Digital transformation'],
-          suitableFor: ['Innovation Teams', 'Change Agents', 'Tech Leaders'],
-          colorScheme: 'purple',
+          name: 'Energetic Friend',
+          description: 'Upbeat motivator who keeps energy high without the hype',
+          characteristics: ['Momentum building', 'Positive reinforcement', 'Punchy sentences'],
+          voiceAttributes: ['Upbeat', 'Motivating', 'Bright'],
+          examples: ['Session openers', 'Marketing teasers', 'Hype moments'],
+          suitableFor: ['Launch events', 'High-energy workshops', 'Promotional assets'],
+          colorScheme: 'orange',
           isActive: true,
         },
         {
           id: '4',
-          name: 'Technical & Analytical',
-          description: 'Data-driven, precise tone for technical subjects',
-          characteristics: ['Fact-based', 'Logical flow', 'Detail-oriented'],
-          voiceAttributes: ['Precise', 'Methodical', 'Objective'],
-          examples: ['Technical training', 'Process improvement', 'Quality assurance'],
-          suitableFor: ['Engineers', 'Analysts', 'Technical Specialists'],
-          colorScheme: 'slate',
-          isActive: false,
+          name: 'Storytelling Buddy',
+          description: 'Narrative guide who connects ideas to lived experiences',
+          characteristics: ['Anecdotal hooks', 'Reflective prompts', 'Contextual cues'],
+          voiceAttributes: ['Empathetic', 'Curious', 'Grounded'],
+          examples: ['Case study intros', 'Segment transitions', 'Follow-up recaps'],
+          suitableFor: ['Story-driven sessions', 'Content recaps', 'Testimonial moments'],
+          colorScheme: 'purple',
+          isActive: true,
         },
       ]);
       setLoading(false);
@@ -87,6 +87,8 @@ const ManageTonesPage: React.FC = () => {
         return `bg-green-${opacity} text-green-700 border-green-200`;
       case 'purple':
         return `bg-purple-${opacity} text-purple-700 border-purple-200`;
+      case 'orange':
+        return `bg-orange-${opacity} text-orange-700 border-orange-200`;
       case 'slate':
         return `bg-slate-${opacity} text-slate-700 border-slate-200`;
       default:

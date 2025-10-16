@@ -27,9 +27,11 @@ export interface SessionTopicLink {
     sequenceOrder: number;
     durationMinutes?: number | null;
     trainerId?: number | null;
+    trainerIds?: number[];
     notes?: string | null;
     topic?: Topic;
     trainer?: Trainer;
+    trainers?: Trainer[];
 }
 export interface Session {
     id: string;
@@ -180,6 +182,27 @@ export declare enum AudienceVocabularyLevel {
     EXPERT = "expert",
     INDUSTRY_SPECIFIC = "industry_specific"
 }
+export declare enum ToneStyle {
+    PROFESSIONAL = "professional",
+    CASUAL = "casual",
+    MOTIVATIONAL = "motivational",
+    AUTHORITATIVE = "authoritative",
+    EMPOWERING = "empowering",
+    COLLABORATIVE = "collaborative",
+    DIRECTIVE = "directive"
+}
+export declare enum ToneEnergyLevel {
+    CALM = "calm",
+    MODERATE = "moderate",
+    ENERGETIC = "energetic",
+    PASSIONATE = "passionate"
+}
+export declare enum ToneSentenceStructure {
+    SIMPLE = "simple",
+    MODERATE = "moderate",
+    COMPLEX = "complex",
+    VARIED = "varied"
+}
 export interface Audience {
     id: number;
     name: string;
@@ -201,9 +224,17 @@ export interface Tone {
     id: number;
     name: string;
     description?: string;
+    style?: ToneStyle;
+    formality?: number;
+    energyLevel?: ToneEnergyLevel;
+    languageCharacteristics?: string[];
+    sentenceStructure?: ToneSentenceStructure;
+    emotionalResonance?: string[];
+    examplePhrases?: string[];
+    promptInstructions?: string;
     isActive: boolean;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: Date | string;
+    updatedAt: Date | string;
     sessions?: Session[];
 }
 export interface Category {

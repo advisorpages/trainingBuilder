@@ -991,7 +991,6 @@ export const SessionForm: React.FC<SessionFormProps> = ({
                   onChange={(categoryId) => handleInputChange('categoryId', categoryId)}
                   placeholder="Select category..."
                   className="mt-1"
-                  allowCreate={true}
                   onError={(error) => console.error('Category error:', error)}
                 />
               </div>

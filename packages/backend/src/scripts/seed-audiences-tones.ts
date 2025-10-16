@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { entities } from '../entities';
 import {
   Audience,
@@ -86,103 +86,71 @@ async function runSeeder() {
       },
     ];
 
-    // Sample Tones
+    // Sample Tones aligned with conversational persona strategy
     const tones = [
       {
-        name: 'Professional & Polished',
-        description: 'Formal, authoritative tone suitable for executive audiences',
-        style: ToneStyle.PROFESSIONAL,
-        formality: 5,
+        name: 'Friendly Coach',
+        description: 'Supportive mentor voice that blends warmth with practical direction',
+        style: ToneStyle.EMPOWERING,
+        formality: 2,
         energyLevel: ToneEnergyLevel.MODERATE,
-        languageCharacteristics: ['active-voice', 'precise', 'data-driven', 'objective'],
-        sentenceStructure: ToneSentenceStructure.COMPLEX,
-        emotionalResonance: ['confidence', 'authority', 'clarity'],
+        languageCharacteristics: ['encouraging', 'clear', 'supportive', 'action-oriented'],
+        sentenceStructure: ToneSentenceStructure.VARIED,
+        emotionalResonance: ['trust', 'optimism', 'confidence'],
         examplePhrases: [
-          'Our analysis indicates that strategic alignment will drive measurable outcomes.',
-          'The data supports a phased implementation approach.',
-          'This framework has been validated across multiple industries.',
+          'Let\'s tackle this together—here\'s the first small step.',
+          'You already have the instincts; we\'ll sharpen them with practice.',
+          'Try this playbook and see how it lands with your next group.',
         ],
-        promptInstructions: 'Maintain professional distance. Use industry-standard terminology. Support assertions with evidence. Avoid colloquialisms.',
+        promptInstructions: 'Sound like a trusted coach. Use second-person language, share quick wins, and keep tips practical without leaning on corporate buzzwords. Keep exclamation marks to singles.',
       },
       {
-        name: 'Conversational & Friendly',
-        description: 'Warm, approachable tone that builds connection',
+        name: 'Casual Colleague',
+        description: 'Down-to-earth teammate who keeps things real and relatable',
         style: ToneStyle.CASUAL,
         formality: 2,
         energyLevel: ToneEnergyLevel.MODERATE,
-        languageCharacteristics: ['inclusive', 'relatable', 'conversational', 'supportive'],
+        languageCharacteristics: ['conversational', 'straightforward', 'relatable', 'light-humor'],
         sentenceStructure: ToneSentenceStructure.SIMPLE,
-        emotionalResonance: ['warmth', 'empathy', 'encouragement'],
+        emotionalResonance: ['camaraderie', 'ease', 'clarity'],
         examplePhrases: [
-          'Let\'s explore how this works in real life.',
-          'You might be thinking - "How does this apply to me?"',
-          'Here\'s the good news: you already have what it takes.',
+          'Here\'s how I handle it when a session starts to drift.',
+          'You know that moment when everyone goes quiet? Try this reset.',
+          'Let\'s make this easier than the usual slide dump.',
         ],
-        promptInstructions: 'Write like you\'re talking to a colleague over coffee. Use contractions. Ask rhetorical questions. Be encouraging.',
+        promptInstructions: 'Write like you are chatting with a coworker over coffee. Use contractions, short paragraphs, and the occasional rhetorical question. Avoid jargon and stiff phrasing.',
       },
       {
-        name: 'Motivational & Inspiring',
-        description: 'Energetic, empowering tone that drives action',
+        name: 'Energetic Friend',
+        description: 'Upbeat motivator who keeps energy high without sounding salesy',
         style: ToneStyle.MOTIVATIONAL,
-        formality: 3,
+        formality: 1,
         energyLevel: ToneEnergyLevel.ENERGETIC,
-        languageCharacteristics: ['action-oriented', 'empowering', 'positive', 'direct'],
+        languageCharacteristics: ['upbeat', 'motivating', 'positive', 'direct'],
         sentenceStructure: ToneSentenceStructure.VARIED,
-        emotionalResonance: ['inspiration', 'confidence', 'urgency', 'excitement'],
+        emotionalResonance: ['excitement', 'encouragement', 'momentum'],
         examplePhrases: [
-          'You have the power to transform your team starting today.',
-          'This is your moment to step into leadership.',
-          'Small actions, repeated consistently, create extraordinary results.',
+          'You can light up the room with this opener—give it a shot!',
+          'Keep the pace snappy and celebrate every small win.',
+          'This is where the session clicks for people—lean into it.',
         ],
-        promptInstructions: 'Use powerful verbs. Create vivid imagery. Focus on possibilities. Build momentum. End with strong calls to action.',
+        promptInstructions: 'Bring contagious energy with short, punchy sentences and positive reinforcement. Invite the reader to act. Limit exclamation marks to one at a time and steer clear of hype-y promises.',
       },
       {
-        name: 'Technical & Precise',
-        description: 'Clear, logical tone for technical audiences',
-        style: ToneStyle.AUTHORITATIVE,
-        formality: 4,
-        energyLevel: ToneEnergyLevel.CALM,
-        languageCharacteristics: ['precise', 'logical', 'structured', 'evidence-based'],
-        sentenceStructure: ToneSentenceStructure.MODERATE,
-        emotionalResonance: ['clarity', 'confidence', 'objectivity'],
-        examplePhrases: [
-          'The algorithm follows a three-step process: input validation, transformation, and output.',
-          'Consider the following implementation pattern.',
-          'This approach reduces complexity by abstracting the underlying logic.',
-        ],
-        promptInstructions: 'Be exact and unambiguous. Use technical terminology appropriately. Provide clear structure. Include concrete examples.',
-      },
-      {
-        name: 'Collaborative & Inclusive',
-        description: 'Team-focused tone that emphasizes shared ownership',
+        name: 'Storytelling Buddy',
+        description: 'Narrative guide who connects ideas to real-world moments',
         style: ToneStyle.COLLABORATIVE,
-        formality: 3,
+        formality: 2,
         energyLevel: ToneEnergyLevel.MODERATE,
-        languageCharacteristics: ['inclusive', 'we-focused', 'participatory', 'respectful'],
+        languageCharacteristics: ['narrative', 'descriptive', 'empathetic', 'grounded'],
         sentenceStructure: ToneSentenceStructure.VARIED,
-        emotionalResonance: ['belonging', 'partnership', 'mutual-respect'],
+        emotionalResonance: ['connection', 'curiosity', 'empathy'],
         examplePhrases: [
-          'Together, we can explore different perspectives on this challenge.',
-          'What insights can we draw from our collective experience?',
-          'Let\'s build on each other\'s ideas to find the best path forward.',
+          'Picture the session when someone finally shares that honest story.',
+          'Here’s a moment that still sticks with me—and why it worked.',
+          'Tee up each activity with a quick story that invites people in.',
         ],
-        promptInstructions: 'Use "we" language. Invite participation. Acknowledge diverse perspectives. Create psychological safety.',
-      },
-      {
-        name: 'Directive & Action-Focused',
-        description: 'Clear, direct tone that drives immediate action',
-        style: ToneStyle.DIRECTIVE,
-        formality: 3,
-        energyLevel: ToneEnergyLevel.ENERGETIC,
-        languageCharacteristics: ['imperative', 'concise', 'action-oriented', 'clear'],
-        sentenceStructure: ToneSentenceStructure.SIMPLE,
-        emotionalResonance: ['urgency', 'clarity', 'confidence'],
-        examplePhrases: [
-          'Start by identifying your top three priorities.',
-          'Take this specific action before the end of the week.',
-          'Here\'s exactly what to do next.',
-        ],
-        promptInstructions: 'Use imperative verbs. Be specific and concrete. Provide clear next steps. Keep sentences short and punchy.',
+        promptInstructions: 'Use story-driven framing, sensory detail, and smooth transitions. Share quick anecdotes or starter phrases, then tie them back to clear takeaways. Keep it conversational, not overly dramatic.',
       },
     ];
 
@@ -207,6 +175,21 @@ async function runSeeder() {
         console.log(`⏭️  Skipped existing tone: ${toneData.name}`);
       }
     }
+
+    // Deactivate legacy tones that conflict with the new persona strategy
+    const retiredToneNames = [
+      'Professional & Polished',
+      'Conversational & Friendly',
+      'Motivational & Inspiring',
+      'Technical & Precise',
+      'Collaborative & Inclusive',
+      'Directive & Action-Focused',
+    ];
+
+    await toneRepository.update(
+      { name: In(retiredToneNames) },
+      { isActive: false },
+    );
 
     console.log('🎉 Audience and tone seeding complete!');
   } finally {

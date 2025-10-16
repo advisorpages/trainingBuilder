@@ -1,10 +1,18 @@
 import { api } from './api.service';
-import { Tone } from '@leadership-training/shared';
+import { Tone, ToneStyle, ToneEnergyLevel, ToneSentenceStructure } from '@leadership-training/shared';
 import { API_ENDPOINTS } from '@leadership-training/shared';
 
 export interface CreateToneRequest {
   name: string;
   description?: string;
+  style?: ToneStyle;
+  formality?: number;
+  energyLevel?: ToneEnergyLevel;
+  languageCharacteristics?: string[];
+  sentenceStructure?: ToneSentenceStructure;
+  emotionalResonance?: string[];
+  examplePhrases?: string[];
+  promptInstructions?: string;
 }
 
 export interface UpdateToneRequest extends Partial<CreateToneRequest> {
