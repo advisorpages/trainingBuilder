@@ -1,28 +1,8 @@
 import * as React from 'react';
 import { Button } from '../ui';
+import type { MultiVariantResponse } from '../../services/session-builder.service';
 
-interface RagSource {
-  filename: string;
-  category: string;
-  similarity: number;
-  excerpt: string;
-  createdAt?: string;
-}
-
-interface Variant {
-  id: string;
-  outline: {
-    suggestedSessionTitle: string;
-    sections: any[];
-    totalDuration: number;
-  };
-  generationSource: 'rag' | 'baseline';
-  ragWeight: number;
-  ragSourcesUsed: number;
-  ragSources?: RagSource[];
-  label: string;
-  description: string;
-}
+type Variant = MultiVariantResponse['variants'][number];
 
 interface VariantSelectorProps {
   variants: Variant[];

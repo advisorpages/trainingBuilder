@@ -1077,9 +1077,12 @@ export const SessionBuilderProvider: React.FC<{
       dispatch({ type: 'UPDATE_OUTLINE', payload: selected.outline });
 
       try {
+        const loggingSource: 'rag' | 'baseline' =
+          selected.generationSource === 'rag' ? 'rag' : 'baseline';
+
         await sessionBuilderService.logVariantSelection(state.draft.sessionId, {
           variantId: selected.id,
-          generationSource: selected.generationSource,
+          generationSource: loggingSource,
           ragWeight: selected.ragWeight,
           ragSourcesUsed: selected.ragSourcesUsed,
           category: state.draft.metadata.category || '',

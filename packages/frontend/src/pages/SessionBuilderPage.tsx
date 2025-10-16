@@ -352,9 +352,10 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
       }
 
       // If no suggested title, try to get title from summary
-      if (!variantTitle && selectedVariant.summary) {
+      const summaryText = selectedVariant.summary ?? '';
+      if (!variantTitle && summaryText) {
         // Take first sentence or first 60 characters of summary
-        const firstSentence = selectedVariant.summary.split('.')[0];
+        const firstSentence = summaryText.split('.')[0];
         variantTitle = firstSentence.length > 60
           ? firstSentence.substring(0, 60).trim() + '...'
           : firstSentence;
@@ -409,6 +410,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
 
     try {
       // Create the saved variant data
+      const generationSource: 'rag' | 'baseline' | 'ai' = variant.generationSource ?? 'ai';
       const savedVariantData = {
         variantId: variant.id,
         outline: variant.outline,
@@ -420,7 +422,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
         ragWeight: toNumeric(variant.ragWeight),
         ragSourcesUsed: Math.max(0, Math.round(toNumeric(variant.ragSourcesUsed))),
         ragSources: variant.ragSources,
-        generationSource: variant.generationSource || 'ai',
+        generationSource,
         variantLabel: variant.label,
         metadata: {
           originalGenerationTime: new Date().toISOString(),

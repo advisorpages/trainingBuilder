@@ -3,29 +3,37 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const apiMocks = vi.hoisted(() => ({
   getMock: vi.fn(),
   postMock: vi.fn(),
+  patchMock: vi.fn(),
 }));
 
 vi.mock('../api.service', () => ({
   api: {
     get: apiMocks.getMock,
     post: apiMocks.postMock,
+    patch: apiMocks.patchMock,
   },
 }));
 
 import { sessionBuilderService } from '../session-builder.service';
 
-const { getMock, postMock } = apiMocks;
+const { getMock, postMock, patchMock } = apiMocks;
 
 describe('sessionBuilderService', () => {
   beforeEach(() => {
     getMock.mockReset();
     postMock.mockReset();
+    patchMock.mockReset();
   });
 
   it('creates missing topics when publishing a session from outline suggestions', async () => {
     getMock.mockImplementation(async (url: string) => {
       if (url === '/topics') {
         return { data: [] };
+      }
+
+      if (url.startsWith('/admin/categories/')) {
+        const id = Number(url.split('/').pop());
+        return { data: { id, name: 'Leadership Development' } };
       }
 
       if (url === '/admin/categories/active') {
@@ -48,6 +56,10 @@ describe('sessionBuilderService', () => {
 
       if (url === '/topics') {
         return { data: { id: 999, ...payload } };
+      }
+
+      if (url === '/admin/categories') {
+        return { data: { id: 42, ...payload } };
       }
 
       throw new Error(`Unexpected POST to ${url}`);
@@ -101,7 +113,9 @@ describe('sessionBuilderService', () => {
       '/topics',
       expect.objectContaining({
         name: 'Warm Welcome',
-        categoryId: 9, // Opening category
+        aiGeneratedContent: expect.objectContaining({
+          categoryName: 'Opening',
+        }),
       })
     );
 
@@ -111,8 +125,16 @@ describe('sessionBuilderService', () => {
         name: 'Leading with Empathy',
         description: 'Explore empathetic leadership techniques.',
         learningOutcomes: 'Recognize empathy blockers',
+        aiGeneratedContent: expect.objectContaining({
+          categoryName: 'Leadership',
+        }),
       })
     );
+
+    const sessionPayload = postMock.mock.calls.find(([url]) => url === '/sessions')?.[1];
+    expect(sessionPayload).toBeDefined();
+    expect(sessionPayload.sessionTopics).toHaveLength(2);
+    expect(sessionPayload.sessionTopics.map((topic: any) => topic.sequenceOrder)).toEqual([1, 2]);
 
     expect(postMock).toHaveBeenCalledWith('/sessions', expect.any(Object));
   });
@@ -121,6 +143,11 @@ describe('sessionBuilderService', () => {
     getMock.mockImplementation(async (url: string) => {
       if (url === '/topics') {
         return { data: [] };
+      }
+
+      if (url.startsWith('/admin/categories/')) {
+        const id = Number(url.split('/').pop());
+        return { data: { id, name: 'Leadership Development' } };
       }
 
       if (url === '/admin/categories/active') {
@@ -143,6 +170,10 @@ describe('sessionBuilderService', () => {
 
       if (url === '/topics') {
         return { data: { id: 888, ...payload } };
+      }
+
+      if (url === '/admin/categories') {
+        return { data: { id: 42, ...payload } };
       }
 
       throw new Error(`Unexpected POST to ${url}`);
@@ -219,7 +250,11 @@ describe('sessionBuilderService', () => {
         materialsNeeded: 'Name tags\nSticky notes',
         trainerNotes: 'Start with energy and enthusiasm',
         deliveryGuidance: 'Keep it light and engaging',
-        categoryId: 9, // Opening category
+        aiGeneratedContent: expect.objectContaining({
+          categoryName: 'Opening',
+          materialsNeeded: ['Name tags', 'Sticky notes'],
+          trainerNotes: 'Start with energy and enthusiasm',
+        }),
       })
     );
 
@@ -233,8 +268,8 @@ describe('sessionBuilderService', () => {
         materialsNeeded: 'Case study handouts\nDecision matrix templates',
         trainerNotes: 'Emphasize real-world applications',
         deliveryGuidance: 'Use the Eisenhower Matrix as a visual aid',
-        categoryId: 1, // Leadership Development category
         aiGeneratedContent: expect.objectContaining({
+          categoryName: 'Leadership Development',
           suggestedActivities: ['Case study analysis', 'Group discussion'],
         }),
       })
@@ -246,11 +281,127 @@ describe('sessionBuilderService', () => {
       expect.objectContaining({
         name: 'Wrap Up & Next Steps',
         description: 'Summarize key learnings and action items.',
-        categoryId: 10, // Closing category
+        aiGeneratedContent: expect.objectContaining({
+          categoryName: 'Closing',
+        }),
       })
     );
 
+    const sessionPayload = postMock.mock.calls.find(([url]) => url === '/sessions')?.[1];
+    expect(sessionPayload).toBeDefined();
+    expect(sessionPayload.sessionTopics).toHaveLength(3);
+    expect(sessionPayload.sessionTopics.map((topic: any) => topic.sequenceOrder)).toEqual([1, 2, 3]);
+
     // Verify session was created
     expect(postMock).toHaveBeenCalledWith('/sessions', expect.any(Object));
+  });
+
+  it('maps mixed content sections into ordered session topics', async () => {
+    let savedPayload: any | null = null;
+    let topicCounter = 200;
+
+    getMock.mockImplementation(async (url: string) => {
+      if (url === '/topics') {
+        return { data: [] };
+      }
+
+      if (url.startsWith('/admin/categories/')) {
+        const id = Number(url.split('/').pop());
+        return { data: { id, name: 'Leadership Development' } };
+      }
+
+      if (url === '/admin/categories/active') {
+        return {
+          data: [
+            { id: 1, name: 'Leadership Development' },
+            { id: 9, name: 'Opening' },
+            { id: 10, name: 'Closing' },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected GET to ${url}`);
+    });
+
+    postMock.mockImplementation(async (url: string, payload: any) => {
+      if (url === '/sessions') {
+        savedPayload = payload;
+        return { data: { id: 'session-003', status: payload.status ?? 'draft', ...payload } };
+      }
+
+      if (url === '/topics') {
+        topicCounter += 1;
+        return { data: { id: topicCounter, ...payload } };
+      }
+
+      if (url === '/admin/categories') {
+        topicCounter += 1;
+        return { data: { id: topicCounter, ...payload } };
+      }
+
+      throw new Error(`Unexpected POST to ${url}`);
+    });
+
+    await sessionBuilderService.createSessionFromOutline({
+      outline: {
+        sections: [
+          {
+            id: 'section-1',
+            type: 'topic',
+            position: 1,
+            title: 'Core Leadership Principles',
+            duration: 30,
+            description: 'Explore foundational leadership concepts.',
+          },
+          {
+            id: 'section-2',
+            type: 'exercise',
+            position: 2,
+            title: 'Leadership Role Play',
+            duration: 20,
+            description: 'Participants practice real-world leadership scenarios.',
+            trainerNotes: 'Pair participants for maximum engagement.',
+          },
+          {
+            id: 'section-3',
+            type: 'discussion',
+            position: 3,
+            title: 'Peer Feedback Circle',
+            duration: 15,
+            description: 'Reflect on lessons learned and exchange insights.',
+          },
+        ],
+        totalDuration: 65,
+        suggestedSessionTitle: 'Leadership Mastery Lab',
+        suggestedDescription: 'Blend instruction with hands-on learning for leaders.',
+        difficulty: 'Intermediate',
+        recommendedAudienceSize: '8-15',
+        fallbackUsed: false,
+        generatedAt: new Date().toISOString(),
+      },
+      input: {
+        title: 'Leadership Mastery',
+        category: 'Leadership Development',
+        categoryId: 1,
+        sessionType: 'workshop',
+        desiredOutcome: 'Develop core leadership competencies.',
+        date: '2025-07-01',
+        startTime: new Date('2025-07-01T15:00:00Z').toISOString(),
+        endTime: new Date('2025-07-01T16:05:00Z').toISOString(),
+      },
+      readinessScore: 92,
+    });
+
+    expect(savedPayload).not.toBeNull();
+    expect(Array.isArray(savedPayload.sessionTopics)).toBe(true);
+    expect(savedPayload.sessionTopics).toHaveLength(3);
+
+    // Ensure sequence order is preserved and durations captured
+    expect(savedPayload.sessionTopics.map((topic: any) => topic.sequenceOrder)).toEqual([1, 2, 3]);
+    expect(savedPayload.sessionTopics.map((topic: any) => topic.durationMinutes)).toEqual([30, 20, 15]);
+
+    // Confirm trainer notes propagate as notes for applicable sections
+    const exerciseTopic = savedPayload.sessionTopics.find((topic: any) => topic.sequenceOrder === 2);
+    expect(exerciseTopic?.notes).toBe('Pair participants for maximum engagement.');
   });
 });

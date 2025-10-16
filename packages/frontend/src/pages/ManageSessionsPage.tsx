@@ -65,15 +65,70 @@ const SessionsTable: React.FC<{
     }
   };
 
-  // Helper: Get all topics in sequence order
-  const getOrderedTopics = (session: Session) => {
-    if (!session.sessionTopics || session.sessionTopics.length === 0) {
-      return session.topics || [];
+  // Helper: Get all topics in sequence order, including opener/closer sections
+  type DisplayTopic = {
+    id: string;
+    topicId?: number | string;
+    name: string;
+    description?: string;
+    sequenceOrder: number;
+  };
+
+  const getOrderedTopics = (session: Session): DisplayTopic[] => {
+    if (!session) {
+      return [];
     }
-    return [...session.sessionTopics]
-      .sort((a, b) => a.sequenceOrder - b.sequenceOrder)
-      .map(st => st.topic)
-      .filter(t => t !== undefined) as any[];
+
+    if (Array.isArray(session.sessionTopics) && session.sessionTopics.length > 0) {
+      const topicsById = new Map<number, { name: string; description?: string }>(
+        (session.topics ?? []).map((topic) => [topic.id, topic]),
+      );
+
+      return [...session.sessionTopics]
+        .sort((a, b) => {
+          const orderA = typeof a.sequenceOrder === 'number' ? a.sequenceOrder : Number.MAX_SAFE_INTEGER;
+          const orderB = typeof b.sequenceOrder === 'number' ? b.sequenceOrder : Number.MAX_SAFE_INTEGER;
+          return orderA - orderB;
+        })
+        .map((sessionTopic, index) => {
+          const fallbackOrderLabel =
+            typeof sessionTopic.sequenceOrder === 'number'
+              ? sessionTopic.sequenceOrder
+              : index + 1;
+
+          const topic =
+            sessionTopic.topic ??
+            (typeof sessionTopic.topicId === 'number'
+              ? topicsById.get(sessionTopic.topicId)
+              : undefined);
+
+          if (topic) {
+            return {
+              id: `${topic.id ?? sessionTopic.topicId ?? `session-topic-${index}`}-${index}`,
+              topicId: topic.id ?? sessionTopic.topicId,
+              name: topic.name,
+              description: topic.description,
+              sequenceOrder: fallbackOrderLabel,
+            };
+          }
+
+          return {
+            id: `${sessionTopic.topicId ?? `session-topic-${index}`}-${index}`,
+            topicId: sessionTopic.topicId,
+            name: `Topic ${fallbackOrderLabel}`,
+            description: sessionTopic.notes ?? '',
+            sequenceOrder: fallbackOrderLabel,
+          };
+        });
+    }
+
+    return (session.topics || []).map((topic, index) => ({
+      id: `${topic.id ?? `topic-${index}`}-${index}`,
+      topicId: topic.id,
+      name: topic.name,
+      description: topic.description,
+      sequenceOrder: index + 1,
+    }));
   };
 
   // Helper: Get all unique trainers
@@ -263,9 +318,9 @@ const SessionsTable: React.FC<{
                         </span>
                       </div>
                       <div className="text-slate-700 text-xs">
-                        {orderedTopics.map((t, i) => (
-                          <div key={i} className="py-0.5">
-                            {i + 1}. {t.name}
+                        {orderedTopics.map((t) => (
+                          <div key={t.id} className="py-0.5">
+                            {t.sequenceOrder}. {t.name}
                           </div>
                         ))}
                       </div>

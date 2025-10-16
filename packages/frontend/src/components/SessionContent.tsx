@@ -1,6 +1,14 @@
 import { Session } from '@leadership-training/shared'
 import './SessionContent.css'
 
+type DisplayTopic = {
+  id: number | string
+  topicId?: number | string
+  name: string
+  description: string
+  sequenceOrder: number
+}
+
 interface SessionContentProps {
   session: Session
 }
@@ -40,6 +48,41 @@ const SessionContent = ({ session }: SessionContentProps) => {
 
   const aiContent = parseAIContent(session.aiGeneratedContent)
   const duration = formatDuration(session.startTime, session.endTime)
+  const topicsToDisplay: DisplayTopic[] = (() => {
+    if (Array.isArray(session.sessionTopics) && session.sessionTopics.length > 0) {
+      return [...session.sessionTopics]
+        .sort((a, b) => {
+          const orderA = typeof a.sequenceOrder === 'number' ? a.sequenceOrder : Number.MAX_SAFE_INTEGER
+          const orderB = typeof b.sequenceOrder === 'number' ? b.sequenceOrder : Number.MAX_SAFE_INTEGER
+          return orderA - orderB
+        })
+        .map((sessionTopic, index) => {
+          const topic =
+            sessionTopic.topic ??
+            session.topics?.find((candidate) => candidate.id === sessionTopic.topicId)
+
+          return {
+            id: `${sessionTopic.topicId ?? topic?.id ?? `session-topic-${index}`}-${index}`,
+            topicId: topic?.id ?? sessionTopic.topicId,
+            name: topic?.name ?? `Topic ${typeof sessionTopic.sequenceOrder === 'number' ? sessionTopic.sequenceOrder : index + 1}`,
+            description: topic?.description ?? sessionTopic.notes ?? '',
+            sequenceOrder: typeof sessionTopic.sequenceOrder === 'number' ? sessionTopic.sequenceOrder : index + 1,
+          }
+        })
+    }
+
+    if (Array.isArray(session.topics) && session.topics.length > 0) {
+      return session.topics.map((topic, index) => ({
+        id: `${topic.id ?? `topic-${index}`}-${index}`,
+        topicId: topic.id,
+        name: topic.name,
+        description: topic.description ?? '',
+        sequenceOrder: index + 1,
+      }))
+    }
+
+    return []
+  })()
 
   return (
     <div className="session-content">
@@ -127,13 +170,15 @@ const SessionContent = ({ session }: SessionContentProps) => {
         )}
 
         {/* Topics Section (from database relations) */}
-        {session.topics && session.topics.length > 0 && (
+        {topicsToDisplay.length > 0 && (
           <section className="content-section">
             <h2>Key Topics</h2>
             <div className="topics-grid">
-              {session.topics.map((topic) => (
+              {topicsToDisplay.map((topic, index) => (
                 <div key={topic.id} className="topic-item">
-                  <h4>{topic.name}</h4>
+                  <h4>
+                    {topic.sequenceOrder}. {topic.name}
+                  </h4>
                   {topic.description && <p>{topic.description}</p>}
                 </div>
               ))}

@@ -194,6 +194,16 @@ export interface SectionTypeConfig {
   availableFields: string[];
 }
 
+type SectionTopicAssignment = {
+  sectionId: string;
+  topicId: number;
+};
+
+interface TopicResolutionResult {
+  uniqueTopicIds: number[];
+  sectionTopicAssignments: SectionTopicAssignment[];
+}
+
 export interface SessionOutlineResponse {
   outline: SessionOutline;
   relevantTopics: any[];
@@ -207,15 +217,25 @@ export interface SessionOutlineResponse {
   };
 }
 
+export interface RagSource {
+  filename: string;
+  category: string;
+  similarity: number;
+  excerpt: string;
+  createdAt?: string;
+}
+
 export interface MultiVariantResponse {
   variants: Array<{
     id: string;
     outline: SessionOutline;
-    generationSource: 'rag' | 'baseline';
+    generationSource?: 'rag' | 'baseline' | 'ai';
     ragWeight: number;
     ragSourcesUsed: number;
+    ragSources?: RagSource[];
     label: string;
     description: string;
+    summary?: string;
   }>;
   metadata: {
     processingTime: number;
@@ -291,6 +311,32 @@ type TopicPersistencePayload = {
 export class SessionBuilderService {
   private static readonly OPENING_CATEGORY_NAME = 'Opening';
   private static readonly CLOSING_CATEGORY_NAME = 'Closing';
+  private static readonly AUXILIARY_CATEGORY_NAMES = new Map<string, string>([
+    ['opener', SessionBuilderService.OPENING_CATEGORY_NAME],
+    ['closing', SessionBuilderService.CLOSING_CATEGORY_NAME],
+    ['exercise', 'Interactive Exercise'],
+    ['video', 'Video & Media'],
+    ['discussion', 'Discussion'],
+    ['assessment', 'Assessment'],
+    ['inspiration', 'Inspiration'],
+    ['break', 'Break'],
+  ]);
+  private static readonly TOPIC_SECTION_TYPES = new Set<FlexibleSessionSection['type']>([
+    'opener',
+    'closing',
+    'topic',
+    'exercise',
+    'discussion',
+    'presentation',
+    'assessment',
+    'custom',
+    'inspiration',
+    'video',
+  ]);
+  private static readonly SUPPORTING_SECTION_TYPES = new Set<FlexibleSessionSection['type']>([
+    'opener',
+    'closing',
+  ]);
 
   async generateSessionOutline(input: SessionBuilderInput, templateId?: string): Promise<SessionOutlineResponse> {
     try {
@@ -407,7 +453,7 @@ export class SessionBuilderService {
         request.input.categoryId = resolvedCategoryId;
       }
 
-      const topicIds = await this.ensureTopicsFromOutline(
+      const topicResolution = await this.ensureTopicsFromOutline(
         request.outline,
         request.input.categoryName ?? request.input.category,
         resolvedCategoryId,
@@ -416,7 +462,7 @@ export class SessionBuilderService {
       const sessionData = this.transformOutlineToSession(
         request.outline,
         request.input,
-        topicIds,
+        topicResolution,
         request.readinessScore,
       );
 
@@ -537,36 +583,45 @@ export class SessionBuilderService {
 
   private createSessionTopicsFromOutline(
     outline: SessionOutline,
-    topicIds?: number[]
-  ): Array<{topicId: number; trainerId?: number; sequenceOrder: number; durationMinutes?: number; notes?: string}> {
-    const sessionTopics: Array<{topicId: number; trainerId?: number; sequenceOrder: number; durationMinutes?: number; notes?: string}> = [];
-
-    if (!outline?.sections?.length || !topicIds?.length) {
-      return sessionTopics;
+    sectionTopicAssignments?: SectionTopicAssignment[],
+  ): Array<{ topicId: number; trainerId?: number; sequenceOrder: number; durationMinutes?: number; notes?: string }> {
+    if (!outline?.sections?.length || !Array.isArray(sectionTopicAssignments) || sectionTopicAssignments.length === 0) {
+      return [];
     }
 
-    // Filter for topic sections and map them to session topics
+    const assignmentLookup = new Map(sectionTopicAssignments.map((assignment) => [assignment.sectionId, assignment.topicId]));
+
     const topicSections = outline.sections
-      .filter(section => section.type === 'topic')
+      .filter((section) => SessionBuilderService.TOPIC_SECTION_TYPES.has(section.type))
       .sort((a, b) => a.position - b.position);
 
-    topicSections.forEach((section, index) => {
-      // Find the corresponding topic ID from the topicIds array
-      const topicId = topicIds[index];
-      if (!topicId) return;
+    return topicSections.reduce<Array<{ topicId: number; trainerId?: number; sequenceOrder: number; durationMinutes?: number; notes?: string }>>(
+      (accumulator, section, index) => {
+        const resolvedTopicId = assignmentLookup.get(section.id);
+        const topicId =
+          typeof resolvedTopicId === 'number' && !Number.isNaN(resolvedTopicId)
+            ? resolvedTopicId
+            : typeof section.associatedTopic?.id === 'number' && !Number.isNaN(section.associatedTopic.id)
+              ? section.associatedTopic.id
+              : undefined;
 
-      const sessionTopic = {
-        topicId,
-        trainerId: section.trainerId, // This should be set from the classic builder
-        sequenceOrder: index + 1,
-        durationMinutes: section.duration || undefined,
-        notes: section.trainerNotes || undefined
-      };
+        if (typeof topicId !== 'number' || Number.isNaN(topicId)) {
+          return accumulator;
+        }
 
-      sessionTopics.push(sessionTopic);
-    });
+        accumulator.push({
+          topicId,
+          trainerId: typeof section.trainerId === 'number' && !Number.isNaN(section.trainerId) ? section.trainerId : undefined,
+          sequenceOrder: index + 1,
+          durationMinutes:
+            typeof section.duration === 'number' && section.duration > 0 ? Math.trunc(section.duration) : undefined,
+          notes: section.trainerNotes?.trim() || undefined,
+        });
 
-    return sessionTopics;
+        return accumulator;
+      },
+      [],
+    );
   }
 
   async autosaveDraft(
@@ -588,7 +643,7 @@ export class SessionBuilderService {
   private transformOutlineToSession(
     outline: SessionOutline,
     input: SessionBuilderInput,
-    topicIds?: number[],
+    topicResolution?: TopicResolutionResult,
     readinessScore?: number,
   ): Record<string, unknown> {
     const fallbackTitle = input.title?.trim() || 'Untitled Session';
@@ -631,10 +686,12 @@ export class SessionBuilderService {
       payload.categoryId = input.categoryId;
     }
 
-    if (Array.isArray(topicIds) && topicIds.length > 0) {
+    const resolvedTopicIds = topicResolution?.uniqueTopicIds ?? [];
+
+    if (resolvedTopicIds.length > 0) {
       const uniqueIds = Array.from(
         new Set(
-          topicIds
+          resolvedTopicIds
             .map((value) => Number(value))
             .filter((value) => typeof value === 'number' && !Number.isNaN(value)),
         ),
@@ -661,7 +718,10 @@ export class SessionBuilderService {
     }
 
     // Add sessionTopics with trainer assignments
-    const sessionTopics = this.createSessionTopicsFromOutline(outline, topicIds);
+    const sessionTopics = this.createSessionTopicsFromOutline(
+      outline,
+      topicResolution?.sectionTopicAssignments,
+    );
     if (sessionTopics.length > 0) {
       payload.sessionTopics = sessionTopics;
     }
@@ -935,49 +995,38 @@ export class SessionBuilderService {
     outline: SessionOutline,
     categoryName?: string,
     categoryId?: number,
-  ): Promise<number[]> {
+  ): Promise<TopicResolutionResult> {
     if (!outline?.sections?.length) {
-      return [];
+      return { uniqueTopicIds: [], sectionTopicAssignments: [] };
     }
 
     const lookup = await this.getTopicLookup();
-    const topicIds: number[] = [];
-    const seenTopicIds = new Set<number>();
+    const uniqueTopicIds = new Set<number>();
+    const sectionTopicAssignments: SectionTopicAssignment[] = [];
+
+    const sortedSections = this.sortSectionsByPosition(outline.sections);
 
     const baseCategoryId =
       typeof categoryId === 'number' && Number.isInteger(categoryId) && categoryId > 0
         ? categoryId
         : undefined;
 
-    const relevantSections = outline.sections.filter(
-      (section) => section.type === 'topic' || section.type === 'opener' || section.type === 'closing',
-    );
+    for (const section of sortedSections) {
+      const sectionType = section.type;
+      const isTopicSection = SessionBuilderService.TOPIC_SECTION_TYPES.has(sectionType);
+      const isSupportingSection = SessionBuilderService.SUPPORTING_SECTION_TYPES.has(sectionType);
 
-    for (const section of relevantSections) {
-      let sectionCategoryName = categoryName;
-      let sectionCategoryId = baseCategoryId;
-
-      if (section.type === 'opener') {
-        sectionCategoryName = SessionBuilderService.OPENING_CATEGORY_NAME;
-        const lookupId = await this.getCategoryIdByName(sectionCategoryName);
-        if (
-          typeof lookupId === 'number' &&
-          Number.isInteger(lookupId) &&
-          lookupId > 0
-        ) {
-          sectionCategoryId = lookupId;
-        }
-      } else if (section.type === 'closing') {
-        sectionCategoryName = SessionBuilderService.CLOSING_CATEGORY_NAME;
-        const lookupId = await this.getCategoryIdByName(sectionCategoryName);
-        if (
-          typeof lookupId === 'number' &&
-          Number.isInteger(lookupId) &&
-          lookupId > 0
-        ) {
-          sectionCategoryId = lookupId;
-        }
+      if (!isTopicSection && !isSupportingSection) {
+        continue;
       }
+
+      const sectionCategoryContext = await this.resolveSectionCategoryContext(
+        sectionType,
+        categoryName,
+        baseCategoryId,
+      );
+      const sectionCategoryName = sectionCategoryContext.categoryName;
+      const sectionCategoryId = sectionCategoryContext.categoryId;
 
       const payload = this.buildTopicPayload(section, sectionCategoryName, sectionCategoryId);
       if (!payload) {
@@ -1060,17 +1109,21 @@ export class SessionBuilderService {
         }
       }
 
-      if (!seenTopicIds.has(topicId)) {
-        seenTopicIds.add(topicId);
-        topicIds.push(topicId);
+      uniqueTopicIds.add(topicId);
+
+      if (isTopicSection) {
+        sectionTopicAssignments.push({ sectionId: section.id, topicId });
       }
     }
 
-    if (topicIds.length > 0) {
+    if (uniqueTopicIds.size > 0) {
       this.topicLookupCache = { map: lookup, fetchedAt: Date.now() };
     }
 
-    return topicIds;
+    return {
+      uniqueTopicIds: Array.from(uniqueTopicIds),
+      sectionTopicAssignments,
+    };
   }
 
   // PHASE 5: Training Kit and Marketing Kit Methods
@@ -1346,6 +1399,29 @@ export class SessionBuilderService {
 
   calculateTotalDuration(sections: FlexibleSessionSection[]): number {
     return sections.reduce((total, section) => total + section.duration, 0);
+  }
+
+  private async resolveSectionCategoryContext(
+    sectionType: FlexibleSessionSection['type'],
+    fallbackName?: string,
+    fallbackId?: number,
+  ): Promise<{ categoryName?: string; categoryId?: number }> {
+    const auxiliaryCategoryName = SessionBuilderService.AUXILIARY_CATEGORY_NAMES.get(sectionType);
+    if (auxiliaryCategoryName) {
+      let auxiliaryCategoryId = await this.getCategoryIdByName(auxiliaryCategoryName);
+      if (auxiliaryCategoryId === null || auxiliaryCategoryId === undefined) {
+        auxiliaryCategoryId = await this.getCategoryIdByName(auxiliaryCategoryName, true);
+      }
+      if (
+        typeof auxiliaryCategoryId === 'number' &&
+        Number.isInteger(auxiliaryCategoryId) &&
+        auxiliaryCategoryId > 0
+      ) {
+        return { categoryName: auxiliaryCategoryName, categoryId: auxiliaryCategoryId };
+      }
+      return { categoryName: auxiliaryCategoryName, categoryId: fallbackId };
+    }
+    return { categoryName: fallbackName, categoryId: fallbackId };
   }
 
   isLegacyOutline(outline: any): outline is SessionOutlineLegacy {

@@ -169,25 +169,67 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
       console.log('🔍 Topic after update:', updatedTopics[topicIndex]);
 
       await Promise.resolve(onTopicsChange(updatedTopics));
+
+      // Also update the corresponding section in the outline if the topic has a sectionId
+      if (topic.sectionId) {
+        console.log('🔄 Updating section with trainer assignment:', {
+          sectionId: topic.sectionId,
+          trainerId: trainer?.id,
+          trainerName: trainer?.name
+        });
+
+        try {
+          onUpdateSection(topic.sectionId, {
+            trainerId: trainer?.id,
+            trainerName: trainer?.name,
+          });
+        } catch (error) {
+          console.error('❌ Failed to update section with trainer assignment:', error);
+        }
+      }
     };
 
     void run();
-  }, [topics, onTopicsChange, getTopicStateKey]);
+  }, [topics, onTopicsChange, onUpdateSection, getTopicStateKey]);
 
   const handleTopicEdit = (topicIndex: number) => {
     setEditingTopicIndex(topicIndex);
     setEditingTopic({ ...topics[topicIndex] });
   };
 
-  const handleTopicSave = () => {
+  const handleTopicSave = React.useCallback(() => {
     if (editingTopicIndex !== null && editingTopic) {
       const updatedTopics = [...topics];
       updatedTopics[editingTopicIndex] = editingTopic;
       void Promise.resolve(onTopicsChange(updatedTopics));
+
+      // Also update the corresponding section in the outline if the topic has a sectionId
+      // and trainer information has changed
+      const originalTopic = topics[editingTopicIndex];
+      if (editingTopic.sectionId && (
+        originalTopic.trainerId !== editingTopic.trainerId ||
+        originalTopic.trainerName !== editingTopic.trainerName
+      )) {
+        console.log('🔄 Updating section with edited topic trainer info:', {
+          sectionId: editingTopic.sectionId,
+          trainerId: editingTopic.trainerId,
+          trainerName: editingTopic.trainerName
+        });
+
+        try {
+          onUpdateSection(editingTopic.sectionId, {
+            trainerId: editingTopic.trainerId,
+            trainerName: editingTopic.trainerName,
+          });
+        } catch (error) {
+          console.error('❌ Failed to update section with edited topic trainer info:', error);
+        }
+      }
+
       setEditingTopicIndex(null);
       setEditingTopic(null);
     }
-  };
+  }, [editingTopic, editingTopicIndex, topics, onTopicsChange, onUpdateSection]);
 
   const handleTopicCancel = () => {
     setEditingTopicIndex(null);
@@ -461,6 +503,7 @@ const TopicCardComponent: React.FC<TopicCardProps> = ({
                         onChange={(e) => onTopicFieldChange('title', e.target.value)}
                         className="w-full text-lg font-bold text-slate-900 bg-transparent border-b-2 border-blue-400 focus:outline-none focus:border-blue-600"
                         placeholder="Topic title"
+                        autoFocus
                       />
                     ) : (
                       <h4 className="text-lg font-bold text-slate-900 mb-2">

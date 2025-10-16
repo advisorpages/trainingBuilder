@@ -462,10 +462,12 @@ export const SessionDetails: React.FC<SessionDetailsProps> = ({
                         ? trainers.find(t => t.id === sessionTopic.trainerId)
                         : null;
 
+                      const uniqueKey = `${sessionTopic.topicId ?? 'session-topic'}-${index}`;
+
                       return (
                         <Draggable
-                          key={sessionTopic.topicId}
-                          draggableId={sessionTopic.topicId.toString()}
+                          key={uniqueKey}
+                          draggableId={uniqueKey}
                           index={index}
                           isDragDisabled={isReordering}
                         >

@@ -854,10 +854,10 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
 
             {/* Session Location */}
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-3">
               <label className="text-sm font-medium text-slate-700 flex items-center gap-1">
                 Where will you host it? <span className="text-red-500">*</span>
                 {requiredFields.locationId && (

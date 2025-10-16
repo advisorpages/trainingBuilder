@@ -8,6 +8,7 @@ import { incentiveService } from '../services/incentive.service';
 import { LocationSelect } from '../components/ui/LocationSelect';
 import { AudienceSelect } from '../components/ui/AudienceSelect';
 import { ToneSelect } from '../components/ui/ToneSelect';
+import { CategorySelect } from '../components/ui/CategorySelect';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
 import { BuilderLayout } from '../layouts/BuilderLayout';
@@ -16,6 +17,76 @@ import { SessionTopicDetail } from '../components/sessions/EnhancedTopicCard';
 import { SessionFlowSummary } from '../features/session-builder/components/SessionFlowSummary';
 import { TopicSelectionModal } from '../features/session-builder/components/TopicSelectionModal';
 import { EditTopicDetailsModal } from '../features/session-builder/components/EditTopicDetailsModal';
+
+type ExtendedIncentive = Incentive & {
+  name?: string;
+  overview?: string;
+  terms?: string;
+  isActive?: boolean;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+  status?: string;
+};
+
+type SessionWithBackendFields = Session & {
+  scheduledAt?: string | Date | null;
+  durationMinutes?: number | null;
+  categoryId?: number | null;
+  category?: { id: number; name: string } | null;
+  incentives?: ExtendedIncentive[];
+};
+
+const parseDateTime = (value?: string | Date | null): Date | null => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatForDateTimeLocal = (value?: string | Date | null): string => {
+  const date = parseDateTime(value);
+  if (!date) {
+    return '';
+  }
+
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+};
+
+const computeEndDateTime = (
+  start?: string | Date | null,
+  end?: string | Date | null,
+  durationMinutes?: number | null,
+): string => {
+  const explicitEnd = parseDateTime(end);
+  if (explicitEnd) {
+    return formatForDateTimeLocal(explicitEnd);
+  }
+
+  const startDate = parseDateTime(start);
+  if (!startDate || !durationMinutes || durationMinutes <= 0) {
+    return '';
+  }
+
+  const computedEnd = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
+  return formatForDateTimeLocal(computedEnd);
+};
+
+const formatDisplayDate = (value?: string | Date | null): string => {
+  const parsed = parseDateTime(value);
+  return parsed ? parsed.toLocaleDateString() : 'N/A';
+};
+
+const getIncentiveTitle = (incentive: ExtendedIncentive): string =>
+  incentive.title ?? incentive.name ?? 'Untitled Incentive';
+
+const getIncentiveDescription = (incentive: ExtendedIncentive): string | undefined =>
+  incentive.description ?? incentive.overview ?? undefined;
+
+const getIncentiveStatus = (incentive: ExtendedIncentive): string =>
+  incentive.status ?? (incentive.isActive === false ? 'Inactive' : 'Active');
 
 interface FormData {
   title: string;
@@ -26,6 +97,7 @@ interface FormData {
   locationId?: number;
   audienceId?: number;
   toneId?: number;
+  categoryId?: number;
   startTime?: string;
   endTime?: string;
   status?: SessionStatus;
@@ -57,15 +129,16 @@ const SessionEditPage: React.FC = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [editingTopicId, setEditingTopicId] = useState<number | null>(null);
+  const [selectedCategoryLabel, setSelectedCategoryLabel] = useState<string | undefined>(undefined);
 
   // Dropdown options
   const [topics, setTopics] = useState<Topic[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [incentives, setIncentives] = useState<Incentive[]>([]);
+  const [incentives, setIncentives] = useState<ExtendedIncentive[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Current associations
-  const [currentIncentives, setCurrentIncentives] = useState<Incentive[]>([]);
+  const [currentIncentives, setCurrentIncentives] = useState<ExtendedIncentive[]>([]);
 
   // Load session data
   useEffect(() => {
@@ -80,20 +153,25 @@ const SessionEditPage: React.FC = () => {
         const sessionData = await sessionService.getSession(sessionId);
         console.log('[SessionEditPage] Loaded session data:', sessionData);
         setSession(sessionData);
-        const sessionWithRelations = sessionData as Session & {
-          incentives?: Incentive[];
-        sessionTopics?: Array<{
-          sessionId: string;
-          topicId: number;
-          sequenceOrder?: number | null;
-          durationMinutes?: number | null;
-          trainerId?: number | null;
-          notes?: string | null;
-          topic?: Topic;
-          trainer?: Trainer;
-        }>;
-        topics?: Topic[];
-      };
+        const sessionWithRelations = sessionData as SessionWithBackendFields & {
+          sessionTopics?: Array<{
+            sessionId: string;
+            topicId: number;
+            sequenceOrder?: number | null;
+            durationMinutes?: number | null;
+            trainerId?: number | null;
+            notes?: string | null;
+            topic?: Topic;
+            trainer?: Trainer;
+          }>;
+          topics?: Topic[];
+        };
+
+        const startSource =
+          sessionWithRelations.scheduledAt ?? (sessionData as any).startTime ?? null;
+        const endSource = (sessionData as any).endTime ?? null;
+        const durationMinutes =
+          sessionWithRelations.durationMinutes ?? (sessionData as any).durationMinutes ?? null;
 
         console.log('[SessionEditPage] Session topics from API:', sessionWithRelations.sessionTopics);
         console.log('[SessionEditPage] Direct topics from API:', sessionWithRelations.topics);
@@ -159,14 +237,23 @@ const SessionEditPage: React.FC = () => {
           locationId: sessionData.locationId || undefined,
           audienceId: sessionData.audienceId || undefined,
           toneId: sessionData.toneId || undefined,
-          startTime: sessionData.startTime ? new Date(sessionData.startTime).toISOString().slice(0, 16) : '',
-          endTime: sessionData.endTime ? new Date(sessionData.endTime).toISOString().slice(0, 16) : '',
+          categoryId:
+            sessionWithRelations.categoryId ??
+            sessionWithRelations.category?.id ??
+            undefined,
+          startTime: formatForDateTimeLocal(startSource),
+          endTime: computeEndDateTime(startSource, endSource, durationMinutes),
           status: sessionData.status || SessionStatus.DRAFT,
           readinessScore: sessionData.readinessScore || 0,
           incentiveIds: sessionWithRelations.incentives?.map(inc => inc.id) || [],
         });
 
-        setCurrentIncentives(sessionWithRelations.incentives || []);
+        setSelectedCategoryLabel(sessionWithRelations.category?.name ?? undefined);
+
+        const relatedIncentives = (sessionWithRelations.incentives || []).map((incentive) => ({
+          ...incentive,
+        }));
+        setCurrentIncentives(relatedIncentives);
       } catch (error) {
         console.error('[SessionEditPage] Failed to load session:', error);
         setLoadError('Failed to load session data. Please try refreshing the page.');
@@ -230,8 +317,8 @@ const SessionEditPage: React.FC = () => {
   // Track unsaved changes
   useEffect(() => {
     if (session) {
-      const sessionWithRelations = session as Session & {
-        incentives?: Incentive[];
+      const sessionWithRelations = session as SessionWithBackendFields & {
+        incentives?: ExtendedIncentive[];
         sessionTopics?: Array<{
           topicId: number;
           sequenceOrder?: number | null;
@@ -241,6 +328,14 @@ const SessionEditPage: React.FC = () => {
         }>;
         topics?: Topic[];
       };
+
+      const startSource =
+        sessionWithRelations.scheduledAt ?? (session as any).startTime ?? null;
+      const endSource = (session as any).endTime ?? null;
+      const durationMinutes =
+        sessionWithRelations.durationMinutes ?? (session as any).durationMinutes ?? null;
+      const originalStartTime = formatForDateTimeLocal(startSource);
+      const originalEndTime = computeEndDateTime(startSource, endSource, durationMinutes);
 
       const originalTopicIds = sessionWithRelations.topics
         ? sessionWithRelations.topics.map(topic => topic.id)
@@ -280,8 +375,9 @@ const SessionEditPage: React.FC = () => {
         formData.locationId !== (session.locationId || undefined) ||
         formData.audienceId !== (session.audienceId || undefined) ||
         formData.toneId !== (session.toneId || undefined) ||
-        formData.startTime !== (session.startTime ? new Date(session.startTime).toISOString().slice(0, 16) : '') ||
-        formData.endTime !== (session.endTime ? new Date(session.endTime).toISOString().slice(0, 16) : '') ||
+        formData.categoryId !== (sessionWithRelations.categoryId ?? sessionWithRelations.category?.id ?? undefined) ||
+        formData.startTime !== originalStartTime ||
+        formData.endTime !== originalEndTime ||
         formData.status !== (session.status || SessionStatus.DRAFT) ||
         formData.readinessScore !== (session.readinessScore || 0) ||
         JSON.stringify(currentIncentiveIds) !== JSON.stringify(originalIncentiveIds) ||
@@ -462,6 +558,7 @@ const SessionEditPage: React.FC = () => {
         locationId: formData.locationId,
         audienceId: formData.audienceId,
         toneId: formData.toneId,
+        categoryId: formData.categoryId,
         status: formData.status,
         readinessScore: formData.readinessScore,
         durationMinutes,
@@ -720,6 +817,24 @@ const SessionEditPage: React.FC = () => {
                         placeholder="Select a tone"
                       />
                     </div>
+
+                    <div>
+                      <label htmlFor="categoryId" className="block text-sm font-medium text-slate-700 mb-2">
+                        Category
+                      </label>
+                      <CategorySelect
+                        value={formData.categoryId ?? ''}
+                        selectedLabel={selectedCategoryLabel}
+                        onChange={(categoryId) => {
+                          handleInputChange(
+                            'categoryId',
+                            typeof categoryId === 'number' ? categoryId : undefined,
+                          );
+                        }}
+                        onCategoryChange={(category) => setSelectedCategoryLabel(category?.name)}
+                        placeholder="Select a category"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -743,13 +858,17 @@ const SessionEditPage: React.FC = () => {
                         {currentIncentives.map(incentive => (
                           <div key={incentive.id} className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200">
                             <div className="flex-1">
-                              <div className="font-semibold text-slate-900">{incentive.title}</div>
-                              {incentive.description && (
-                                <div className="text-sm text-slate-600 mt-1">{incentive.description}</div>
+                              <div className="font-semibold text-slate-900">{getIncentiveTitle(incentive)}</div>
+                              {getIncentiveDescription(incentive) && (
+                                <div className="text-sm text-slate-600 mt-1">{getIncentiveDescription(incentive)}</div>
                               )}
                               <div className="text-xs text-slate-500 mt-1">
-                                Status: {incentive.status} |
-                                Valid: {new Date(incentive.startDate).toLocaleDateString()} - {new Date(incentive.endDate).toLocaleDateString()}
+                                Status: {getIncentiveStatus(incentive)}
+                                {(incentive.startDate || incentive.endDate) && (
+                                  <>
+                                    {' '}| Valid: {formatDisplayDate(incentive.startDate)} - {formatDisplayDate(incentive.endDate)}
+                                  </>
+                                )}
                               </div>
                             </div>
                             <Button
@@ -797,8 +916,8 @@ const SessionEditPage: React.FC = () => {
                         .filter(incentive => !formData.incentiveIds?.includes(incentive.id))
                         .map(incentive => (
                           <option key={incentive.id} value={incentive.id}>
-                            {incentive.title}
-                            {incentive.description && ` - ${incentive.description}`}
+                            {getIncentiveTitle(incentive)}
+                            {getIncentiveDescription(incentive) ? ` - ${getIncentiveDescription(incentive)}` : ''}
                           </option>
                         ))}
                     </select>
