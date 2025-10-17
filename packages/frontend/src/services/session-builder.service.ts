@@ -1,7 +1,7 @@
 
 import { TONE_DEFAULTS } from '@leadership-training/shared';
 import { api } from './api.service';
-import type { LocationType, MeetingPlatform, Session } from '@leadership-training/shared';
+import type { LocationType, MeetingPlatform, Session, SessionStatus } from '@leadership-training/shared';
 
 export interface SessionBuilderInput {
   title?: string;
@@ -9,6 +9,7 @@ export interface SessionBuilderInput {
   categoryId?: number;
   categoryName?: string;
   sessionType: 'event' | 'training' | 'workshop' | 'webinar' | null;
+  sessionStatus?: SessionStatus;
   desiredOutcome: string;
   currentProblem?: string;
   specificTopics?: string;
@@ -572,19 +573,7 @@ export class SessionBuilderService {
     }
   }
 
-  async getTrainers(search?: string, limit = 50): Promise<{ id: number; name: string }[]> {
-    try {
-      const params = new URLSearchParams();
-      params.append('limit', String(limit));
-      if (search) params.append('search', search);
-      const response = await api.get(`/admin/trainers?${params.toString()}`);
-      const data = response.data as { trainers: any[] };
-      return (data.trainers || []).map(t => ({ id: t.id, name: t.name }));
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Failed to load trainers');
-    }
-  }
-
+  
   private createSessionTopicsFromOutline(
     outline: SessionOutline,
     sectionTopicAssignments?: SectionTopicAssignment[],

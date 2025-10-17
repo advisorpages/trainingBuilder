@@ -30,6 +30,15 @@ import {
   areRequiredItemsComplete,
   getDraftReadinessItems,
 } from '../features/session-builder/utils/readiness';
+import { SessionStatus } from '@leadership-training/shared';
+
+type BuilderNavigationState = {
+  from?: string;
+  prefilledTopics?: SessionTopicDraft[];
+  savedVariant?: any;
+  isEditing?: boolean;
+  initialStep?: BuilderStep;
+};
 
 const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50">
@@ -48,80 +57,35 @@ const toNumeric = (value: unknown, fallback = 0): number => {
   return fallback;
 };
 
-// Utility function to transform flexible sections to topic-based structure for UnifiedReviewEditor
-const transformFlexibleSectionsToTopics = (outline: any, metadata: any): SessionTopicDraft[] => {
-  if (!outline?.sections || !Array.isArray(outline.sections)) {
-    return [];
+// Simplified function to get topics for UI components - now just returns metadata topics
+// since topics are automatically synchronized with outline
+const getTopicsForUI = (draft: SessionDraftData): SessionTopicDraft[] => {
+  // Primary source: synchronized metadata topics
+  if (draft.metadata.topics && Array.isArray(draft.metadata.topics) && draft.metadata.topics.length > 0) {
+    return draft.metadata.topics;
   }
 
-  const metadataTopics: SessionTopicDraft[] = Array.isArray(metadata?.topics)
-    ? metadata.topics
-    : [];
-
-  const topicBySectionId = new Map<string, SessionTopicDraft>();
-  const topicByTopicId = new Map<number, SessionTopicDraft>();
-
-  metadataTopics.forEach((topic) => {
-    if (topic.sectionId) {
-      topicBySectionId.set(topic.sectionId, topic);
-    }
-    if (typeof topic.topicId === 'number') {
-      topicByTopicId.set(topic.topicId, topic);
-    }
-  });
-
-  const topics: SessionTopicDraft[] = [];
-  const sortedSections = sessionBuilderService.sortSectionsByPosition(outline.sections);
-
-  sortedSections.forEach((section: FlexibleSessionSection, index: number) => {
-    const fallbackPosition = section.position ?? index + 1;
-    const metadataTopic =
-      topicBySectionId.get(section.id) ||
-      (section.associatedTopic?.id ? topicByTopicId.get(section.associatedTopic.id) : undefined);
-
-    // Transform each section into a topic structure
-    const topic: SessionTopicDraft = {
+  // Fallback: derive directly from outline if metadata topics are empty
+  if (draft.outline?.sections && Array.isArray(draft.outline.sections)) {
+    console.warn('[SessionBuilder] Metadata topics empty, deriving from outline as fallback');
+    return sessionBuilderService.sortSectionsByPosition(draft.outline.sections).map((section: FlexibleSessionSection, index: number) => ({
       sectionId: section.id,
-      title: metadataTopic?.title ?? section.title ?? `Section ${index + 1}`,
-      description: metadataTopic?.description ?? section.description ?? '',
-      durationMinutes: metadataTopic?.durationMinutes ?? section.duration ?? 15,
-      learningOutcomes:
-        metadataTopic?.learningOutcomes ??
-        section.learningObjectives?.join('\n') ??
-        '',
-      trainerNotes: metadataTopic?.trainerNotes ?? section.trainerNotes ?? '',
-      materialsNeeded:
-        metadataTopic?.materialsNeeded ??
-        section.materialsNeeded?.join('\n') ??
-        '',
-      deliveryGuidance:
-        metadataTopic?.deliveryGuidance ?? section.deliveryGuidance ?? '',
-      callToAction:
-        metadataTopic?.callToAction ??
-        section.suggestedActivities?.join('\n') ??
-        '',
-      trainerName: metadataTopic?.trainerName ?? section.trainerName,
-      position: metadataTopic?.position ?? fallbackPosition,
-    };
+      title: section.title || `Section ${index + 1}`,
+      description: section.description || '',
+      durationMinutes: section.duration || 15,
+      learningOutcomes: section.learningObjectives?.join('\n') || '',
+      trainerNotes: section.trainerNotes || '',
+      materialsNeeded: section.materialsNeeded?.join('\n') || '',
+      deliveryGuidance: section.deliveryGuidance || '',
+      callToAction: section.suggestedActivities?.join('\n') || '',
+      trainerName: section.trainerName,
+      position: section.position ?? index + 1,
+      ...(section.associatedTopic?.id ? { topicId: section.associatedTopic.id } : {}),
+      ...(section.trainerId ? { trainerId: section.trainerId } : {}),
+    }));
+  }
 
-    // Add topic ID if available
-    if (typeof metadataTopic?.topicId === 'number') {
-      topic.topicId = metadataTopic.topicId;
-    } else if (section.associatedTopic?.id) {
-      topic.topicId = section.associatedTopic.id;
-    }
-
-    // Add trainer assignment if available
-    if (typeof metadataTopic?.trainerId === 'number') {
-      topic.trainerId = metadataTopic.trainerId;
-    } else if (section.trainerId) {
-      topic.trainerId = section.trainerId;
-    }
-
-    topics.push(topic);
-  });
-
-  return topics;
+  return [];
 };
 
 interface SessionBuilderScreenProps {
@@ -157,16 +121,24 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
   rejectAcceptedVersion,
     selectVersion,
     selectVariant,
-    manualAutosave,
     publishSession,
-    canUndoAutosave,
-    undoAutosave,
     variants,
     variantsStatus,
     variantsError,
     variantSelectionTime,
   } = useSessionBuilder();
+  const draft = state.draft;
+  const publishStatus = state.publishStatus;
   const navigate = useNavigate();
+  const location = useLocation();
+  const navigationState = (location.state ?? {}) as BuilderNavigationState;
+  const fromSessionsList = Boolean(navigationState.from === 'sessions-list');
+  const {
+    prefilledTopics: statePrefilledTopics,
+    savedVariant: stateSavedVariant,
+    initialStep: stateInitialStep,
+    isEditing: stateIsEditingSavedVariant,
+  } = navigationState;
   const [showTopicsNotification, setShowTopicsNotification] = React.useState(false);
 
   // Show notification when topics are pre-filled
@@ -211,8 +183,36 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
 
         // Create outline from existing session topics
         const currentDraft = state.draft;
-        if (builderData.outline && !currentDraft?.outline) {
+        if (builderData.outline) {
           await updateOutline(builderData.outline);
+
+          // Ensure topics are also populated in metadata from the transformed data
+          if (builderData.topics && builderData.topics.length > 0) {
+            console.log('[SessionBuilder Edit Mode] Loading topics from transformed data:', builderData.topics);
+            await updateMetadata({ topics: builderData.topics });
+          } else {
+            // If no topics in transformed data, create them from outline sections
+            if (builderData.outline.sections && builderData.outline.sections.length > 0) {
+              const topicsFromOutline = sessionBuilderService.sortSectionsByPosition(builderData.outline.sections).map((section: FlexibleSessionSection, index: number) => ({
+                sectionId: section.id,
+                title: section.title || `Topic ${index + 1}`,
+                description: section.description || '',
+                durationMinutes: section.duration || 30,
+                learningOutcomes: section.learningObjectives?.join('\n') || '',
+                trainerNotes: section.trainerNotes || '',
+                materialsNeeded: section.materialsNeeded?.join('\n') || '',
+                deliveryGuidance: section.deliveryGuidance || '',
+                callToAction: section.suggestedActivities?.join('\n') || '',
+                trainerName: section.trainerName,
+                position: section.position ?? index + 1,
+                ...(section.associatedTopic?.id ? { topicId: section.associatedTopic.id } : {}),
+                ...(section.trainerId ? { trainerId: section.trainerId } : {}),
+              }));
+
+              console.log('[SessionBuilder Edit Mode] Created topics from outline sections:', topicsFromOutline);
+              await updateMetadata({ topics: topicsFromOutline });
+            }
+          }
         }
 
         console.log('[SessionBuilder Edit Mode] Successfully loaded and transformed session data');
@@ -243,6 +243,158 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
     canGoPrev
   } = useBuilderSteps(startingStep);
 
+  // Debug edit mode detection - moved after currentStep is defined
+  console.log('[SessionBuilderScreen] Component mounted with:', { isEditMode, existingSessionId, currentStep });
+
+  // Quick save functionality for edit mode
+  const [quickSaveStatus, setQuickSaveStatus] = React.useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [showQuickSaveConfirm, setShowQuickSaveConfirm] = React.useState(false);
+
+  // Quick save handler - saves current changes without navigation
+  const handleQuickSave = React.useCallback(async () => {
+    if (!isEditMode || !existingSessionId || !draft) return;
+
+    setQuickSaveStatus('saving');
+    try {
+      console.log('[Quick Save] Saving session changes:', existingSessionId);
+
+      const sections = draft.outline
+        ? sessionBuilderService.sortSectionsByPosition(draft.outline.sections ?? [])
+        : [];
+
+      const metadataTopicsSource =
+        draft.metadata.topics && draft.metadata.topics.length > 0
+          ? draft.metadata.topics
+          : latestTopicsRef.current;
+
+      const metadataTopicMap = new Map<string, SessionTopicDraft>();
+      metadataTopicsSource.forEach((topic) => {
+        if (topic.sectionId) {
+          metadataTopicMap.set(topic.sectionId, topic);
+        } else if (typeof topic.topicId === 'number') {
+          metadataTopicMap.set(`topic-${topic.topicId}`, topic);
+        }
+      });
+
+      const sessionTopicsPayload =
+        sections
+          .filter((section) => typeof section.associatedTopic?.id === 'number')
+          .map((section, index) => {
+            const topicDraft =
+              metadataTopicMap.get(section.id) ??
+              metadataTopicMap.get(section.associatedTopic ? `topic-${section.associatedTopic.id}` : '');
+
+            const durationMinutes = topicDraft?.durationMinutes ?? section.duration ?? 30;
+            const trainerId = topicDraft?.trainerId ?? section.trainerId;
+            const notesSource = topicDraft?.trainerNotes ?? section.trainerNotes ?? '';
+
+            return {
+              topicId: section.associatedTopic!.id,
+              sequenceOrder: topicDraft?.position ?? section.position ?? index + 1,
+              durationMinutes,
+              trainerId,
+              notes: notesSource?.trim ? notesSource.trim() : notesSource || undefined,
+            };
+          })
+          .filter((payload) => typeof payload.topicId === 'number');
+
+      const resolvedStatus = draft.metadata.sessionStatus ?? SessionStatus.DRAFT;
+
+      // Prepare update data from draft
+      const updateData = {
+        title: draft.metadata.title,
+        subtitle: '', // Can be added to metadata if needed
+        objective: draft.metadata.desiredOutcome,
+        locationId: draft.metadata.locationId,
+        audienceId: draft.metadata.audienceId,
+        toneId: draft.metadata.toneId,
+        categoryId: draft.metadata.categoryId,
+        startTime: draft.metadata.startTime ? new Date(draft.metadata.startTime) : undefined,
+        endTime: draft.metadata.endTime ? new Date(draft.metadata.endTime) : undefined,
+        status: resolvedStatus,
+        readinessScore: draft.readinessScore || 0,
+        sessionTopics: sessionTopicsPayload,
+      };
+
+      // Debug logging for prepared updateData
+      console.log('[SessionBuilder] Prepared updateData:', {
+        context: isEditMode ? 'updateExistingSession' : 'quickSave',
+        updateData: {
+          ...updateData,
+          startTime: updateData.startTime,
+          endTime: updateData.endTime,
+          startTimeType: typeof updateData.startTime,
+          endTimeType: typeof updateData.endTime
+        }
+      });
+
+      await sessionService.updateSession(existingSessionId, updateData);
+
+      console.log('[Quick Save] Session saved successfully');
+      setQuickSaveStatus('success');
+      setShowQuickSaveConfirm(true);
+
+      // Hide confirmation after 3 seconds
+      setTimeout(() => {
+        setShowQuickSaveConfirm(false);
+        setQuickSaveStatus('idle');
+      }, 3000);
+
+    } catch (error) {
+      console.error('[Quick Save] Failed to save session:', error);
+      setQuickSaveStatus('error');
+      setTimeout(() => setQuickSaveStatus('idle'), 3000);
+    }
+  }, [isEditMode, existingSessionId, draft]);
+
+  // Determine the most relevant editing step based on session content
+  const getOptimalEditStep = React.useCallback((): BuilderStep => {
+    if (!draft) return 'trainers-topics';
+
+    // If session has outline but no topics assigned, go to trainers-topics
+    if (draft.outline && (!draft.metadata.topics || draft.metadata.topics.length === 0)) {
+      return 'trainers-topics';
+    }
+
+    // If outline and topics exist and readiness is strong, surface the review step; otherwise stay in trainers-topics
+    if (draft.outline && draft.metadata.topics && draft.metadata.topics.length > 0) {
+      const readinessScore = typeof draft.readinessScore === 'number' ? draft.readinessScore : 0;
+      if (readinessScore >= 80) {
+        return 'review';
+      }
+      return 'trainers-topics';
+    }
+
+    // Otherwise go to trainers-topics as default
+    return 'trainers-topics';
+  }, [draft]);
+
+  // Auto-navigate to optimal edit step when session is loaded
+  React.useEffect(() => {
+    if (isEditMode && state.status === 'ready' && currentStep === 'trainers-topics') {
+      const optimalStep = getOptimalEditStep();
+      if (optimalStep !== currentStep) {
+        console.log('[Edit Mode] Auto-navigating to optimal step:', optimalStep);
+        goToStep(optimalStep);
+      }
+    }
+  }, [isEditMode, state.status, currentStep, getOptimalEditStep, goToStep]);
+
+  // Keyboard shortcut for quick save (Ctrl+S / Cmd+S)
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditMode && (event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        if (quickSaveStatus !== 'saving' && draft) {
+          void handleQuickSave();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditMode, quickSaveStatus, draft, handleQuickSave]);
+
   const [isQuickAddOpen, setQuickAddOpen] = React.useState(false);
   const [isVersionCompareOpen, setIsVersionCompareOpen] = React.useState(false);
   const [compareVersionIds, setCompareVersionIds] = React.useState<[string, string]>(['', '']);
@@ -255,12 +407,11 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
   const hasBootstrappedVariants = React.useRef(false);
   const hasRedirectedAfterPublish = React.useRef(false);
   const latestTopicsRef = React.useRef<SessionTopicDraft[]>([]);
+  const [isUpdatingExistingSession, setIsUpdatingExistingSession] = React.useState(false);
+  const [postUpdateNavigation, setPostUpdateNavigation] = React.useState<{ sessionId: string; fromSessionsList: boolean } | null>(null);
 
   // Enable API debugging
   useApiDebugger();
-
-  const draft = state.draft;
-  const publishStatus = state.publishStatus;
   const isPublishing = publishStatus === 'pending';
   const readinessItems = React.useMemo(() => getDraftReadinessItems(draft ?? null), [draft]);
   const canPublish = !!draft && areRequiredItemsComplete(readinessItems);
@@ -316,6 +467,19 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
       hasRedirectedAfterPublish.current = false;
     }
   }, [navigate, state.publishStatus]);
+
+  React.useEffect(() => {
+    if (postUpdateNavigation) {
+      navigate('/sessions', {
+        replace: true,
+        state: {
+          updatedSessionId: postUpdateNavigation.sessionId,
+          fromSessionsList: postUpdateNavigation.fromSessionsList,
+        },
+      });
+      setPostUpdateNavigation(null);
+    }
+  }, [postUpdateNavigation, navigate]);
 
   // Auto-complete and advance steps only when users move forward
   // This prevents confusing auto-completion while users are still working on a step
@@ -843,13 +1007,14 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
   };
 
   const primaryButtonLabel = React.useMemo(() => {
+    console.log('[primaryButtonLabel] Computing label:', { isEditMode, currentStep, publishStatus, isUpdatingExistingSession });
     if (isEditMode) {
       switch (currentStep) {
-        case 'trainers-topics': return 'Continue to Review Changes';
-        case 'review': return 'Continue to Update Session';
+        case 'trainers-topics': return 'Review Changes';
+        case 'review': return 'Preview & Update';
         case 'finalize':
           if (publishStatus === 'success') return 'Updated';
-          if (isPublishing) return 'Updating...';
+          if (isPublishing || isUpdatingExistingSession) return 'Updating...';
           return 'Update Session';
         default: return 'Continue';
       }
@@ -866,7 +1031,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
         return 'Publish Session';
       default: return 'Continue';
     }
-  }, [currentStep, isEditMode, isPublishing, publishStatus]);
+  }, [currentStep, isEditMode, isPublishing, publishStatus, isUpdatingExistingSession]);
 
   const primaryButtonDisabled = React.useMemo(() => {
     if (currentStep === 'setup') {
@@ -888,25 +1053,21 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
     }
 
     if (currentStep === 'finalize') {
-      return isPublishing || publishStatus === 'success' || !canPublish;
+      return isPublishing || isUpdatingExistingSession || publishStatus === 'success' || !canPublish;
     }
 
     return false;
-  }, [currentStep, hasRequiredSetupFields, draft?.acceptedVersionId, hasChosenCreateOwn, canGoNext, isPublishing, publishStatus, canPublish]);
-
-  const handlePrimaryAction = React.useCallback(() => {
-    if (currentStep === 'finalize') {
-      if (isEditMode && existingSessionId) {
-        // In edit mode, update the existing session instead of publishing
-        void updateExistingSession();
-      } else {
-        void publishSession();
-      }
-      return;
-    }
-
-    nextStep();
-  }, [currentStep, isEditMode, existingSessionId, publishSession, nextStep]);
+  }, [
+    currentStep,
+    hasRequiredSetupFields,
+    draft?.acceptedVersionId,
+    hasChosenCreateOwn,
+    canGoNext,
+    isPublishing,
+    isUpdatingExistingSession,
+    publishStatus,
+    canPublish,
+  ]);
 
   const handleAcceptVersion = (versionId: string) => {
     acceptVersion(versionId);
@@ -929,6 +1090,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
 
   const updateExistingSession = React.useCallback(async () => {
     if (!existingSessionId || !draft) return;
+    setIsUpdatingExistingSession(true);
 
     try {
       console.log('[SessionBuilder Edit Mode] Updating session:', existingSessionId);
@@ -973,6 +1135,8 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
           })
           .filter((payload) => typeof payload.topicId === 'number');
 
+      const resolvedStatus = draft.metadata.sessionStatus ?? SessionStatus.DRAFT;
+
       // Prepare update data from draft
       const updateData = {
         title: draft.metadata.title,
@@ -984,30 +1148,76 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
         categoryId: draft.metadata.categoryId,
         startTime: draft.metadata.startTime ? new Date(draft.metadata.startTime) : undefined,
         endTime: draft.metadata.endTime ? new Date(draft.metadata.endTime) : undefined,
-        status: 'DRAFT', // Keep current status
+        status: resolvedStatus,
         readinessScore: draft.readinessScore || 0,
         sessionTopics: sessionTopicsPayload,
       };
+
+      // Debug logging for prepared updateData
+      console.log('[SessionBuilder] Prepared updateData:', {
+        context: isEditMode ? 'updateExistingSession' : 'quickSave',
+        updateData: {
+          ...updateData,
+          startTime: updateData.startTime,
+          endTime: updateData.endTime,
+          startTimeType: typeof updateData.startTime,
+          endTimeType: typeof updateData.endTime
+        }
+      });
 
       await sessionService.updateSession(existingSessionId, updateData);
 
       console.log('[SessionBuilder Edit Mode] Session updated successfully');
 
-      // Navigate back to sessions list after successful update
-      navigate('/sessions', { replace: true });
+      setPostUpdateNavigation({
+        sessionId: existingSessionId,
+        fromSessionsList,
+      });
 
     } catch (error) {
       console.error('[SessionBuilder Edit Mode] Failed to update session:', error);
       // Could show error toast here
+    } finally {
+      setIsUpdatingExistingSession(false);
     }
-  }, [existingSessionId, draft, navigate]);
+  }, [existingSessionId, draft, fromSessionsList]);
+
+  const handlePrimaryAction = React.useCallback(() => {
+    console.log('[handlePrimaryAction] Called:', { currentStep, isEditMode, existingSessionId, isUpdatingExistingSession });
+    if (currentStep === 'finalize') {
+      if (isEditMode && existingSessionId) {
+        console.log('[handlePrimaryAction] In edit mode, calling updateExistingSession');
+        if (isUpdatingExistingSession) {
+          console.log('[handlePrimaryAction] Already updating, returning early');
+          return;
+        }
+        // In edit mode, update the existing session instead of publishing
+        void updateExistingSession();
+      } else {
+        console.log('[handlePrimaryAction] In create mode, calling publishSession');
+        void publishSession();
+      }
+      return;
+    }
+
+    console.log('[handlePrimaryAction] Not finalize step, calling nextStep');
+    nextStep();
+  }, [
+    currentStep,
+    isEditMode,
+    existingSessionId,
+    publishSession,
+    nextStep,
+    isUpdatingExistingSession,
+    updateExistingSession,
+  ]);
 
   if (state.status === 'loading' || !draft) {
     return (
       <BuilderLayout
         title={isEditMode ? "Edit Session" : "AI Session Builder"}
         subtitle={isEditMode ? "Loading session for editing..." : "Launching workspace..."}
-        statusSlot={<AutosaveIndicator status="pending" onManualSave={manualAutosave} />}
+        statusSlot={<AutosaveIndicator />}
       >
         <EmptyState message={isEditMode ? "Loading session data..." : "Loading builder experience…"} />
       </BuilderLayout>
@@ -1019,7 +1229,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
       <BuilderLayout
         title={isEditMode ? "Edit Session" : "AI Session Builder"}
         subtitle="Something went wrong"
-        statusSlot={<AutosaveIndicator status="error" onManualSave={manualAutosave} />}
+        statusSlot={<AutosaveIndicator />}
       >
         <EmptyState message={existingSessionError || state.error || 'We could not load the builder right now.'} />
       </BuilderLayout>
@@ -1063,7 +1273,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
       case 'trainers-topics':
         return draft.outline ? (
           <TrainerAndTopicAssignmentStep
-            topics={transformFlexibleSectionsToTopics(draft.outline, draft.metadata)}
+            topics={getTopicsForUI(draft)}
             sections={draft.outline.sections}
             metadata={draft.metadata}
             onTopicsChange={handleTopicsChange}
@@ -1093,7 +1303,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
         return draft.outline ? (
           <UnifiedReviewEditor
             outline={draft.outline}
-            topics={transformFlexibleSectionsToTopics(draft.outline, draft.metadata)}
+            topics={getTopicsForUI(draft)}
             metadata={draft.metadata}
             readinessScore={draft.readinessScore}
             onEdit={() => goToStep('trainers-topics')}
@@ -1127,11 +1337,13 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
         return draft.outline ? (
           <UnifiedReviewEditor
             outline={draft.outline}
-            topics={transformFlexibleSectionsToTopics(draft.outline, draft.metadata)}
+            topics={getTopicsForUI(draft)}
             metadata={draft.metadata}
             readinessScore={draft.readinessScore}
             onEdit={() => goToStep('review')}
-            onPublish={() => void publishSession()}
+            onPublish={() =>
+              void (isEditMode ? updateExistingSession() : publishSession())
+            }
             onUpdateSection={handleUpdateSection}
             onAddSection={handleAddSection}
             onDeleteSection={handleDeleteSection}
@@ -1143,6 +1355,14 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
             isPublishing={isPublishing}
             isPublished={publishStatus === 'success'}
             isFinalStep={true}
+            primaryActionLabel={isEditMode ? 'Update Session' : undefined}
+            primaryActionBusyLabel={isEditMode ? 'Updating...' : undefined}
+            primaryActionSuccessLabel={isEditMode ? 'Updated' : undefined}
+            isPrimaryActionBusy={isEditMode ? isUpdatingExistingSession : undefined}
+            isPrimaryActionComplete={
+              isEditMode ? false : publishStatus === 'success'
+            }
+            disablePrimaryAction={primaryButtonDisabled}
           />
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
@@ -1169,13 +1389,70 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
     (version) => version.id === (draft.selectedVersionId || draft.acceptedVersionId)
   );
 
+  const getSessionDisplayInfo = () => {
+    if (!draft?.metadata) return null;
+
+    const { startTime, startDate, title } = draft.metadata;
+
+    // Format date and time for display
+    const formatSessionDateTime = () => {
+      if (!startTime) return null;
+
+      try {
+        const sessionDate = new Date(startTime);
+        if (isNaN(sessionDate.getTime())) return null;
+
+        const now = new Date();
+        const isToday = sessionDate.toDateString() === now.toDateString();
+        const isTomorrow = sessionDate.toDateString() === new Date(now.getTime() + 24 * 60 * 60 * 1000).toDateString();
+
+        let dateStr = '';
+        if (isToday) {
+          dateStr = 'Today';
+        } else if (isTomorrow) {
+          dateStr = 'Tomorrow';
+        } else {
+          dateStr = sessionDate.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: sessionDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+          });
+        }
+
+        const timeStr = sessionDate.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+
+        return { date: dateStr, time: timeStr };
+      } catch (error) {
+        console.warn('Error formatting session date/time:', error);
+        return null;
+      }
+    };
+
+    const dateTimeInfo = formatSessionDateTime();
+
+    return {
+      title: title?.trim() || 'Untitled Session',
+      dateTime: dateTimeInfo
+    };
+  };
+
   const getStepTitle = () => {
+    const sessionInfo = getSessionDisplayInfo();
+
     if (isEditMode) {
+      // Include session title in edit mode
+      const baseTitle = sessionInfo?.title ? `Edit: ${sessionInfo.title}` : 'Edit Session';
+
       switch (currentStep) {
-        case 'trainers-topics': return 'Edit Session - Assign Trainers & Refine Topics';
-        case 'review': return 'Edit Session - Review Changes';
-        case 'finalize': return 'Edit Session - Update Session';
-        default: return 'Edit Session';
+        case 'trainers-topics': return baseTitle;
+        case 'review': return baseTitle;
+        case 'finalize': return baseTitle;
+        default: return baseTitle;
       }
     }
 
@@ -1190,12 +1467,25 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
   };
 
   const getStepSubtitle = () => {
+    const sessionInfo = getSessionDisplayInfo();
+
     if (isEditMode) {
+      // Build subtitle with date/time info if available
+      let dateTimeStr = '';
+      if (sessionInfo?.dateTime) {
+        dateTimeStr = `${sessionInfo.dateTime.date} at ${sessionInfo.dateTime.time}`;
+        if (currentStep === 'finalize') {
+          dateTimeStr += ' • ';
+        } else {
+          dateTimeStr += ' • ';
+        }
+      }
+
       switch (currentStep) {
-        case 'trainers-topics': return 'Manage topic assignments and trainer assignments for your existing session.';
-        case 'review': return 'Review your changes before updating the session.';
-        case 'finalize': return 'Finalize your changes and update the session.';
-        default: return 'Edit your existing session using the builder interface.';
+        case 'trainers-topics': return dateTimeStr + 'Manage topic assignments and trainer assignments for your existing session.';
+        case 'review': return dateTimeStr + 'Review your changes before updating the session.';
+        case 'finalize': return dateTimeStr + 'Finalize your changes and update the session.';
+        default: return dateTimeStr + 'Edit your existing session using the builder interface.';
       }
     }
 
@@ -1244,11 +1534,7 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
         subtitle={getStepSubtitle()}
         statusSlot={
           <AutosaveIndicator
-            status={state.autosaveStatus}
             lastSavedAt={draft.lastAutosaveAt}
-            onManualSave={manualAutosave}
-            canUndo={canUndoAutosave}
-            onUndo={undoAutosave}
           />
         }
       >
@@ -1278,6 +1564,77 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
           </div>
         )}
 
+        {/* Edit Mode Header */}
+        {isEditMode && (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-blue-900">Edit Mode</h3>
+                <p className="text-xs sm:text-sm text-blue-700 mt-1">
+                  Make changes to your session and use Quick Save to save progress without leaving the page.
+                  <span className="ml-1 text-xs bg-blue-100 px-2 py-0.5 rounded font-mono">Ctrl+S</span>
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleQuickSave}
+                  disabled={quickSaveStatus === 'saving' || !draft}
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                >
+                  {quickSaveStatus === 'saving' ? (
+                    <>
+                      <svg className="h-3 w-3 mr-1 animate-spin" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                      </svg>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                      </svg>
+                      Quick Save
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={() => navigate('/sessions')}
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs"
+                >
+                  Exit to Sessions
+                </Button>
+              </div>
+            </div>
+
+            {/* Quick Save Confirmation */}
+            {showQuickSaveConfirm && quickSaveStatus === 'success' && (
+              <div className="mt-3 rounded bg-green-100 p-2">
+                <p className="text-xs text-green-700 flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Session saved successfully!
+                </p>
+              </div>
+            )}
+
+            {quickSaveStatus === 'error' && (
+              <div className="mt-3 rounded bg-red-100 p-2">
+                <p className="text-xs text-red-700 flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  Failed to save session
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Step Indicator */}
         <div className="mb-6 sm:mb-8">
           <StepIndicator
@@ -1296,17 +1653,44 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               {/* Left: Previous Button */}
               {canGoPrev && (
-                <Button
-                  variant="ghost"
-                  onClick={prevStep}
-                  disabled={variantsStatus === 'pending'}
-                  className="w-full sm:w-auto"
-                >
-                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back
-                </Button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  {isEditMode && (
+                    <Button
+                      onClick={handleQuickSave}
+                      disabled={quickSaveStatus === 'saving' || !draft}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                    >
+                      {quickSaveStatus === 'saving' ? (
+                        <>
+                          <svg className="h-3 w-3 mr-1 animate-spin" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                          </svg>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                          </svg>
+                          Quick Save
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    onClick={prevStep}
+                    disabled={variantsStatus === 'pending'}
+                    className="flex-1 sm:flex-initial"
+                  >
+                    <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </Button>
+                </div>
               )}
 
               {/* Right: Primary Action */}
@@ -1318,9 +1702,11 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
                   size="lg"
                 >
                   {primaryButtonLabel}
-                  <svg className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
+                  {currentStep !== 'finalize' && (
+                    <svg className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
                 </Button>
               )}
             </div>
@@ -1375,16 +1761,24 @@ export const SessionBuilderPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationState = (location.state ?? {}) as BuilderNavigationState;
+  const {
+    prefilledTopics: statePrefilledTopics,
+    savedVariant: stateSavedVariant,
+    initialStep: stateInitialStep,
+    isEditing: stateIsEditingSavedVariant,
+  } = navigationState;
 
   // Determine if this is edit mode from URL pattern
   const isEditMode = location.pathname.includes('/edit/');
+  console.log('[SessionBuilderPage] Edit mode detection:', { pathname: location.pathname, isEditMode });
   const [isCreatingDraft, setIsCreatingDraft] = React.useState(sessionId === 'new');
   const [draftCreationError, setDraftCreationError] = React.useState<string | null>(null);
 
   // Extract prefilled topics from navigation state OR sessionStorage
   const getPrefilledTopics = React.useCallback(() => {
     // First try location state
-    const stateTopics = (location.state as any)?.prefilledTopics;
+    const stateTopics = statePrefilledTopics;
     if (stateTopics && Array.isArray(stateTopics) && stateTopics.length > 0) {
       console.log('[Session Builder Page] Found topics in location.state:', stateTopics);
       return stateTopics;
@@ -1415,22 +1809,21 @@ export const SessionBuilderPage: React.FC = () => {
     }
 
     return null;
-  }, [location.state]);
+  }, [statePrefilledTopics, location.state]);
 
   // Extract saved variant from navigation state
   const getSavedVariant = React.useCallback(() => {
-    const stateSavedVariant = (location.state as any)?.savedVariant;
     if (stateSavedVariant) {
       console.log('[Session Builder Page] Found saved variant in location.state:', stateSavedVariant);
       return stateSavedVariant;
     }
     return null;
-  }, [location.state]);
+  }, [stateSavedVariant, location.state]);
 
   const prefilledTopics = getPrefilledTopics();
   const savedVariant = getSavedVariant();
-  const initialStep = (location.state as any)?.initialStep as BuilderStep | undefined;
-  const isEditingSavedVariant = (location.state as any)?.isEditing;
+  const initialStep = stateInitialStep as BuilderStep | undefined;
+  const isEditingSavedVariant = stateIsEditingSavedVariant;
 
   React.useEffect(() => {
     console.log('[Session Builder Page] Received prefilled topics:', prefilledTopics);

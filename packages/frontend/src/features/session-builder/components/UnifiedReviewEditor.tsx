@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { Button, Card, CardContent, Progress } from '../../../ui';
 import { Trainer } from '@leadership-training/shared';
-import { FlexibleSessionSection, SectionType, SessionOutline, sessionBuilderService } from '../../../services/session-builder.service';
+import { FlexibleSessionSection, SectionType, SessionOutline } from '../../../services/session-builder.service';
+import { trainerService } from '../../../services/trainer.service';
 import { SessionMetadata, SessionTopicDraft } from '../state/types';
 import { cn } from '../../../lib/utils';
 
@@ -23,6 +24,14 @@ interface UnifiedReviewEditorProps {
   isPublishing?: boolean;
   isPublished?: boolean;
   isFinalStep?: boolean;
+  primaryActionLabel?: string;
+  primaryActionBusyLabel?: string;
+  primaryActionSuccessLabel?: string;
+  isPrimaryActionBusy?: boolean;
+  isPrimaryActionComplete?: boolean;
+  disablePrimaryAction?: boolean;
+  requireTopicsForPrimaryAction?: boolean;
+  primaryActionClassName?: string;
 }
 
 interface TopicWithSection {
@@ -64,6 +73,14 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
   isPublishing = false,
   isPublished = false,
   isFinalStep = false,
+  primaryActionLabel,
+  primaryActionBusyLabel,
+  primaryActionSuccessLabel,
+  isPrimaryActionBusy,
+  isPrimaryActionComplete,
+  disablePrimaryAction,
+  requireTopicsForPrimaryAction = true,
+  primaryActionClassName,
 }) => {
   const [expandedTopics, setExpandedTopics] = React.useState<Set<number>>(new Set());
   const [editingSection, setEditingSection] = React.useState<string | null>(null);
@@ -163,9 +180,8 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
     const loadMissing = async () => {
       await Promise.all(Array.from(missingIds).map(async (trainerId) => {
         try {
-          // Simple trainer name resolution - using sessionBuilderService like step 2
-          const trainers = await sessionBuilderService.getTrainers('', 100);
-          const trainer = trainers.find(t => t.id === trainerId);
+          // Use the proper trainerService to get individual trainer
+          const trainer = await trainerService.getTrainer(trainerId);
           if (trainer && !cancelled) {
             trainerCache.current.set(trainer.id, trainer);
             setResolvedTrainerNames((prev) => {
@@ -195,6 +211,14 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
   const assignedCount = topicsWithSections.filter(item => item.isAssigned).length;
   const completedCount = topicsWithSections.filter(item => item.isComplete).length;
   const completionProgress = totalTopics > 0 ? (completedCount / totalTopics) * 100 : 0;
+  const topicsComplete = totalTopics === 0 || completedCount === totalTopics;
+  const primaryBusy = isPrimaryActionBusy ?? isPublishing;
+  const primaryComplete = isPrimaryActionComplete ?? isPublished;
+  const primaryDisabledExplicit = disablePrimaryAction ?? false;
+  const topicsGateFailed = requireTopicsForPrimaryAction && !topicsComplete;
+  const primaryDisabled =
+    primaryDisabledExplicit || primaryBusy || primaryComplete || topicsGateFailed;
+  const showActiveStyle = topicsComplete && !primaryDisabledExplicit && !primaryBusy && !primaryComplete;
 
   const toggleTopicExpansion = (topicIndex: number) => {
     setExpandedTopics(prev => {
@@ -622,33 +646,37 @@ export const UnifiedReviewEditor: React.FC<UnifiedReviewEditorProps> = ({
         {onPublish && (
           <Button
             onClick={onPublish}
-            disabled={isPublishing || isPublished || completedCount < totalTopics}
+            disabled={primaryDisabled}
             size="lg"
             className={cn(
               'w-full sm:w-auto',
-              completedCount === totalTopics
+              showActiveStyle
                 ? 'bg-green-600 hover:bg-green-700 text-lg px-8'
-                : 'bg-slate-400 cursor-not-allowed'
+                : 'bg-slate-400 cursor-not-allowed',
+              primaryActionClassName
             )}
           >
-            {isPublishing ? (
+            {primaryBusy ? (
               <>
                 <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2" />
-                Publishing...
+                {primaryActionBusyLabel ??
+                  (isFinalStep ? 'Publishing...' : 'Saving...')}
               </>
-            ) : isPublished ? (
+            ) : primaryComplete ? (
               <>
                 <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                 </svg>
-                Published
+                {primaryActionSuccessLabel ??
+                  (isFinalStep ? 'Published' : 'Saved')}
               </>
             ) : (
               <>
                 <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                {isFinalStep ? 'Publish Session' : 'Continue to Finalize'}
+                {primaryActionLabel ??
+                  (isFinalStep ? 'Publish Session' : 'Continue to Finalize')}
               </>
             )}
           </Button>

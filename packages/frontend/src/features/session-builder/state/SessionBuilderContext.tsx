@@ -1,4 +1,4 @@
-import { TONE_DEFAULTS } from '@leadership-training/shared';
+import { SessionStatus, TONE_DEFAULTS } from '@leadership-training/shared';
 import * as React from 'react';
 import {
   sessionBuilderService,
@@ -25,10 +25,7 @@ interface SessionBuilderContextValue {
   acceptVersion: (versionId: string) => void;
   rejectAcceptedVersion: () => void;
   selectVersion: (versionId: string) => void;
-  manualAutosave: () => Promise<void>;
   publishSession: () => Promise<void>;
-  canUndoAutosave: boolean;
-  undoAutosave: () => void;
   variants: MultiVariantResponse['variants'];
   variantsStatus: 'idle' | 'pending' | 'success' | 'error';
   variantsError: string | null;
@@ -45,7 +42,6 @@ interface SessionBuilderContextValue {
 const SessionBuilderContext =
   React.createContext<SessionBuilderContextValue | undefined>(undefined);
 
-const AUTOSAVE_DEBOUNCE_MS = 1500;
 const DEFAULT_TIMEZONE = 'America/New_York';
 const SESSION_TYPE_VALUES = ['event', 'training', 'workshop', 'webinar'] as const;
 
@@ -83,6 +79,7 @@ function buildDefaultMetadata(): SessionMetadata {
     title: '',
     sessionType: null, // No default selection
     category: '',
+    sessionStatus: SessionStatus.DRAFT,
     desiredOutcome: '',
     currentProblem: '',
     specificTopics: '',
@@ -113,6 +110,7 @@ function metadataToInput(metadata: SessionMetadata): SessionBuilderInput {
     categoryId: metadata.categoryId,
     categoryName: metadata.category,
     sessionType: normalizeSessionType(metadata.sessionType),
+    sessionStatus: metadata.sessionStatus ?? SessionStatus.DRAFT,
     desiredOutcome: metadata.desiredOutcome,
     currentProblem: metadata.currentProblem,
     specificTopics: metadata.specificTopics,
@@ -147,6 +145,7 @@ function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
     sessionType: normalizedSessionType,
     category: input.categoryName ?? input.category,
     categoryId: input.categoryId,
+    sessionStatus: input.sessionStatus ?? SessionStatus.DRAFT,
     desiredOutcome: input.desiredOutcome,
     currentProblem: input.currentProblem ?? '',
     specificTopics: input.specificTopics ?? '',
@@ -215,7 +214,7 @@ function normalizeCategoryId(value: unknown): number | undefined {
   return undefined;
 }
 
-function deriveTopicsFromOutline(outline: SessionOutline | null | undefined): SessionTopicDraft[] {
+function createTopicsFromOutline(outline: SessionOutline | null | undefined): SessionTopicDraft[] {
   if (!outline?.sections || !Array.isArray(outline.sections)) {
     return [];
   }
@@ -233,9 +232,15 @@ function deriveTopicsFromOutline(outline: SessionOutline | null | undefined): Se
     deliveryGuidance: section.deliveryGuidance || '',
     callToAction: section.suggestedActivities?.join('\n') || '',
     trainerName: section.trainerName,
+    position: section.position ?? index + 1,
     ...(section.associatedTopic?.id ? { topicId: section.associatedTopic.id } : {}),
     ...(section.trainerId ? { trainerId: section.trainerId } : {}),
   }));
+}
+
+// Legacy function for backward compatibility - delegates to the new unified function
+function deriveTopicsFromOutline(outline: SessionOutline | null | undefined): SessionTopicDraft[] {
+  return createTopicsFromOutline(outline);
 }
 
 function outlineToVersion(outline: SessionOutline, prompt: string): AIContentVersion {
@@ -423,8 +428,6 @@ export const SessionBuilderProvider: React.FC<{
   const [state, dispatch] = React.useReducer(builderReducer, initialBuilderState);
   const { publish } = useToast();
   const lastSavedRef = React.useRef<SessionDraftData | null>(null);
-  const undoTimerRef = React.useRef<number | null>(null);
-  const [canUndoAutosave, setCanUndoAutosave] = React.useState(false);
   const [variants, setVariants] = React.useState<MultiVariantResponse['variants']>([]);
   const [variantsStatus, setVariantsStatus] =
     React.useState<'idle' | 'pending' | 'success' | 'error'>('idle');
@@ -442,34 +445,7 @@ export const SessionBuilderProvider: React.FC<{
     });
   }, [publish]);
 
-  const showUndoTemporarily = React.useCallback(() => {
-    setCanUndoAutosave(true);
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    if (undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-    }
-
-    undoTimerRef.current = window.setTimeout(() => {
-      setCanUndoAutosave(false);
-      undoTimerRef.current = null;
-    }, 8000);
-  }, []);
-
-  const undoAutosave = React.useCallback(() => {
-    if (!lastSavedRef.current) return;
-    const restored = cloneDraft(lastSavedRef.current);
-    dispatch({ type: 'RESTORE_DRAFT', payload: restored });
-    setCanUndoAutosave(false);
-
-    if (typeof window !== 'undefined' && undoTimerRef.current) {
-      window.clearTimeout(undoTimerRef.current);
-      undoTimerRef.current = null;
-    }
-  }, [dispatch]);
-
+  
   const loadDraft = React.useCallback(async (): Promise<SessionDraftData> => {
     // Handle saved variant first (highest priority)
     if (savedVariant) {
@@ -486,6 +462,7 @@ export const SessionBuilderProvider: React.FC<{
         sessionType: normalizeSessionType(savedVariant.sessionType || null),
         category: metadataFromVariant?.category ?? '',
         categoryId: categoryIdFromVariant,
+        sessionStatus: metadataFromVariant?.sessionStatus ?? SessionStatus.DRAFT,
         desiredOutcome: metadataFromVariant?.desiredOutcome || '',
         currentProblem: metadataFromVariant?.currentProblem || '',
         specificTopics: metadataFromVariant?.specificTopics || '',
@@ -573,52 +550,72 @@ export const SessionBuilderProvider: React.FC<{
       try {
         const serverDraft = await sessionBuilderService.getCompleteSessionData(sessionId);
         if (serverDraft) {
-          const draftMetadataInput = serverDraft.builderDraft?.metadata as SessionBuilderInput | undefined;
-          const metadataFromDraft = draftMetadataInput ? inputToMetadata(draftMetadataInput) : undefined;
+          const draftMetadata = serverDraft.builderDraft?.metadata as any;
 
+          // Helper function to safely transform date values to ISO strings
+          const toIsoString = (value?: string | Date | null): string => {
+            if (!value) {
+              return '';
+            }
+
+            try {
+              let parsed: Date;
+
+              if (value instanceof Date) {
+                // Handle Date objects directly
+                parsed = value;
+              } else if (typeof value === 'string') {
+                // Handle string values - try to parse as ISO date
+                parsed = new Date(value);
+              } else {
+                // Handle any other type by converting to string first
+                parsed = new Date(String(value));
+              }
+
+              if (Number.isNaN(parsed.getTime())) {
+                console.warn('[SessionBuilderContext] Invalid date value:', { value, valueType: typeof value });
+                return '';
+              }
+
+              return parsed.toISOString();
+            } catch (error) {
+              console.error('[SessionBuilderContext] Error converting date to ISO:', { value, error });
+              return '';
+            }
+          };
+
+          // Transform serverDraft date/time values properly
+          const startTimeIso = toIsoString(serverDraft.startTime);
+          const endTimeIso = toIsoString(serverDraft.endTime);
+
+          // Simplified: session entity always takes precedence, only add builder-specific fields
           const metadata: SessionMetadata = {
-            title: serverDraft.title ?? metadataFromDraft?.title ?? '',
-            sessionType: normalizeSessionType(
-              serverDraft.sessionType ?? metadataFromDraft?.sessionType ?? null
-            ),
-            category: metadataFromDraft?.category ?? serverDraft.category?.name ?? '',
-            categoryId: metadataFromDraft?.categoryId ?? serverDraft.category?.id,
-            desiredOutcome: serverDraft.desiredOutcome ?? metadataFromDraft?.desiredOutcome ?? '',
-            currentProblem: metadataFromDraft?.currentProblem ?? '',
-            specificTopics: metadataFromDraft?.specificTopics ?? '',
-            startDate:
-              metadataFromDraft?.startDate ??
-              serverDraft.startTime?.slice(0, 10) ??
-              new Date().toISOString().slice(0, 10),
-            startTime: metadataFromDraft?.startTime ?? serverDraft.startTime ?? new Date().toISOString(),
-            endTime:
-              metadataFromDraft?.endTime ??
-              serverDraft.endTime ??
-              new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-            timezone: metadataFromDraft?.timezone ?? serverDraft.timezone ?? DEFAULT_TIMEZONE,
-            location: metadataFromDraft?.location ?? serverDraft.locationName ?? '',
-            locationId: metadataFromDraft?.locationId ?? serverDraft.locationId,
-            locationType: metadataFromDraft?.locationType ?? serverDraft.location?.locationType,
-            meetingPlatform: metadataFromDraft?.meetingPlatform ?? serverDraft.location?.meetingPlatform,
-            locationCapacity: metadataFromDraft?.locationCapacity ?? serverDraft.location?.capacity,
-            locationTimezone:
-              metadataFromDraft?.locationTimezone ??
-              serverDraft.location?.timezone ??
-              serverDraft.timezone ??
-              DEFAULT_TIMEZONE,
-            locationNotes:
-              metadataFromDraft?.locationNotes ??
-              serverDraft.location?.notes ??
-              serverDraft.location?.accessInstructions ??
-              undefined,
-            audienceId: metadataFromDraft?.audienceId ?? serverDraft.audienceId,
-            audienceName: metadataFromDraft?.audienceName ?? serverDraft.audienceName ?? undefined,
-            toneId: metadataFromDraft?.toneId ?? serverDraft.toneId,
-            toneName: metadataFromDraft?.toneName ?? serverDraft.toneName ?? undefined,
-            marketingToneId: metadataFromDraft?.marketingToneId ?? serverDraft.marketingToneId,
-            marketingToneName: metadataFromDraft?.marketingToneName ?? serverDraft.marketingToneName ?? TONE_DEFAULTS.MARKETING,
-            // If topics aren't in the draft metadata, check if we have prefilled topics
-            topics: metadataFromDraft?.topics ?? [],
+            title: serverDraft.title,
+            sessionType: null, // No longer stored in draft
+            category: serverDraft.category?.name ?? '',
+            categoryId: serverDraft.category?.id,
+            sessionStatus: serverDraft.status,
+            desiredOutcome: serverDraft.desiredOutcome,
+            currentProblem: draftMetadata?.currentProblem ?? '',
+            specificTopics: draftMetadata?.specificTopics ?? '',
+            startDate: startTimeIso ? startTimeIso.split('T')[0] : startTimeIso,
+            startTime: startTimeIso,
+            endTime: endTimeIso,
+            timezone: serverDraft.timezone ?? DEFAULT_TIMEZONE,
+            location: serverDraft.locationName ?? '',
+            locationId: serverDraft.locationId,
+            locationType: serverDraft.location?.locationType,
+            meetingPlatform: serverDraft.location?.meetingPlatform,
+            locationCapacity: serverDraft.location?.capacity,
+            locationTimezone: serverDraft.location?.timezone ?? DEFAULT_TIMEZONE,
+            locationNotes: serverDraft.location?.notes ?? serverDraft.location?.accessInstructions,
+            audienceId: serverDraft.audienceId,
+            audienceName: serverDraft.audienceName,
+            toneId: serverDraft.toneId,
+            toneName: serverDraft.toneName,
+            marketingToneId: serverDraft.marketingToneId,
+            marketingToneName: serverDraft.marketingToneName ?? TONE_DEFAULTS.MARKETING,
+            topics: draftMetadata?.topics ?? [],
           };
 
           // Apply prefilled topics if they exist and metadata doesn't already have topics
@@ -741,16 +738,7 @@ export const SessionBuilderProvider: React.FC<{
     };
   }, [loadDraft]);
 
-  React.useEffect(() => {
-    const timer =
-      state.autosaveStatus === 'success'
-        ? window.setTimeout(() => dispatch({ type: 'AUTOSAVE_IDLE' }), 2000)
-        : undefined;
-    return () => {
-      if (timer) window.clearTimeout(timer);
-    };
-  }, [state.autosaveStatus]);
-
+  
   React.useEffect(() => {
     if (!state.draft) return;
     const nextReadiness = calculateReadiness(state.draft);
@@ -759,66 +747,8 @@ export const SessionBuilderProvider: React.FC<{
     }
   }, [state.draft]);
 
-  const manualAutosave = React.useCallback(async () => {
-    if (!state.draft) return;
-    dispatch({ type: 'AUTOSAVE_PENDING' });
-    try {
-      const response = await sessionBuilderService.autosaveDraft(
-        state.draft.sessionId,
-        convertAutosavePayload(state.draft)
-      );
-      const savedAt = response?.savedAt ?? new Date().toISOString();
-      lastSavedRef.current = cloneDraft({ ...state.draft, lastAutosaveAt: savedAt, isDirty: false });
-      dispatch({ type: 'AUTOSAVE_SUCCESS', payload: savedAt });
-      showUndoTemporarily();
-    } catch (error: any) {
-      const message = error?.message ?? 'Autosave failed';
-      dispatch({ type: 'AUTOSAVE_FAILURE', payload: message });
-      publish({
-        variant: 'error',
-        title: 'Autosave failed',
-        description: message,
-      });
-      throw error;
-    }
-  }, [state.draft, publish, showUndoTemporarily]);
-
-  React.useEffect(() => {
-    const draftSnapshot = state.draft;
-    if (!draftSnapshot || !draftSnapshot.isDirty || state.status !== 'ready') {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      dispatch({ type: 'AUTOSAVE_PENDING' });
-      sessionBuilderService
-        .autosaveDraft(draftSnapshot.sessionId, convertAutosavePayload(draftSnapshot))
-        .then((response) => {
-          const savedAt = response?.savedAt ?? new Date().toISOString();
-          lastSavedRef.current = cloneDraft({
-            ...draftSnapshot,
-            lastAutosaveAt: savedAt,
-            isDirty: false,
-          });
-          dispatch({ type: 'AUTOSAVE_SUCCESS', payload: savedAt });
-          showUndoTemporarily();
-        })
-        .catch((error: any) => {
-          const message = error?.message ?? 'Autosave failed';
-          dispatch({ type: 'AUTOSAVE_FAILURE', payload: message });
-          publish({
-            variant: 'error',
-            title: 'Autosave failed',
-            description: message,
-            actionLabel: 'Retry now',
-            onAction: () => void manualAutosave(),
-          });
-        });
-    }, AUTOSAVE_DEBOUNCE_MS);
-
-    return () => window.clearTimeout(timer);
-  }, [state.draft, state.status, publish, manualAutosave, showUndoTemporarily]);
-
+  
+  
   const updateMetadata = React.useCallback((updates: Partial<SessionMetadata>) => {
     dispatch({ type: 'UPDATE_METADATA', payload: updates });
     setVariants([]);
@@ -835,6 +765,12 @@ export const SessionBuilderProvider: React.FC<{
 
   const updateOutline = React.useCallback((outline: SessionOutline) => {
     dispatch({ type: 'UPDATE_OUTLINE', payload: outline });
+
+    // Automatically derive and sync topics from outline to ensure they're always available
+    const derivedTopics = createTopicsFromOutline(outline);
+    if (derivedTopics.length > 0) {
+      dispatch({ type: 'UPDATE_METADATA', payload: { topics: derivedTopics } });
+    }
   }, []);
 
   const applyServerOutline = React.useCallback((outline: SessionOutline) => {
@@ -842,17 +778,20 @@ export const SessionBuilderProvider: React.FC<{
       return;
     }
 
-    const savedAt = new Date().toISOString();
     const updatedDraft: SessionDraftData = {
       ...state.draft,
       outline,
-      lastAutosaveAt: savedAt,
       isDirty: false,
     };
 
     lastSavedRef.current = cloneDraft(updatedDraft);
     dispatch({ type: 'UPDATE_OUTLINE', payload: outline });
-    dispatch({ type: 'AUTOSAVE_SUCCESS', payload: savedAt });
+
+    // Automatically derive and sync topics from server outline
+    const derivedTopics = createTopicsFromOutline(outline);
+    if (derivedTopics.length > 0) {
+      dispatch({ type: 'UPDATE_METADATA', payload: { topics: derivedTopics } });
+    }
   }, [state.draft]);
 
   const addOutlineSection = React.useCallback(async (sectionType: SectionType, position?: number) => {
@@ -873,10 +812,25 @@ export const SessionBuilderProvider: React.FC<{
       return;
     }
 
+    const performUpdate = async () => {
+      return sessionBuilderService.updateSection(state.draft.sessionId, sectionId, updates);
+    };
+
     try {
-      const updatedOutline = await sessionBuilderService.updateSection(state.draft.sessionId, sectionId, updates);
+      const updatedOutline = await performUpdate();
       applyServerOutline(updatedOutline);
-    } catch (error) {
+    } catch (error: any) {
+      const status = error?.response?.status ?? error?.status;
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error?.message === 'string'
+            ? error.message
+            : '';
+      const shouldRetryAfterAutosave =
+        status === 404 || message.toLowerCase().includes('not found');
+
+      
       handleOutlineError('Unable to update section', error);
     }
   }, [state.draft, applyServerOutline, handleOutlineError]);
@@ -944,6 +898,12 @@ export const SessionBuilderProvider: React.FC<{
     if (version && version.sections && version.sections.length > 0) {
       const outline = versionToOutline(version);
       dispatch({ type: 'UPDATE_OUTLINE', payload: outline });
+
+      // Automatically derive and sync topics from accepted version outline
+      const derivedTopics = createTopicsFromOutline(outline);
+      if (derivedTopics.length > 0) {
+        dispatch({ type: 'UPDATE_METADATA', payload: { topics: derivedTopics } });
+      }
     }
   }, [state.draft]);
 
@@ -1086,6 +1046,12 @@ export const SessionBuilderProvider: React.FC<{
       dispatch({ type: 'AI_REQUEST_SUCCESS', payload: versionWithContext });
       dispatch({ type: 'ACCEPT_AI_VERSION', payload: versionWithContext.id });
       dispatch({ type: 'UPDATE_OUTLINE', payload: selected.outline });
+
+      // Automatically derive and sync topics from selected variant outline
+      const derivedTopics = createTopicsFromOutline(selected.outline);
+      if (derivedTopics.length > 0) {
+        dispatch({ type: 'UPDATE_METADATA', payload: { topics: derivedTopics } });
+      }
 
       try {
         const loggingSource: 'rag' | 'baseline' =
@@ -1249,15 +1215,7 @@ export const SessionBuilderProvider: React.FC<{
     }
   }, [state.draft, state.publishStatus, publish]);
 
-  React.useEffect(() => {
-    return () => {
-      if (typeof window !== 'undefined' && undoTimerRef.current) {
-        window.clearTimeout(undoTimerRef.current);
-        undoTimerRef.current = null;
-      }
-    };
-  }, []);
-
+  
   const value = React.useMemo<SessionBuilderContextValue>(() => ({
     state,
     updateMetadata,
@@ -1272,10 +1230,7 @@ export const SessionBuilderProvider: React.FC<{
     acceptVersion,
     rejectAcceptedVersion,
     selectVersion,
-    manualAutosave,
     publishSession,
-    canUndoAutosave,
-    undoAutosave,
     variants,
     variantsStatus,
     variantsError,
@@ -1296,10 +1251,7 @@ export const SessionBuilderProvider: React.FC<{
     acceptVersion,
     rejectAcceptedVersion,
     selectVersion,
-    manualAutosave,
     publishSession,
-    canUndoAutosave,
-    undoAutosave,
     variants,
     variantsStatus,
     variantsError,

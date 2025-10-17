@@ -339,6 +339,7 @@ describe('SessionBuilderProvider workflow', () => {
         category: 'Leadership',
         desiredOutcome: 'Equip managers to lead change with empathy.',
         location: 'Virtual',
+        sessionType: 'workshop',
       });
     });
 
@@ -414,7 +415,7 @@ describe('SessionBuilderProvider variant generation', () => {
 
     await waitFor(() => expect(harnessRef.current?.getVariantsStatus()).toBe('error'), { timeout: 2000 });
     expect(mocks.publishMock).toHaveBeenCalledWith(expect.objectContaining({
-      variant: 'warning',
+      variant: 'error',
       title: 'More details needed',
     }));
   }, { timeout: 10000 });
@@ -442,6 +443,7 @@ describe('SessionBuilderProvider variant generation', () => {
         category: 'Leadership',
         locationId: 101,
         location: 'Leadership Hub',
+        sessionType: 'workshop',
       });
     });
 
@@ -485,6 +487,7 @@ describe('SessionBuilderProvider variant generation', () => {
         category: 'Leadership',
         locationId: 202,
         location: 'Innovation Lab',
+        sessionType: 'workshop',
       });
     });
 

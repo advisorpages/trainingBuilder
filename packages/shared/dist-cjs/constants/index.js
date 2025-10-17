@@ -105,7 +105,6 @@ exports.DEFAULTS = {
     MAX_REGISTRATIONS_PER_SESSION: 50,
     LOCATION_CAPACITY: 30,
 };
-
 exports.TONE_DEFAULTS = {
     INSTRUCTIONAL: 'Instructional',
     MARKETING: 'Conversational',

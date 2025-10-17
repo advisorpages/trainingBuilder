@@ -2,7 +2,6 @@ import { BuilderAction, BuilderState } from './types';
 
 export const initialBuilderState: BuilderState = {
   status: 'idle',
-  autosaveStatus: 'idle',
   aiStatus: 'idle',
   draft: null,
   error: undefined,
@@ -22,7 +21,6 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     case 'INIT_SUCCESS':
       return {
         status: 'ready',
-        autosaveStatus: 'idle',
         aiStatus: 'idle',
         error: undefined,
         draft: action.payload,
@@ -141,33 +139,6 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
           acceptedVersionId: undefined,
           isDirty: true,
         },
-      };
-    case 'AUTOSAVE_PENDING':
-      return {
-        ...state,
-        autosaveStatus: 'pending',
-      };
-    case 'AUTOSAVE_SUCCESS':
-      if (!state.draft) return state;
-      return {
-        ...state,
-        autosaveStatus: 'success',
-        draft: {
-          ...state.draft,
-          lastAutosaveAt: action.payload,
-          isDirty: false,
-        },
-      };
-    case 'AUTOSAVE_FAILURE':
-      return {
-        ...state,
-        autosaveStatus: 'error',
-        error: action.payload,
-      };
-    case 'AUTOSAVE_IDLE':
-      return {
-        ...state,
-        autosaveStatus: 'idle',
       };
     case 'UPDATE_READINESS':
       if (!state.draft) return state;

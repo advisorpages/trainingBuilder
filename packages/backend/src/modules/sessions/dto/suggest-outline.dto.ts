@@ -1,6 +1,6 @@
 import { IsEnum, IsOptional, IsString, IsArray, ValidateNested, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { LocationType, MeetingPlatform } from '../../../entities';
+import { LocationType, MeetingPlatform, SessionStatus } from '../../../entities';
 
 export class TopicDto {
   @IsString()
@@ -56,6 +56,10 @@ export class SuggestOutlineDto {
 
   @IsEnum(SuggestedSessionType)
   sessionType: SuggestedSessionType;
+
+  @IsOptional()
+  @IsEnum(SessionStatus)
+  sessionStatus?: SessionStatus;
 
   @IsString()
   desiredOutcome: string;

@@ -5,6 +5,39 @@ import { api } from './api.service';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api';
 
+type SessionResponse = Session & {
+  scheduledAt?: string | Date | null;
+  durationMinutes?: number | null;
+};
+
+const normalizeSessionResponse = <T extends SessionResponse>(session: T): T => {
+  if (!session) {
+    return session;
+  }
+
+  const startSource = session.startTime ?? session.scheduledAt ?? null;
+
+  if (startSource) {
+    session.startTime = startSource;
+    if (session.scheduledAt === undefined || session.scheduledAt === null) {
+      session.scheduledAt = startSource;
+    }
+  }
+
+  if ((!session.endTime || session.endTime === null) && typeof session.durationMinutes === 'number' && startSource) {
+    const parsedStart = new Date(startSource as any);
+    if (!Number.isNaN(parsedStart.getTime())) {
+      const computedEnd = new Date(parsedStart.getTime() + session.durationMinutes * 60 * 1000);
+      session.endTime = computedEnd.toISOString() as any;
+    }
+  }
+
+  return session;
+};
+
+const normalizeSessionCollection = <T extends SessionResponse>(sessions: T[]): T[] =>
+  Array.isArray(sessions) ? sessions.map((session) => normalizeSessionResponse({ ...session })) : sessions;
+
 export interface SessionTopicAssignmentPayload {
   topicId: number;
   sequenceOrder?: number;
@@ -16,8 +49,8 @@ export interface SessionTopicAssignmentPayload {
 export interface CreateSessionRequest {
   title: string;
   description?: string;
-  startTime: Date;
-  endTime: Date;
+  startTime: Date | string;
+  endTime: Date | string;
   locationId?: number;
   audienceId?: number;
   toneId?: number;
@@ -42,23 +75,58 @@ class SessionService {
   private readonly base = `${API_BASE_URL}${API_ENDPOINTS.SESSIONS.BASE}`;
 
   async createSession(data: CreateSessionRequest): Promise<Session> {
-    const response = await api.post<Session>(`${this.base}/`, data);
-    return response.data;
+    const response = await api.post<SessionResponse>(`${this.base}/`, data);
+    return normalizeSessionResponse(response.data);
   }
 
   async updateSession(id: string, data: UpdateSessionRequest): Promise<Session> {
-    const response = await api.patch<Session>(`${this.base}/${id}`, data);
-    return response.data;
+    // Debug logging to track request data
+    console.log('[SessionService.updateSession] Sending request:', {
+      id,
+      data: {
+        ...data,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        startTimeType: typeof data.startTime,
+        endTimeType: typeof data.endTime
+      }
+    });
+
+    const response = await api.patch<SessionResponse>(`${this.base}/${id}`, data);
+
+    // Debug logging to track response data
+    console.log('[SessionService.updateSession] Received response:', {
+      id,
+      sessionData: {
+        id: response.data.id,
+        startTime: response.data.startTime,
+        endTime: response.data.endTime
+      }
+    });
+
+    return normalizeSessionResponse(response.data);
   }
 
   async getSession(id: string): Promise<Session> {
-    const response = await api.get<Session>(`${this.base}/${id}`);
-    return response.data;
+    const response = await api.get<SessionResponse>(`${this.base}/${id}`);
+
+    // Debug logging to track session data
+    console.log('[SessionService.getSession] Received session data:', {
+      id,
+      sessionData: {
+        id: response.data.id,
+        startTime: response.data.startTime,
+        endTime: response.data.endTime,
+        title: response.data.title
+      }
+    });
+
+    return normalizeSessionResponse(response.data);
   }
 
   async getSessions(): Promise<Session[]> {
-    const response = await api.get<Session[]>(`${this.base}/`);
-    return response.data;
+    const response = await api.get<SessionResponse[]>(`${this.base}/`);
+    return normalizeSessionCollection(response.data);
   }
 
   async deleteSession(id: string): Promise<void> {
@@ -66,19 +134,19 @@ class SessionService {
   }
 
   async getSessionsByAuthor(authorId: string): Promise<Session[]> {
-    const response = await api.get<Session[]>(`${this.base}/author/${authorId}`);
-    return response.data;
+    const response = await api.get<SessionResponse[]>(`${this.base}/author/${authorId}`);
+    return normalizeSessionCollection(response.data);
   }
 
   // Draft-specific methods for Story 2.2
   async saveDraft(id: string, data: UpdateSessionRequest): Promise<Session> {
-    const response = await api.patch<Session>(`${this.base}/${id}/draft`, data);
-    return response.data;
+    const response = await api.patch<SessionResponse>(`${this.base}/${id}/draft`, data);
+    return normalizeSessionResponse(response.data);
   }
 
   async getMyDrafts(): Promise<Session[]> {
-    const response = await api.get<Session[]>(`${this.base}/drafts/my`);
-    return response.data;
+    const response = await api.get<SessionResponse[]>(`${this.base}/drafts/my`);
+    return normalizeSessionCollection(response.data);
   }
 
   async autoSaveDraft(id: string, partialData: Partial<UpdateSessionRequest>): Promise<{ success: boolean; lastSaved: Date }> {
@@ -99,8 +167,8 @@ class SessionService {
 
   // Status update methods for Story 3.2
   async updateSessionStatus(id: string, statusUpdate: StatusUpdateRequest): Promise<Session> {
-    const response = await api.patch<Session>(`${this.base}/${id}/status`, statusUpdate);
-    return response.data;
+    const response = await api.patch<SessionResponse>(`${this.base}/${id}/status`, statusUpdate);
+    return normalizeSessionResponse(response.data);
   }
 
   async getSessionStatusHistory(id: string): Promise<Array<Record<string, any>>> {
@@ -114,8 +182,8 @@ class SessionService {
   }
 
   async publishSession(id: string): Promise<Session> {
-    const response = await api.post<Session>(`${this.base}/${id}/publish`);
-    return response.data;
+    const response = await api.post<SessionResponse>(`${this.base}/${id}/publish`);
+    return normalizeSessionResponse(response.data);
   }
 
   async bulkArchive(sessionIds: string[]): Promise<{ archived: number }> {

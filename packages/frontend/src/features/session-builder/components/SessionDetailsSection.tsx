@@ -104,25 +104,77 @@ export const SessionDetailsSection: React.FC<SessionDetailsSectionProps> = ({
     }));
   };
 
-  // Format display values
-  const displayDate = metadata.startDate ? new Date(metadata.startDate).toLocaleDateString('en-US', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  }) : 'Date TBD';
+  // Format display values with improved error handling
+  const formatDateDisplay = (dateValue?: string): string => {
+    if (!dateValue) {
+      return 'Date TBD';
+    }
 
-  const displayStartTime = metadata.startTime ? new Date(metadata.startTime).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  }) : 'Time TBD';
+    try {
+      const date = new Date(dateValue);
+      if (Number.isNaN(date.getTime())) {
+        // If direct parsing fails, try parsing as ISO date
+        const isoDate = new Date(dateValue.includes('T') ? dateValue : `${dateValue}T00:00:00`);
+        if (Number.isNaN(isoDate.getTime())) {
+          return 'Date TBD';
+        }
+        return isoDate.toLocaleDateString('en-US', {
+          weekday: 'short',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      }
 
-  const displayEndTime = metadata.endTime ? new Date(metadata.endTime).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  }) : 'Time TBD';
+      return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('[SessionDetailsSection] Error formatting date:', { dateValue, error });
+      return 'Date TBD';
+    }
+  };
+
+  const formatTimeDisplay = (timeValue?: string): string => {
+    if (!timeValue) {
+      return 'Time TBD';
+    }
+
+    try {
+      const time = new Date(timeValue);
+      if (Number.isNaN(time.getTime())) {
+        return 'Time TBD';
+      }
+
+      return time.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.error('[SessionDetailsSection] Error formatting time:', { timeValue, error });
+      return 'Time TBD';
+    }
+  };
+
+  const displayDate = formatDateDisplay(metadata.startDate || metadata.startTime);
+  const displayStartTime = formatTimeDisplay(metadata.startTime);
+  const displayEndTime = formatTimeDisplay(metadata.endTime);
+
+  // Only log when we have TBD values to debug the issue
+  if (displayDate === 'Date TBD' || displayStartTime === 'Time TBD' || displayEndTime === 'Time TBD') {
+    console.log('[SessionDetailsSection] TBD Values detected:', {
+      startDate: metadata.startDate,
+      startTime: metadata.startTime,
+      endTime: metadata.endTime,
+      displayDate,
+      displayStartTime,
+      displayEndTime
+    });
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">

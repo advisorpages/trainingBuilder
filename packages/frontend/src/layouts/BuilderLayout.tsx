@@ -44,14 +44,7 @@ const allNavItems: NavItem[] = [
     roles: ['content_developer', 'broker'],
     icon: '🤖',
   },
-  {
-    label: 'Classic Session Builder',
-    description: 'Manual session creation',
-    to: '/sessions/builder/classic/new',
-    roles: ['content_developer', 'broker'],
-    icon: '🛠️',
-  },
-  {
+    {
     label: 'Sessions',
     description: 'Manage existing sessions and drafts',
     to: '/sessions',

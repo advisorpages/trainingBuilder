@@ -562,8 +562,8 @@ const SessionEditPage: React.FC = () => {
         status: formData.status,
         readinessScore: formData.readinessScore,
         durationMinutes,
-        startTime: formData.startTime ? new Date(formData.startTime) : undefined,
-        endTime: formData.endTime ? new Date(formData.endTime) : undefined,
+        startTime: formData.startTime ? new Date(formData.startTime).toISOString() : undefined,
+        endTime: formData.endTime ? new Date(formData.endTime).toISOString() : undefined,
         incentiveIds: formData.incentiveIds,
         sessionTopics: sessionTopicsPayload,
       };

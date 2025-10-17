@@ -92,6 +92,7 @@ describe('SessionsService', () => {
   let incentiveRepository: Repository<Incentive> | undefined;
   let userRepository: Repository<User> | undefined;
   let sessionRepository: Repository<Session> | undefined;
+  let draftsRepository: Repository<SessionBuilderDraft> | undefined;
   let dataSource: DataSource | undefined;
   let container: StartedTestContainer | undefined;
   let runtimeAvailable = true;
@@ -158,6 +159,7 @@ describe('SessionsService', () => {
     incentiveRepository = moduleRef.get(getRepositoryToken(Incentive));
     userRepository = moduleRef.get(getRepositoryToken(User));
     sessionRepository = moduleRef.get(getRepositoryToken(Session));
+    draftsRepository = moduleRef.get(getRepositoryToken(SessionBuilderDraft));
     dataSource = moduleRef.get(DataSource);
 
     await userRepository.save(
@@ -204,6 +206,51 @@ describe('SessionsService', () => {
     const fetched = await service.findOne(session.id);
     expect(fetched.topics?.[0]?.id).toEqual(topic.id);
     expect(fetched.incentives).toHaveLength(1);
+  });
+
+  it('updates session metadata via autosaveBuilderDraft for existing sessions', async () => {
+    if (!runtimeAvailable || !service || !sessionRepository || !draftsRepository) {
+      return;
+    }
+
+    const session = await sessionRepository.save(
+      sessionRepository.create({
+        title: 'Original Session',
+        status: SessionStatus.DRAFT,
+        readinessScore: 10,
+      }),
+    );
+
+    const startTime = new Date('2024-04-01T15:00:00.000Z');
+    const endTime = new Date('2024-04-01T16:30:00.000Z');
+
+    await service.autosaveBuilderDraft(session.id, {
+      metadata: {
+        title: 'Updated Session Title',
+        desiredOutcome: 'Updated objective',
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+      },
+      outline: {
+        sections: [],
+        totalDuration: 0,
+      },
+      aiPrompt: 'Prompt',
+      aiVersions: [],
+      readinessScore: 72,
+    });
+
+    const updatedSession = await sessionRepository.findOne({ where: { id: session.id } });
+    expect(updatedSession).toBeTruthy();
+    expect(updatedSession?.title).toBe('Updated Session Title');
+    expect(updatedSession?.objective).toBe('Updated objective');
+    expect(updatedSession?.readinessScore).toBe(72);
+    expect(updatedSession?.scheduledAt?.toISOString()).toBe(startTime.toISOString());
+    expect(updatedSession?.durationMinutes).toBe(90);
+
+    const draft = await draftsRepository.findOne({ where: { draftKey: session.id } });
+    expect(draft).toBeTruthy();
+    expect(draft?.payload).toBeTruthy();
   });
 
   it('imports sessions with reusable topics and enriched fields', async () => {

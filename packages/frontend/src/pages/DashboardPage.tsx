@@ -195,16 +195,7 @@ const DashboardPage: React.FC = () => {
             </Link>
           </Button>
 
-          <Button asChild variant="outline" className="h-auto p-4 justify-start">
-            <Link to="/sessions/builder/classic/new">
-              <div className="text-left">
-                <div className="text-lg mb-1">🛠️</div>
-                <div className="font-medium">Classic Builder</div>
-                <div className="text-xs text-slate-500">Manual session setup</div>
-              </div>
-            </Link>
-          </Button>
-
+  
           <Button asChild variant="outline" className="h-auto p-4 justify-start">
             <Link to="/sessions">
               <div className="text-left">

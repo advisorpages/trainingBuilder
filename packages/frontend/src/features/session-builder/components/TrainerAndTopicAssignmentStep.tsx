@@ -4,6 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { Trainer } from '@leadership-training/shared';
 import type { SessionTopicDraft, SessionMetadata } from '../state/types';
 import { FlexibleSessionSection } from '../../../services/session-builder.service';
+import { trainerService } from '../../../services/trainer.service';
 import { cn } from '../../../lib/utils';
 import type { DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { SessionDetailsSection } from './SessionDetailsSection';
@@ -70,42 +71,25 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
     return `index-${index}`;
   }, []);
 
-  // Simplified trainer fetching function
+  // Simplified trainer fetching function using the proper trainerService
   const fetchAllTrainers = React.useCallback(async () => {
-    console.log('🔄 fetchAllTrainers called');
     setIsLoadingTrainers(true);
     setTrainerError(null);
     try {
-      const { sessionBuilderService } = await import('../../../services/session-builder.service');
-      const trainers = await sessionBuilderService.getTrainers('', 100);
+      const response = await trainerService.getTrainers({ limit: 100 });
+      const trainers = response.trainers;
 
-      console.log('📦 Raw trainers from API:', trainers);
-
-      // Convert to full Trainer objects if needed
-      const fullTrainers = trainers.map(t => ({
-        id: t.id,
-        name: t.name,
-        email: '',
-        bio: '',
-        isActive: true,
-        expertiseTags: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as Trainer));
-
-      console.log('✅ Full trainers created:', fullTrainers);
-      setAllTrainers(fullTrainers);
+      setAllTrainers(trainers);
 
       // Update trainer cache and resolved names
       const newResolvedNames: Record<number, string> = {};
-      fullTrainers.forEach(trainer => {
+      trainers.forEach(trainer => {
         trainerCache.current.set(trainer.id, trainer);
         newResolvedNames[trainer.id] = trainer.name;
       });
-      console.log('📝 New resolved names being set:', newResolvedNames);
       setResolvedTrainerNames(prev => ({ ...prev, ...newResolvedNames }));
     } catch (error) {
-      console.error('❌ Failed to fetch trainers:', error);
+      console.error('Failed to fetch trainers:', error);
       setTrainerError('Failed to load trainers');
     } finally {
       setIsLoadingTrainers(false);
@@ -122,33 +106,19 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
       const topic = topics[topicIndex];
       const stateKey = getTopicStateKey(topic, topicIndex);
 
-      console.log('🎯 handleAssignTrainer called:', { topicIndex, trainer, currentTopics: topics });
-
       if (!topic) {
         console.warn('TrainerAndTopicAssignmentStep: topic not found at index', topicIndex);
         return;
       }
 
       if (trainer) {
-        console.log('✅ Assigning trainer:', trainer.name, 'to topic:', topicIndex);
-        setTopicTrainers(prev => {
-          const newTopicTrainers = { ...prev, [stateKey]: trainer.id };
-          console.log('📝 Updated local topic trainers:', newTopicTrainers);
-          return newTopicTrainers;
-        });
-
+        setTopicTrainers(prev => ({ ...prev, [stateKey]: trainer.id }));
         trainerCache.current.set(trainer.id, trainer);
-        setResolvedTrainerNames(prev => {
-          const newNames = { ...prev, [trainer.id]: trainer.name };
-          console.log('📝 Updated resolved names:', newNames);
-          return newNames;
-        });
+        setResolvedTrainerNames(prev => ({ ...prev, [trainer.id]: trainer.name }));
       } else {
-        console.log('🚫 Removing trainer from topic:', topicIndex);
         setTopicTrainers(prev => {
           const newTopicTrainers = { ...prev };
           delete newTopicTrainers[stateKey];
-          console.log('📝 Updated local topic trainers (removed):', newTopicTrainers);
           return newTopicTrainers;
         });
       }
@@ -164,27 +134,17 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
         return currentTopic;
       });
 
-      console.log('🔄 Calling onTopicsChange with updated topics:', updatedTopics);
-      console.log('🔍 Topic before update:', topics[topicIndex]);
-      console.log('🔍 Topic after update:', updatedTopics[topicIndex]);
-
       await Promise.resolve(onTopicsChange(updatedTopics));
 
       // Also update the corresponding section in the outline if the topic has a sectionId
       if (topic.sectionId) {
-        console.log('🔄 Updating section with trainer assignment:', {
-          sectionId: topic.sectionId,
-          trainerId: trainer?.id,
-          trainerName: trainer?.name
-        });
-
         try {
           onUpdateSection(topic.sectionId, {
             trainerId: trainer?.id,
             trainerName: trainer?.name,
           });
         } catch (error) {
-          console.error('❌ Failed to update section with trainer assignment:', error);
+          console.error('Failed to update section with trainer assignment:', error);
         }
       }
     };
@@ -210,19 +170,13 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
         originalTopic.trainerId !== editingTopic.trainerId ||
         originalTopic.trainerName !== editingTopic.trainerName
       )) {
-        console.log('🔄 Updating section with edited topic trainer info:', {
-          sectionId: editingTopic.sectionId,
-          trainerId: editingTopic.trainerId,
-          trainerName: editingTopic.trainerName
-        });
-
         try {
           onUpdateSection(editingTopic.sectionId, {
             trainerId: editingTopic.trainerId,
             trainerName: editingTopic.trainerName,
           });
         } catch (error) {
-          console.error('❌ Failed to update section with edited topic trainer info:', error);
+          console.error('Failed to update section with edited topic trainer info:', error);
         }
       }
 
@@ -323,10 +277,8 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
     const loadMissing = async () => {
       await Promise.all(Array.from(missingIds).map(async (trainerId) => {
         try {
-          // Use sessionBuilderService to get trainers (similar to UnifiedReviewEditor)
-          const { sessionBuilderService } = await import('../../../services/session-builder.service');
-          const trainers = await sessionBuilderService.getTrainers('', 100);
-          const trainer = trainers.find(t => t.id === trainerId);
+          // Use trainerService to get individual trainer
+          const trainer = await trainerService.getTrainer(trainerId);
           if (trainer && !cancelled) {
             trainerCache.current.set(trainer.id, trainer);
             setResolvedTrainerNames((prev) => {
@@ -810,10 +762,8 @@ const TopicCardComponent: React.FC<TopicCardProps> = ({
                     <select
                       value={currentTrainerId ?? ''}
                       onChange={(e) => {
-                        console.log('🎯 Select onChange triggered for topic', topicIndex, ':', e.target.value);
                         const trainerId = e.target.value;
                         const trainer = trainerId ? allTrainers.find(t => t.id === parseInt(trainerId)) || null : null;
-                        console.log('🔍 Found trainer:', trainer);
                         onAssignTrainer(topicIndex, trainer);
                       }}
                       className="w-full h-10 px-3 py-2 text-sm bg-white border border-slate-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -921,20 +871,7 @@ TopicCard.displayName = 'TopicCard';
                     // Update isAssigned based on currentTrainerId
                     const isAssigned = Boolean(currentTrainerId);
 
-                    // Debug logging for trainer name resolution
-                    console.log('🔍 Trainer name resolution for topic', index, ':', {
-                      topicTrainerId: topic.trainerId,
-                      topicTrainerName: topic.trainerName,
-                      localTopicTrainerId: storedTrainerId,
-                      currentTrainerId: currentTrainerId,
-                      stateKey,
-                      resolvedNames: resolvedTrainerNames,
-                      allTrainersCount: allTrainers.length,
-                      foundInCache: currentTrainerId ? resolvedTrainerNames[currentTrainerId] : undefined,
-                      foundInAllTrainers: currentTrainerId ? allTrainers.find(t => t.id === currentTrainerId)?.name : undefined,
-                      finalTrainerName: trainerName
-                    });
-
+  
                     return (
                       <Draggable key={topicKey} draggableId={topicKey} index={index}>
                         {(draggableProvided, snapshot) => (

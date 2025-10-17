@@ -1,16 +1,25 @@
-import { Session } from '@leadership-training/shared';
+import { Session, SessionStatus } from '@leadership-training/shared';
 import { SessionMetadata, SessionTopicDraft } from '../features/session-builder/state/types';
 import { FlexibleSessionSection } from '../services/session-builder.service';
 
 type SessionTopicDetail = {
+  sessionId: string;
   topicId: number;
   sequenceOrder?: number | null;
   durationMinutes?: number | null;
   notes?: string | null;
-  assignedTrainerId?: number | null;
   trainerId?: number | null;
-  trainer?: { name?: string | null } | null;
-  trainerName?: string | null;
+  trainer?: { id: number; name?: string | null } | null;
+  topic?: {
+    id: number;
+    name: string;
+    description?: string | null;
+    learningOutcomes?: string | null;
+    materialsNeeded?: string | null;
+    deliveryGuidance?: string | null;
+    trainerNotes?: string | null;
+    callToAction?: string | null;
+  } | null;
 };
 
 const toIsoString = (value?: string | Date | null): string => {
@@ -18,8 +27,30 @@ const toIsoString = (value?: string | Date | null): string => {
     return '';
   }
 
-  const parsed = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+  try {
+    let parsed: Date;
+
+    if (value instanceof Date) {
+      // Handle Date objects directly
+      parsed = value;
+    } else if (typeof value === 'string') {
+      // Handle string values - try to parse as ISO date
+      parsed = new Date(value);
+    } else {
+      // Handle any other type by converting to string first
+      parsed = new Date(String(value));
+    }
+
+    if (Number.isNaN(parsed.getTime())) {
+      console.warn('[sessionEditTransform] Invalid date value:', { value, valueType: typeof value });
+      return '';
+    }
+
+    return parsed.toISOString();
+  } catch (error) {
+    console.error('[sessionEditTransform] Error converting date to ISO:', { value, error });
+    return '';
+  }
 };
 
 /**
@@ -28,17 +59,32 @@ const toIsoString = (value?: string | Date | null): string => {
 
 // Transform Session to SessionMetadata
 export const transformSessionToMetadata = (session: Session): SessionMetadata => {
-  const startTimeIso = toIsoString((session as Session & { startTime?: string | Date | null }).startTime);
-  const endTimeIso = toIsoString((session as Session & { endTime?: string | Date | null }).endTime);
+  const originalStartTime = (session as Session & { startTime?: string | Date | null }).startTime;
+  const originalEndTime = (session as Session & { endTime?: string | Date | null }).endTime;
+
+  const startTimeIso = toIsoString(originalStartTime);
+  const endTimeIso = toIsoString(originalEndTime);
+
+  // Only log when we have issues to debug
+  if (!startTimeIso || !endTimeIso) {
+    console.log('[sessionEditTransform] Date/time transformation issue:', {
+      sessionId: session.id,
+      hasStartTime: !!originalStartTime,
+      hasEndTime: !!originalEndTime,
+      startTimeIsInvalid: originalStartTime ? Number.isNaN(new Date(originalStartTime).getTime()) : false,
+      endTimeIsInvalid: originalEndTime ? Number.isNaN(new Date(originalEndTime).getTime()) : false
+    });
+  }
 
   return {
     title: session.title || '',
     desiredOutcome: session.objective || '',
     category: session.category?.name || session.categoryId?.toString() || '',
     sessionType: 'workshop', // Default value, could be derived from other fields
+    sessionStatus: session.status ?? SessionStatus.DRAFT,
     locationId: session.locationId || undefined,
     location: session.location?.name || 'Location TBD',
-    startDate: startTimeIso ? startTimeIso.split('T')[0] : '',
+    startDate: startTimeIso ? startTimeIso.split('T')[0] : startTimeIso,
     startTime: startTimeIso,
     endTime: endTimeIso,
     audienceId: session.audienceId || undefined,
@@ -62,13 +108,11 @@ export const transformSessionToMetadata = (session: Session): SessionMetadata =>
 const extractTrainerInfo = (
   topicDetail: SessionTopicDetail,
 ): { trainerId?: number; trainerName?: string } => {
-  const rawTrainerId = topicDetail.assignedTrainerId ?? topicDetail.trainerId;
-  const trainerId =
-    typeof rawTrainerId === 'number' && !Number.isNaN(rawTrainerId) ? rawTrainerId : undefined;
+  const trainerId = topicDetail.trainerId;
 
   const trainerNameCandidate =
     topicDetail.trainer?.name ??
-    (typeof topicDetail.trainerName === 'string' ? topicDetail.trainerName : undefined);
+    (typeof (topicDetail as any).trainerName === 'string' ? (topicDetail as any).trainerName : undefined);
   const trainerName =
     typeof trainerNameCandidate === 'string' && trainerNameCandidate.trim().length > 0
       ? trainerNameCandidate.trim()
@@ -84,17 +128,29 @@ export const transformSessionTopicDetailToDraft = (
 ): SessionTopicDraft => {
   const { trainerId, trainerName } = extractTrainerInfo(topicDetail);
 
+  // Extract rich topic data from the topic relationship
+  const topic = topicDetail.topic;
+  const title = topic?.name || `Topic ${index + 1}`;
+  const description = topic?.description || '';
+  const learningOutcomes = topic?.learningOutcomes || '';
+  const materialsNeeded = topic?.materialsNeeded || '';
+  const deliveryGuidance = topic?.deliveryGuidance || '';
+  const callToAction = topic?.callToAction || '';
+
+  // Use topic trainer notes if available, otherwise use session topic notes
+  const trainerNotes = topic?.trainerNotes || topicDetail.notes || '';
+
   return {
     sectionId: `existing-topic-${topicDetail.topicId}`,
     topicId: topicDetail.topicId,
-    title: `Topic ${index + 1}`, // Will be updated when topic data is loaded
-    description: '',
+    title,
+    description,
     durationMinutes: topicDetail.durationMinutes || 30,
-    learningOutcomes: '',
-    trainerNotes: topicDetail.notes || '',
-    materialsNeeded: '',
-    deliveryGuidance: '',
-    callToAction: '',
+    learningOutcomes,
+    trainerNotes,
+    materialsNeeded,
+    deliveryGuidance,
+    callToAction,
     trainerId,
     trainerName,
     position: topicDetail.sequenceOrder || index + 1,
@@ -108,24 +164,39 @@ export const transformSessionTopicsToSections = (
   return sessionTopics.map((topicDetail, index) => {
     const { trainerId, trainerName } = extractTrainerInfo(topicDetail);
 
+    // Extract rich topic data from the topic relationship
+    const topic = topicDetail.topic;
+    const title = topic?.name || `Topic ${index + 1}`;
+    const description = topic?.description || '';
+    const learningOutcomes = topic?.learningOutcomes ?
+      (typeof topic.learningOutcomes === 'string' ? topic.learningOutcomes.split('\n').filter(Boolean) : []) : [];
+    const materialsNeeded = topic?.materialsNeeded ?
+      (typeof topic.materialsNeeded === 'string' ? topic.materialsNeeded.split('\n').filter(Boolean) : []) : [];
+    const suggestedActivities = topic?.callToAction ?
+      (typeof topic.callToAction === 'string' ? topic.callToAction.split('\n').filter(Boolean) : []) : [];
+    const deliveryGuidance = topic?.deliveryGuidance || '';
+
+    // Use topic trainer notes if available, otherwise use session topic notes
+    const trainerNotes = topic?.trainerNotes || topicDetail.notes || '';
+
     return {
       id: `existing-topic-${topicDetail.topicId}`,
       type: 'topic' as const,
-      title: `Topic ${index + 1}`,
-      description: '',
+      title,
+      description,
       duration: topicDetail.durationMinutes || 30,
-      learningObjectives: [],
-      trainerNotes: topicDetail.notes || '',
-      materialsNeeded: [],
-      suggestedActivities: [],
-      deliveryGuidance: '',
+      learningObjectives: learningOutcomes,
+      trainerNotes,
+      materialsNeeded,
+      suggestedActivities,
+      deliveryGuidance,
       trainerId,
       trainerName,
       position: topicDetail.sequenceOrder || index + 1,
       associatedTopic: {
         id: topicDetail.topicId,
-        name: `Topic ${index + 1}`,
-        description: '',
+        name: title,
+        description,
       },
     };
   });
@@ -154,12 +225,41 @@ export const createBasicOutlineFromSession = (
 export const transformSessionToBuilderData = (session: Session) => {
   const sessionTopics = (session as any).sessionTopics || [];
 
+  console.log('[transformSessionToBuilderData] Processing session:', {
+    sessionId: session.id,
+    sessionTopicsCount: sessionTopics.length,
+    sessionTopicsSample: sessionTopics.slice(0, 2).map((t: any) => ({
+      topicId: t.topicId,
+      topicName: t.topic?.name,
+      trainerName: t.trainer?.name,
+      durationMinutes: t.durationMinutes
+    }))
+  });
+
+  const metadata = transformSessionToMetadata(session);
+  const outline = createBasicOutlineFromSession(session, sessionTopics);
+  const topics = sessionTopics.map((topicDetail: SessionTopicDetail, index: number) =>
+    transformSessionTopicDetailToDraft(topicDetail, index)
+  );
+
+  console.log('[transformSessionToBuilderData] Transformation result:', {
+    topicsCount: topics.length,
+    topicsSample: topics.slice(0, 2).map((t: any) => ({
+      title: t.title,
+      description: t.description?.substring(0, 100) + (t.description?.length > 100 ? '...' : ''),
+      durationMinutes: t.durationMinutes,
+      trainerId: t.trainerId,
+      trainerName: t.trainerName,
+      hasLearningOutcomes: !!t.learningOutcomes,
+      hasMaterials: !!t.materialsNeeded
+    })),
+    outlineSectionsCount: outline.sections.length
+  });
+
   return {
-    metadata: transformSessionToMetadata(session),
-    outline: createBasicOutlineFromSession(session, sessionTopics),
-    topics: sessionTopics.map((topicDetail: SessionTopicDetail, index: number) =>
-      transformSessionTopicDetailToDraft(topicDetail, index)
-    ),
+    metadata,
+    outline,
+    topics,
   };
 };
 

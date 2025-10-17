@@ -170,7 +170,10 @@ const PublicHomepage = () => {
                 <div className="sessions-grid" role="list">
                   {upcomingSessions.map((session) => (
                     <div key={session.id} role="listitem">
-                      <SessionCard session={session} />
+                      <SessionCard
+                        session={session}
+                        onViewDetails={(sessionId) => window.open(`/sessions/${sessionId}`, '_blank')}
+                      />
                     </div>
                   ))}
                 </div>

@@ -28,7 +28,7 @@ import { ReadinessScore, ReadinessScoringService } from './services/readiness-sc
 import { CreateSessionDto, SessionTopicAssignmentDto } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
 import { CreateContentVersionDto } from './dto/create-content-version.dto';
-import { BuilderAutosaveDto } from './dto/builder-autosave.dto';
+import { BuilderAutosaveDto, BuilderMetadataDto } from './dto/builder-autosave.dto';
 import {
   SuggestOutlineDto,
   SuggestOutlineResponse,
@@ -389,6 +389,9 @@ export class SessionsService {
       where: { id },
       relations: [
         'topics',
+        'category',
+        'location',
+        'audience',
         'landingPage',
         'incentives',
         'trainer',
@@ -487,8 +490,27 @@ export class SessionsService {
   }
 
   async update(id: string, dto: UpdateSessionDto): Promise<Session> {
+    // Debug logging for session update
+    console.log('[Backend SessionsService.update] Starting session update:', {
+      id,
+      dto: {
+        ...dto,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        startTimeType: typeof dto.startTime,
+        endTimeType: typeof dto.endTime
+      }
+    });
+
     const session = await this.findOne(id);
     const previousStatus = session.status;
+
+    console.log('[Backend SessionsService.update] Current session data:', {
+      id: session.id,
+      currentScheduledAt: session.scheduledAt,
+      currentTitle: session.title
+    });
+
     const sessionTopicAssignments = this.normalizeSessionTopicAssignments(dto.sessionTopics);
 
     let topicsForAssignment: Topic[] | null = null;
@@ -522,12 +544,50 @@ export class SessionsService {
     if (dto.categoryId !== undefined) session.categoryId = dto.categoryId;
 
     if (dto.startTime !== undefined) {
-      session.scheduledAt = dto.startTime ? new Date(dto.startTime) : undefined;
+      console.log('[Backend SessionsService.update] Processing startTime:', {
+        receivedStartTime: dto.startTime,
+        receivedType: typeof dto.startTime,
+        currentScheduledAt: session.scheduledAt
+      });
+
+      if (dto.startTime) {
+        const parsedDate = new Date(dto.startTime);
+        if (Number.isNaN(parsedDate.getTime())) {
+          console.error('[Backend SessionsService.update] Invalid startTime provided:', dto.startTime);
+          session.scheduledAt = undefined;
+        } else {
+          session.scheduledAt = parsedDate;
+          console.log('[Backend SessionsService.update] Set scheduledAt to:', session.scheduledAt);
+        }
+      } else {
+        session.scheduledAt = undefined;
+        console.log('[Backend SessionsService.update] Set scheduledAt to undefined');
+      }
     }
 
     if (dto.endTime !== undefined || dto.startTime !== undefined) {
       const startTimestamp = session.scheduledAt?.getTime();
       const endTimestamp = dto.endTime ? new Date(dto.endTime).getTime() : undefined;
+
+      // Enhanced logging for endTime processing
+      if (dto.endTime !== undefined) {
+        console.log('[Backend SessionsService.update] Processing endTime:', {
+          receivedEndTime: dto.endTime,
+          receivedType: typeof dto.endTime,
+          parsedEndTime: dto.endTime ? new Date(dto.endTime).toISOString() : null,
+          parsedEndTimeValid: dto.endTime ? !Number.isNaN(new Date(dto.endTime).getTime()) : false
+        });
+      }
+
+      console.log('[Backend SessionsService.update] Calculating duration:', {
+        startTimeReceived: dto.startTime,
+        endTimeReceived: dto.endTime,
+        startTimestamp,
+        endTimestamp,
+        startTimestampValid: startTimestamp !== undefined && !Number.isNaN(startTimestamp),
+        endTimestampValid: endTimestamp !== undefined && !Number.isNaN(endTimestamp),
+        endTimeValid: endTimestamp && startTimestamp && endTimestamp > startTimestamp
+      });
 
       if (
         startTimestamp !== undefined &&
@@ -537,8 +597,10 @@ export class SessionsService {
         endTimestamp > startTimestamp
       ) {
         session.durationMinutes = Math.floor((endTimestamp - startTimestamp) / (60 * 1000));
+        console.log('[Backend SessionsService.update] Set durationMinutes to:', session.durationMinutes);
       } else if (dto.endTime !== undefined && !endTimestamp) {
         session.durationMinutes = undefined;
+        console.log('[Backend SessionsService.update] Invalid endTime, set durationMinutes to undefined');
       }
     }
 
@@ -554,7 +616,21 @@ export class SessionsService {
       }
     }
 
+    console.log('[Backend SessionsService.update] About to save session:', {
+      sessionId: session.id,
+      finalScheduledAt: session.scheduledAt,
+      finalDurationMinutes: session.durationMinutes,
+      title: session.title
+    });
+
     const saved = await this.sessionsRepository.save(session);
+
+    console.log('[Backend SessionsService.update] Session saved successfully:', {
+      sessionId: saved.id,
+      savedScheduledAt: saved.scheduledAt,
+      savedDurationMinutes: saved.durationMinutes,
+      savedTitle: saved.title
+    });
 
     let assignmentsToApply: NormalizedSessionTopicAssignment[] | null = null;
     if (sessionTopicAssignments.length > 0) {
@@ -1543,66 +1619,43 @@ export class SessionsService {
     const metadata = (payload?.metadata as Record<string, any>) ?? {};
     const outline = payload?.outline ? this.ensureOutline(payload.outline as SessionOutlinePayload) : null;
 
-    if (payload && outline) {
-      payload.outline = outline;
-    }
-
     if (!session && !draft) {
       throw new NotFoundException(`Session or draft ${sessionId} not found`);
     }
 
-    const sessionStart = metadata.startTime ?? session?.scheduledAt?.toISOString() ?? null;
-    let sessionEnd: string | null = metadata.endTime ?? null;
-    if (!sessionEnd && session?.scheduledAt && session.durationMinutes) {
-      sessionEnd = new Date(
-        session.scheduledAt.getTime() + session.durationMinutes * 60 * 1000,
-      ).toISOString();
-    }
-
+    // Session entity always takes precedence - simplified logic
     const primaryTopic = session?.topics?.[0];
-
-    const selectedMarketingToneId = metadata.marketingToneId ?? session?.marketingToneId ?? null;
-    let marketingToneName = metadata.marketingToneName ?? session?.marketingTone?.name ?? null;
-
-    if (!marketingToneName) {
-      if (selectedMarketingToneId) {
-        const marketingTone = await this.resolveMarketingToneEntity(selectedMarketingToneId);
-        marketingToneName = marketingTone?.name ?? DEFAULT_MARKETING_TONE_NAME;
-      } else {
-        marketingToneName = DEFAULT_MARKETING_TONE_NAME;
-      }
-    }
 
     return {
       id: session?.id ?? sessionId,
       draftId: sessionId,
-      title: session?.title ?? metadata.title ?? '',
-      subtitle: session?.subtitle ?? metadata.subtitle ?? '',
+      title: session?.title ?? '',
+      subtitle: session?.subtitle ?? '',
       readinessScore: session?.readinessScore ?? (payload?.readinessScore ?? 0),
       status: session?.status ?? SessionStatus.DRAFT,
-      sessionType: metadata.sessionType ?? null,
+      sessionType: null, // No longer stored in draft
       category: primaryTopic
         ? {
             id: primaryTopic.id,
             name: primaryTopic.name,
           }
-        : metadata.category
-        ? { name: metadata.category }
         : null,
-      desiredOutcome: metadata.desiredOutcome ?? session?.objective ?? '',
+      desiredOutcome: session?.objective ?? '',
       currentProblem: metadata.currentProblem ?? '',
       specificTopics: metadata.specificTopics ?? '',
-      startTime: sessionStart,
-      endTime: sessionEnd,
-      timezone: metadata.timezone ?? null,
-      locationId: metadata.locationId ?? null,
-      locationName: metadata.location ?? null,
-      audienceId: metadata.audienceId ?? null,
-      audienceName: metadata.audienceName ?? null,
-      toneId: metadata.toneId ?? null,
-      toneName: metadata.toneName ?? null,
-      marketingToneId: selectedMarketingToneId,
-      marketingToneName,
+      startTime: session?.scheduledAt?.toISOString() ?? null,
+      endTime: session?.scheduledAt && session.durationMinutes
+        ? new Date(session.scheduledAt.getTime() + session.durationMinutes * 60 * 1000).toISOString()
+        : null,
+      timezone: session?.location?.timezone ?? null,
+      locationId: session?.locationId ?? null,
+      locationName: session?.location?.name ?? null,
+      audienceId: session?.audienceId ?? null,
+      audienceName: session?.audience?.name ?? null,
+      toneId: session?.toneId ?? null,
+      toneName: session?.tone?.name ?? null,
+      marketingToneId: session?.marketingToneId ?? null,
+      marketingToneName: session?.marketingTone?.name ?? DEFAULT_MARKETING_TONE_NAME,
       aiGeneratedContent: outline
         ? {
             outline,
@@ -1664,7 +1717,159 @@ export class SessionsService {
       },
     );
 
+    if (session) {
+      await this.applyAutosaveMetadataToSession(
+        session,
+        normalizedPayload.metadata as BuilderMetadataDto | undefined,
+        normalizedPayload.readinessScore,
+      );
+    }
+
     return { savedAt: savedAt.toISOString() };
+  }
+
+  private parseAutosaveNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const parsed = Number(value);
+    if (Number.isNaN(parsed) || !Number.isFinite(parsed)) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+  private parseAutosaveDate(value?: string): Date | null {
+    if (typeof value !== 'string' || !value.trim()) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return parsed;
+  }
+
+  private async applyAutosaveMetadataToSession(
+    session: Session,
+    metadata?: BuilderMetadataDto,
+    readinessScore?: number,
+  ): Promise<void> {
+    let hasChanges = false;
+
+    if (metadata) {
+      if (typeof metadata.title === 'string') {
+        const normalizedTitle = metadata.title.trim();
+        if (normalizedTitle && normalizedTitle !== session.title) {
+          session.title = normalizedTitle;
+          hasChanges = true;
+        }
+      }
+
+      if (typeof metadata.desiredOutcome === 'string') {
+        const normalizedObjective = metadata.desiredOutcome.trim();
+        if (normalizedObjective !== (session.objective ?? '')) {
+          session.objective = normalizedObjective;
+          hasChanges = true;
+        }
+      }
+
+      if (metadata.categoryId !== undefined) {
+        const categoryId = this.parseAutosaveNumber(metadata.categoryId);
+        const currentCategory = session.categoryId ?? null;
+        const nextCategory = categoryId ?? null;
+        if (currentCategory !== nextCategory) {
+          session.categoryId = nextCategory ?? undefined;
+          hasChanges = true;
+        }
+      }
+
+      if (metadata.locationId !== undefined) {
+        const locationId = this.parseAutosaveNumber(metadata.locationId);
+        const currentLocation = session.locationId ?? null;
+        const nextLocation = locationId ?? null;
+        if (currentLocation !== nextLocation) {
+          session.locationId = nextLocation ?? undefined;
+          hasChanges = true;
+        }
+      }
+
+      if (metadata.audienceId !== undefined) {
+        const audienceId = this.parseAutosaveNumber(metadata.audienceId);
+        const currentAudience = session.audienceId ?? null;
+        const nextAudience = audienceId ?? null;
+        if (currentAudience !== nextAudience) {
+          session.audienceId = nextAudience ?? undefined;
+          hasChanges = true;
+        }
+      }
+
+      if (metadata.toneId !== undefined) {
+        const toneId = this.parseAutosaveNumber(metadata.toneId);
+        const currentTone = session.toneId ?? null;
+        const nextTone = toneId ?? null;
+        if (currentTone !== nextTone) {
+          session.toneId = nextTone ?? undefined;
+          hasChanges = true;
+        }
+      }
+
+      if (metadata.marketingToneId !== undefined) {
+        const marketingToneId = this.parseAutosaveNumber(metadata.marketingToneId);
+        const currentToneId = session.marketingToneId ?? null;
+        const nextToneId = marketingToneId ?? null;
+        if (currentToneId !== nextToneId) {
+          const marketingTone = await this.resolveMarketingToneEntity(marketingToneId);
+          session.marketingToneId = marketingTone ? marketingTone.id : null;
+          session.marketingTone = marketingTone ?? null;
+          hasChanges = true;
+        }
+      }
+
+      const startTime = this.parseAutosaveDate(metadata.startTime);
+      const endTime = this.parseAutosaveDate(metadata.endTime);
+
+      if (startTime || metadata.startTime !== undefined) {
+        const currentStart = session.scheduledAt ?? null;
+
+        if (startTime) {
+          if (!currentStart || currentStart.getTime() !== startTime.getTime()) {
+            session.scheduledAt = startTime;
+            hasChanges = true;
+          }
+        } else if (currentStart !== null) {
+          session.scheduledAt = undefined;
+          hasChanges = true;
+        }
+      }
+
+      if (startTime && endTime && endTime > startTime) {
+        const durationMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / (60 * 1000));
+        if (session.durationMinutes !== durationMinutes) {
+          session.durationMinutes = durationMinutes;
+          hasChanges = true;
+        }
+      } else if (metadata.endTime !== undefined && session.durationMinutes !== undefined) {
+        session.durationMinutes = undefined;
+        hasChanges = true;
+      }
+    }
+
+    if (typeof readinessScore === 'number' && Number.isFinite(readinessScore)) {
+      const normalizedScore = Math.min(100, Math.max(0, Math.trunc(readinessScore)));
+      if (session.readinessScore !== normalizedScore) {
+        session.readinessScore = normalizedScore;
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
+      await this.sessionsRepository.save(session);
+    }
   }
 
   async addOutlineSection(sessionId: string, dto: AddOutlineSectionDto): Promise<SessionOutlinePayload> {
@@ -1833,7 +2038,7 @@ export class SessionsService {
 
     return {
       ...(payload ?? {}),
-      metadata: (payload?.metadata as Record<string, unknown>) ?? {},
+      metadata: (payload?.metadata as BuilderMetadataDto | undefined) ?? {},
       outline: normalizedOutline as any,
       aiPrompt: typeof payload?.aiPrompt === 'string' ? payload.aiPrompt : '',
       aiVersions: Array.isArray(payload?.aiVersions) ? payload.aiVersions : [],

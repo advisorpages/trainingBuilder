@@ -20,14 +20,7 @@ const HomePage: React.FC = () => {
       link: '/sessions/builder/new',
       roles: [UserRole.CONTENT_DEVELOPER]
     },
-    {
-      icon: '🛠️',
-      title: 'Classic Session Builder',
-      description: 'Manually craft sessions from your topic library',
-      link: '/sessions/builder/classic/new',
-      roles: [UserRole.CONTENT_DEVELOPER]
-    },
-    {
+      {
       icon: '📊',
       title: 'Analytics Dashboard',
       description: 'Track performance and engagement metrics',
@@ -101,12 +94,7 @@ const HomePage: React.FC = () => {
                       🤖 Guided Session Builder
                     </Link>
                   </Button>
-                  <Button asChild variant="outline" size="lg">
-                    <Link to="/sessions/builder/classic/new">
-                      🛠️ Classic Session Builder
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="lg">
+                    <Button asChild variant="outline" size="lg">
                     <Link to="/analytics">
                       📈 View Analytics
                     </Link>

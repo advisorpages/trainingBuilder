@@ -28,24 +28,95 @@ const toDateInputValue = (value: string) => value.slice(0, 10);
 
 const toDateTimeLocal = (value: string) => {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const offset = date.getTimezoneOffset();
-  const adjusted = new Date(date.getTime() - offset * 60 * 1000);
-  return adjusted.toISOString().slice(0, 16);
+
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      console.warn('[SessionMetadataForm] toDateTimeLocal: Invalid date value:', value);
+      return '';
+    }
+
+    // Get timezone offset in minutes and convert to milliseconds
+    const offset = date.getTimezoneOffset();
+    // Adjust date to local timezone by subtracting the offset
+    const adjusted = new Date(date.getTime() - offset * 60 * 1000);
+    const result = adjusted.toISOString().slice(0, 16);
+
+    console.log('[SessionMetadataForm] toDateTimeLocal:', {
+      input: value,
+      originalDate: date.toISOString(),
+      timezoneOffset: offset,
+      adjustedDate: adjusted.toISOString(),
+      result
+    });
+
+    return result;
+  } catch (error) {
+    console.error('[SessionMetadataForm] toDateTimeLocal: Error processing date:', { value, error });
+    return '';
+  }
 };
 
 const fromDateTimeLocal = (value: string) => {
-  if (!value) return new Date().toISOString();
-  const date = new Date(value);
-  return date.toISOString();
+  if (!value) {
+    console.warn('[SessionMetadataForm] fromDateTimeLocal: No value provided, returning current time');
+    return new Date().toISOString();
+  }
+
+  try {
+    // Parse the datetime-local value (which is in local timezone)
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      console.error('[SessionMetadataForm] fromDateTimeLocal: Invalid date string provided:', value);
+      return new Date().toISOString();
+    }
+
+    // The datetime-local input gives us a date in the local timezone,
+    // so we can convert it directly to ISO string
+    const isoString = date.toISOString();
+
+    console.log('[SessionMetadataForm] fromDateTimeLocal:', {
+      input: value,
+      parsedDate: date.toISOString(),
+      timezoneOffset: date.getTimezoneOffset(),
+      isoString
+    });
+
+    return isoString;
+  } catch (error) {
+    console.error('[SessionMetadataForm] fromDateTimeLocal: Error processing date:', { value, error });
+    return new Date().toISOString();
+  }
 };
 
 const timeSegment = (value: string) => {
-  const local = toDateTimeLocal(value);
-  if (!local) return '09:00';
-  const segment = local.split('T')[1];
-  return segment || '09:00';
+  if (!value) {
+    console.log('[SessionMetadataForm] timeSegment: No value provided, returning default 09:00');
+    return '09:00';
+  }
+
+  try {
+    const local = toDateTimeLocal(value);
+    if (!local) {
+      console.log('[SessionMetadataForm] timeSegment: toDateTimeLocal returned empty, using default 09:00');
+      return '09:00';
+    }
+
+    const segment = local.split('T')[1];
+    const result = segment || '09:00';
+
+    console.log('[SessionMetadataForm] timeSegment:', {
+      input: value,
+      localDateTime: local,
+      extractedTime: segment,
+      result
+    });
+
+    return result;
+  } catch (error) {
+    console.error('[SessionMetadataForm] timeSegment: Error extracting time segment:', { value, error });
+    return '09:00';
+  }
 };
 
 // Generate static test data for development
@@ -900,11 +971,22 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                   const currentStartTime = timeSegment(metadata.startTime);
                   const currentEndTime = timeSegment(metadata.endTime);
 
-                  onChange({
+                  console.log('[SessionMetadataForm] Date change:', {
+                    newDate,
+                    currentStartTime,
+                    currentEndTime,
+                    metadataStartTime: metadata.startTime,
+                    metadataEndTime: metadata.endTime
+                  });
+
+                  const updates = {
                     startDate: newDate,
                     startTime: fromDateTimeLocal(`${newDate}T${currentStartTime}`),
                     endTime: fromDateTimeLocal(`${newDate}T${currentEndTime}`)
-                  });
+                  };
+
+                  console.log('[SessionMetadataForm] Applying date updates:', updates);
+                  onChange(updates);
                 }}
                 min={new Date().toISOString().split('T')[0]}
               />
@@ -919,9 +1001,18 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 value={timeSegment(metadata.startTime)}
                 onChange={(event) => {
                   const newTime = event.target.value;
-                  onChange({
-                    startTime: fromDateTimeLocal(`${metadata.startDate}T${newTime}`)
+                  console.log('[SessionMetadataForm] Start time change:', {
+                    newTime,
+                    startDate: metadata.startDate,
+                    currentStartTime: metadata.startTime
                   });
+
+                  const updates = {
+                    startTime: fromDateTimeLocal(`${metadata.startDate}T${newTime}`)
+                  };
+
+                  console.log('[SessionMetadataForm] Applying start time updates:', updates);
+                  onChange(updates);
                 }}
               />
             </div>
@@ -935,9 +1026,18 @@ export const SessionMetadataForm: React.FC<SessionMetadataFormProps> = ({
                 value={timeSegment(metadata.endTime)}
                 onChange={(event) => {
                   const newTime = event.target.value;
-                  onChange({
-                    endTime: fromDateTimeLocal(`${metadata.startDate}T${newTime}`)
+                  console.log('[SessionMetadataForm] End time change:', {
+                    newTime,
+                    startDate: metadata.startDate,
+                    currentEndTime: metadata.endTime
                   });
+
+                  const updates = {
+                    endTime: fromDateTimeLocal(`${metadata.startDate}T${newTime}`)
+                  };
+
+                  console.log('[SessionMetadataForm] Applying end time updates:', updates);
+                  onChange(updates);
                 }}
               />
               <p className="text-xs text-slate-500">

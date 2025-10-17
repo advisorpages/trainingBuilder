@@ -1,8 +1,7 @@
 import { SessionOutline } from '../../../services/session-builder.service';
-import type { LocationType, MeetingPlatform } from '@leadership-training/shared';
+import type { LocationType, MeetingPlatform, SessionStatus } from '@leadership-training/shared';
 
 export type BuilderStatus = 'idle' | 'loading' | 'ready' | 'error';
-export type AutosaveStatus = 'idle' | 'pending' | 'success' | 'error';
 export type AIRequestStatus = 'idle' | 'pending' | 'error';
 export type PublishStatus = 'idle' | 'pending' | 'success' | 'error';
 
@@ -28,6 +27,7 @@ export interface SessionMetadata {
   sessionType: 'event' | 'training' | 'workshop' | 'webinar' | null;
   category: string; // Category name for display and API calls
   categoryId?: number;
+  sessionStatus?: SessionStatus;
   desiredOutcome: string;
   currentProblem: string;
   specificTopics: string;
@@ -108,7 +108,6 @@ export interface SessionDraftData {
 
 export interface BuilderState {
   status: BuilderStatus;
-  autosaveStatus: AutosaveStatus;
   aiStatus: AIRequestStatus;
   error?: string;
   draft: SessionDraftData | null;
@@ -133,10 +132,6 @@ export type BuilderAction =
   | { type: 'SELECT_AI_VERSION'; payload: string }
   | { type: 'ACCEPT_AI_VERSION'; payload: string }
   | { type: 'CLEAR_ACCEPTED_VERSION' }
-  | { type: 'AUTOSAVE_PENDING' }
-  | { type: 'AUTOSAVE_SUCCESS'; payload: string }
-  | { type: 'AUTOSAVE_FAILURE'; payload: string }
-  | { type: 'AUTOSAVE_IDLE' }
   | { type: 'UPDATE_READINESS'; payload: number }
   | { type: 'RESTORE_DRAFT'; payload: SessionDraftData }
   | { type: 'PUBLISH_SESSION_START' }

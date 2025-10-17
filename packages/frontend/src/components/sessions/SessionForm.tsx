@@ -67,7 +67,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
   const getDefaultStartTime = (): string => {
     if (session?.startTime) {
-      return new Date(session.startTime).toISOString().slice(0, 16);
+      return formatDateForInput(new Date(session.startTime));
     }
     // Default to today at 7:00 PM Toronto time
     const today = getTorontoTime();
@@ -77,7 +77,7 @@ export const SessionForm: React.FC<SessionFormProps> = ({
 
   const getDefaultEndTime = (): string => {
     if (session?.endTime) {
-      return new Date(session.endTime).toISOString().slice(0, 16);
+      return formatDateForInput(new Date(session.endTime));
     }
     // Default to today at 8:30 PM Toronto time
     const today = getTorontoTime();
@@ -219,8 +219,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({
       ...prev,
       title: session.title || '',
       description: session.description || '',
-      startTime: session.startTime ? new Date(session.startTime).toISOString().slice(0, 16) : prev.startTime,
-      endTime: session.endTime ? new Date(session.endTime).toISOString().slice(0, 16) : prev.endTime,
+      startTime: session.startTime ? formatDateForInput(new Date(session.startTime)) : prev.startTime,
+      endTime: session.endTime ? formatDateForInput(new Date(session.endTime)) : prev.endTime,
       locationId: session.locationId || '',
       audienceId: session.audienceId || '',
       toneId: session.toneId || '',
@@ -295,8 +295,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({
       const submissionData = {
         title: formData.title.trim() || undefined,
         description: formData.description.trim() || undefined,
-        startTime: formData.startTime ? new Date(formData.startTime) : undefined,
-        endTime: formData.endTime ? new Date(formData.endTime) : undefined,
+        startTime: formData.startTime ? new Date(formData.startTime).toISOString() : undefined,
+        endTime: formData.endTime ? new Date(formData.endTime).toISOString() : undefined,
         locationId: formData.locationId ? Number(formData.locationId) : undefined,
         audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
         toneId: formData.toneId ? Number(formData.toneId) : undefined,
@@ -492,8 +492,8 @@ export const SessionForm: React.FC<SessionFormProps> = ({
     const submissionData = {
         title: formData.title.trim(),
         description: formData.description.trim() || undefined,
-        startTime: formData.startTime ? new Date(formData.startTime) : undefined,
-        endTime: formData.endTime ? new Date(formData.endTime) : undefined,
+        startTime: formData.startTime ? new Date(formData.startTime).toISOString() : undefined,
+        endTime: formData.endTime ? new Date(formData.endTime).toISOString() : undefined,
         locationId: formData.locationId ? Number(formData.locationId) : undefined,
         audienceId: formData.audienceId ? Number(formData.audienceId) : undefined,
         toneId: formData.toneId ? Number(formData.toneId) : undefined,
