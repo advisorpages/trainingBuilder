@@ -1329,7 +1329,7 @@ export class SessionBuilderService {
 
   // Utility Methods for Flexible Sessions
   createDefaultSection(type: SectionType, position: number): FlexibleSessionSection {
-    const id = `${type}-${Date.now()}-${position}`;
+    const id = crypto.randomUUID();
     const baseSection: FlexibleSessionSection = {
       id,
       type,

@@ -6,6 +6,7 @@ export type AIRequestStatus = 'idle' | 'pending' | 'error';
 export type PublishStatus = 'idle' | 'pending' | 'success' | 'error';
 
 export interface SessionTopicDraft {
+  id: string; // Stable unique identifier for drag-and-drop
   title: string;
   description?: string;
   durationMinutes: number;
@@ -130,6 +131,7 @@ export type BuilderAction =
   | { type: 'AI_REQUEST_SUCCESS'; payload: AIContentVersion }
   | { type: 'AI_REQUEST_FAILURE'; payload: string }
   | { type: 'SELECT_AI_VERSION'; payload: string }
+  | { type: 'AUTOSAVE_SUCCESS'; payload: { savedAt: string } }
   | { type: 'ACCEPT_AI_VERSION'; payload: string }
   | { type: 'CLEAR_ACCEPTED_VERSION' }
   | { type: 'UPDATE_READINESS'; payload: number }

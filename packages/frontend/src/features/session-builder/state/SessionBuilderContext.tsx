@@ -15,6 +15,7 @@ import {
   calculateReadinessScore,
   getDraftReadinessItems,
 } from '../utils/readiness';
+import { useEditMode } from '../../../contexts/EditModeContext';
 
 interface SessionBuilderContextValue {
   state: BuilderState;
@@ -149,7 +150,10 @@ function inputToMetadata(input: SessionBuilderInput): SessionMetadata {
     desiredOutcome: input.desiredOutcome,
     currentProblem: input.currentProblem ?? '',
     specificTopics: input.specificTopics ?? '',
-    topics: input.topics ? [...input.topics] : [],
+    topics: input.topics ? input.topics.map(topic => ({
+      ...topic,
+      id: (topic as any).id || crypto.randomUUID()
+    })) : [],
     startDate: input.date,
     startTime,
     endTime,
@@ -222,6 +226,7 @@ function createTopicsFromOutline(outline: SessionOutline | null | undefined): Se
   const sortedSections = sessionBuilderService.sortSectionsByPosition(outline.sections);
 
   return sortedSections.map((section: FlexibleSessionSection, index: number) => ({
+    id: crypto.randomUUID(), // Generate stable ID for drag-and-drop
     sectionId: section.id,
     title: section.title || `Section ${index + 1}`,
     description: section.description || '',
@@ -427,6 +432,7 @@ export const SessionBuilderProvider: React.FC<{
 }> = ({ sessionId = 'new', prefilledTopics = null, savedVariant = null, children }) => {
   const [state, dispatch] = React.useReducer(builderReducer, initialBuilderState);
   const { publish } = useToast();
+  const { setSessionId, setSessionStatus, canEdit } = useEditMode();
   const lastSavedRef = React.useRef<SessionDraftData | null>(null);
   const [variants, setVariants] = React.useState<MultiVariantResponse['variants']>([]);
   const [variantsStatus, setVariantsStatus] =
@@ -435,6 +441,15 @@ export const SessionBuilderProvider: React.FC<{
   const [variantSelectionTime, setVariantSelectionTime] = React.useState<number>(0);
   const variantGenerationStartRef = React.useRef<number | null>(null);
   const variantReadyAtRef = React.useRef<number | null>(null);
+
+  // Update EditModeContext when sessionId or session status changes
+  React.useEffect(() => {
+    setSessionId(sessionId);
+
+    if (state.draft?.metadata?.sessionStatus) {
+      setSessionStatus(state.draft.metadata.sessionStatus);
+    }
+  }, [sessionId, state.draft?.metadata?.sessionStatus, setSessionId, setSessionStatus]);
 
   const handleOutlineError = React.useCallback((title: string, error: unknown) => {
     const message = error instanceof Error ? error.message : (error as any)?.message ?? 'Please try again.';
@@ -644,6 +659,22 @@ export const SessionBuilderProvider: React.FC<{
 
           const outline: SessionOutline | null = serverDraft.aiGeneratedContent?.outline ?? createEmptyOutline();
 
+          // Ensure a draft exists for this session (important for section operations)
+          try {
+            await sessionBuilderService.autosaveDraft(sessionId, {
+              metadata: metadataToInput(metadata),
+              outline,
+              aiPrompt: buildPrompt(metadata),
+              aiVersions: [],
+              acceptedVersionId: undefined,
+              readinessScore: 0,
+            });
+            console.log('[Session Builder Context] Ensured draft exists for session:', sessionId);
+          } catch (draftError) {
+            console.warn('[Session Builder Context] Failed to ensure draft exists:', draftError);
+            // Continue even if autosave fails - the draft operations might still work
+          }
+
           return {
             sessionId,
             metadata,
@@ -794,62 +825,113 @@ export const SessionBuilderProvider: React.FC<{
     }
   }, [state.draft]);
 
+  const retryOperationWithDraft = React.useCallback(
+    async (operation: () => Promise<SessionOutline>, initialError: unknown): Promise<SessionOutline> => {
+      if (!state.draft) {
+        throw initialError;
+      }
+
+      const rawMessage =
+        initialError instanceof Error
+          ? initialError.message
+          : typeof (initialError as any)?.message === 'string'
+            ? (initialError as any).message
+            : '';
+      const normalizedMessage = typeof rawMessage === 'string' ? rawMessage.toLowerCase() : '';
+      const shouldRetryAfterAutosave =
+        normalizedMessage.includes('draft') && normalizedMessage.includes('not found');
+
+      if (!shouldRetryAfterAutosave) {
+        throw initialError;
+      }
+
+      try {
+        const autosavePayload = convertAutosavePayload(state.draft);
+        const autosaveResult = await sessionBuilderService.autosaveDraft(state.draft.sessionId, autosavePayload);
+        const savedAt = autosaveResult?.savedAt ?? new Date().toISOString();
+        dispatch({ type: 'AUTOSAVE_SUCCESS', payload: { savedAt } });
+        lastSavedRef.current = cloneDraft({
+          ...state.draft,
+          lastAutosaveAt: savedAt,
+          isDirty: false,
+        });
+      } catch (autosaveError) {
+        throw autosaveError;
+      }
+
+      return operation();
+    },
+    [state.draft, dispatch],
+  );
+
+  const executeOutlineMutation = React.useCallback(
+    async (operation: () => Promise<SessionOutline>, errorTitle: string) => {
+      try {
+        const outline = await operation();
+        applyServerOutline(outline);
+      } catch (error) {
+        try {
+          const outline = await retryOperationWithDraft(operation, error);
+          applyServerOutline(outline);
+        } catch (retryError) {
+          handleOutlineError(errorTitle, retryError);
+        }
+      }
+    },
+    [applyServerOutline, handleOutlineError, retryOperationWithDraft],
+  );
+
   const addOutlineSection = React.useCallback(async (sectionType: SectionType, position?: number) => {
-    if (!state.draft) {
+    if (!state.draft || !canEdit) {
+      if (!canEdit) {
+        console.warn('[SessionBuilder] Add section blocked - not in edit mode');
+        return;
+      }
       return;
     }
 
-    try {
-      const updatedOutline = await sessionBuilderService.addSection(state.draft.sessionId, sectionType, position);
-      applyServerOutline(updatedOutline);
-    } catch (error) {
-      handleOutlineError('Unable to add section', error);
-    }
-  }, [state.draft, applyServerOutline, handleOutlineError]);
+    await executeOutlineMutation(
+      () => sessionBuilderService.addSection(state.draft.sessionId, sectionType, position),
+      'Unable to add section',
+    );
+  }, [state.draft, executeOutlineMutation, canEdit]);
 
   const updateOutlineSection = React.useCallback(async (sectionId: string, updates: Partial<FlexibleSessionSection>) => {
-    if (!state.draft) {
+    if (!state.draft || !canEdit) {
+      if (!canEdit) {
+        console.warn('[SessionBuilder] Update section blocked - not in edit mode');
+        return;
+      }
       return;
     }
 
-    const performUpdate = async () => {
-      return sessionBuilderService.updateSection(state.draft.sessionId, sectionId, updates);
-    };
-
-    try {
-      const updatedOutline = await performUpdate();
-      applyServerOutline(updatedOutline);
-    } catch (error: any) {
-      const status = error?.response?.status ?? error?.status;
-      const message =
-        error instanceof Error
-          ? error.message
-          : typeof error?.message === 'string'
-            ? error.message
-            : '';
-      const shouldRetryAfterAutosave =
-        status === 404 || message.toLowerCase().includes('not found');
-
-      
-      handleOutlineError('Unable to update section', error);
-    }
-  }, [state.draft, applyServerOutline, handleOutlineError]);
+    await executeOutlineMutation(
+      () => sessionBuilderService.updateSection(state.draft.sessionId, sectionId, updates),
+      'Unable to update section',
+    );
+  }, [state.draft, executeOutlineMutation, canEdit]);
 
   const removeOutlineSection = React.useCallback(async (sectionId: string) => {
-    if (!state.draft) {
+    if (!state.draft || !canEdit) {
+      if (!canEdit) {
+        console.warn('[SessionBuilder] Remove section blocked - not in edit mode');
+        return;
+      }
       return;
     }
 
-    try {
-      const updatedOutline = await sessionBuilderService.removeSection(state.draft.sessionId, sectionId);
-      applyServerOutline(updatedOutline);
-    } catch (error) {
-      handleOutlineError('Unable to remove section', error);
-    }
-  }, [state.draft, applyServerOutline, handleOutlineError]);
+    await executeOutlineMutation(
+      () => sessionBuilderService.removeSection(state.draft.sessionId, sectionId),
+      'Unable to remove section',
+    );
+  }, [state.draft, executeOutlineMutation, canEdit]);
 
   const moveOutlineSection = React.useCallback(async (sectionId: string, direction: 'up' | 'down') => {
-    if (!state.draft?.outline) {
+    if (!state.draft?.outline || !canEdit) {
+      if (!canEdit) {
+        console.warn('[SessionBuilder] Move section blocked - not in edit mode');
+        return;
+      }
       return;
     }
 
@@ -867,26 +949,26 @@ export const SessionBuilderProvider: React.FC<{
     [sections[index], sections[targetIndex]] = [sections[targetIndex], sections[index]];
     const orderedIds = sections.map((section) => section.id);
 
-    try {
-      const updatedOutline = await sessionBuilderService.reorderSections(state.draft.sessionId, orderedIds);
-      applyServerOutline(updatedOutline);
-    } catch (error) {
-      handleOutlineError('Unable to reorder sections', error);
-    }
-  }, [state.draft, applyServerOutline, handleOutlineError]);
+    await executeOutlineMutation(
+      () => sessionBuilderService.reorderSections(state.draft.sessionId, orderedIds),
+      'Unable to reorder sections',
+    );
+  }, [state.draft, executeOutlineMutation, canEdit]);
 
   const duplicateOutlineSection = React.useCallback(async (sectionId: string) => {
-    if (!state.draft) {
+    if (!state.draft || !canEdit) {
+      if (!canEdit) {
+        console.warn('[SessionBuilder] Duplicate section blocked - not in edit mode');
+        return;
+      }
       return;
     }
 
-    try {
-      const updatedOutline = await sessionBuilderService.duplicateSection(state.draft.sessionId, sectionId);
-      applyServerOutline(updatedOutline);
-    } catch (error) {
-      handleOutlineError('Unable to duplicate section', error);
-    }
-  }, [state.draft, applyServerOutline, handleOutlineError]);
+    await executeOutlineMutation(
+      () => sessionBuilderService.duplicateSection(state.draft.sessionId, sectionId),
+      'Unable to duplicate section',
+    );
+  }, [state.draft, executeOutlineMutation, canEdit]);
 
   const acceptVersion = React.useCallback((versionId: string) => {
     dispatch({ type: 'ACCEPT_AI_VERSION', payload: versionId });

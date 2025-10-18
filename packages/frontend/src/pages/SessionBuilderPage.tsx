@@ -24,13 +24,14 @@ import { VariantSelector } from '../components/session-builder/VariantSelector';
 import { SessionBuilderProvider, useSessionBuilder } from '../features/session-builder/state/SessionBuilderContext';
 import { sessionBuilderService, SectionType, FlexibleSessionSection } from '../services/session-builder.service';
 import { savedVariantsService } from '../services/saved-variants.service';
-import { SessionTopicDraft } from '../features/session-builder/state/types';
+import { SessionTopicDraft, SessionDraftData } from '../features/session-builder/state/types';
 import { cn } from '../lib/utils';
 import {
   areRequiredItemsComplete,
   getDraftReadinessItems,
 } from '../features/session-builder/utils/readiness';
 import { SessionStatus } from '@leadership-training/shared';
+import { EditModeProvider } from '../contexts/EditModeContext';
 
 type BuilderNavigationState = {
   from?: string;
@@ -69,6 +70,7 @@ const getTopicsForUI = (draft: SessionDraftData): SessionTopicDraft[] => {
   if (draft.outline?.sections && Array.isArray(draft.outline.sections)) {
     console.warn('[SessionBuilder] Metadata topics empty, deriving from outline as fallback');
     return sessionBuilderService.sortSectionsByPosition(draft.outline.sections).map((section: FlexibleSessionSection, index: number) => ({
+      id: crypto.randomUUID(), // Generate stable ID for drag-and-drop
       sectionId: section.id,
       title: section.title || `Section ${index + 1}`,
       description: section.description || '',
@@ -175,7 +177,24 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
         // Transform session data to builder format
         const builderData = transformSessionToBuilderData(session);
 
-        // Update metadata
+        // Validate ID consistency between topics and outline sections
+        console.log('[SessionBuilder Edit Mode] Validating ID consistency:', {
+          sessionId: existingSessionId,
+          topicsCount: builderData.topics?.length || 0,
+          outlineSectionsCount: builderData.outline?.sections?.length || 0,
+          topicSample: builderData.topics?.slice(0, 2).map(t => ({
+            id: t.id,
+            title: t.title?.substring(0, 30),
+            sectionId: t.sectionId
+          })),
+          sectionSample: builderData.outline?.sections?.slice(0, 2).map(s => ({
+            id: s.id,
+            title: s.title?.substring(0, 30),
+            hasTopic: !!s.associatedTopic
+          }))
+        });
+
+        // Update metadata first
         await updateMetadata(builderData.metadata);
 
         // Preserve topic snapshot for quick access during edits
@@ -188,30 +207,74 @@ const SessionBuilderScreen: React.FC<SessionBuilderScreenProps> = ({
 
           // Ensure topics are also populated in metadata from the transformed data
           if (builderData.topics && builderData.topics.length > 0) {
-            console.log('[SessionBuilder Edit Mode] Loading topics from transformed data:', builderData.topics);
-            await updateMetadata({ topics: builderData.topics });
+            console.log('[SessionBuilder Edit Mode] Loading topics from transformed data:', builderData.topics.length);
+
+            // Additional validation: ensure all topics have proper IDs and section references
+            const validatedTopics = builderData.topics.map(topic => ({
+              ...topic,
+              // Ensure topic has stable ID if missing
+              id: topic.id || crypto.randomUUID(),
+              // Ensure sectionId matches outline section
+              sectionId: topic.sectionId || builderData.outline.sections.find(s => s.associatedTopic?.id === topic.topicId)?.id
+            }));
+
+            console.log('[SessionBuilder Edit Mode] Validated topics:', validatedTopics.map(t => ({
+              id: t.id,
+              title: t.title?.substring(0, 30),
+              sectionId: t.sectionId,
+              hasValidId: !!t.id
+            })));
+
+            await updateMetadata({ topics: validatedTopics });
           } else {
             // If no topics in transformed data, create them from outline sections
             if (builderData.outline.sections && builderData.outline.sections.length > 0) {
-              const topicsFromOutline = sessionBuilderService.sortSectionsByPosition(builderData.outline.sections).map((section: FlexibleSessionSection, index: number) => ({
-                sectionId: section.id,
-                title: section.title || `Topic ${index + 1}`,
-                description: section.description || '',
-                durationMinutes: section.duration || 30,
-                learningOutcomes: section.learningObjectives?.join('\n') || '',
-                trainerNotes: section.trainerNotes || '',
-                materialsNeeded: section.materialsNeeded?.join('\n') || '',
-                deliveryGuidance: section.deliveryGuidance || '',
-                callToAction: section.suggestedActivities?.join('\n') || '',
-                trainerName: section.trainerName,
-                position: section.position ?? index + 1,
-                ...(section.associatedTopic?.id ? { topicId: section.associatedTopic.id } : {}),
-                ...(section.trainerId ? { trainerId: section.trainerId } : {}),
-              }));
+              console.log('[SessionBuilder Edit Mode] Creating topics from outline sections:', builderData.outline.sections.length);
+              const topicsFromOutline = sessionBuilderService.sortSectionsByPosition(builderData.outline.sections).map((section: FlexibleSessionSection, index: number) => {
+                // Use the section ID as the topic ID for consistency
+                const topicId = section.id.startsWith('topic-') ? section.id : `topic-${section.id}`;
 
-              console.log('[SessionBuilder Edit Mode] Created topics from outline sections:', topicsFromOutline);
+                return {
+                  id: topicId, // Use section ID for consistency
+                  sectionId: section.id,
+                  title: section.title || `Topic ${index + 1}`,
+                  description: section.description || '',
+                  durationMinutes: section.duration || 30,
+                  learningOutcomes: section.learningObjectives?.join('\n') || '',
+                  trainerNotes: section.trainerNotes || '',
+                  materialsNeeded: section.materialsNeeded?.join('\n') || '',
+                  deliveryGuidance: section.deliveryGuidance || '',
+                  callToAction: section.suggestedActivities?.join('\n') || '',
+                  trainerName: section.trainerName,
+                  position: section.position ?? index + 1,
+                  ...(section.associatedTopic?.id ? { topicId: section.associatedTopic.id } : {}),
+                  ...(section.trainerId ? { trainerId: section.trainerId } : {}),
+                };
+              });
+
+              console.log('[SessionBuilder Edit Mode] Created topics from outline sections:', topicsFromOutline.length);
               await updateMetadata({ topics: topicsFromOutline });
             }
+          }
+
+          // Final validation: ensure topics and sections are properly linked
+          const finalDraft = state.draft;
+          if (finalDraft?.metadata.topics && finalDraft?.outline?.sections) {
+            const reconciliationCheck = finalDraft.metadata.topics.map((topic, index) => {
+              const matchingSection = finalDraft.outline.sections.find(section => section.id === topic.sectionId);
+              return {
+                topicId: topic.id,
+                topicTitle: topic.title?.substring(0, 30),
+                sectionId: topic.sectionId,
+                hasMatchingSection: !!matchingSection,
+                sectionTitle: matchingSection?.title?.substring(0, 30)
+              };
+            });
+
+            console.log('[SessionBuilder Edit Mode] Topic-section reconciliation check:', {
+              allMatched: reconciliationCheck.every(check => check.hasMatchingSection),
+              mismatches: reconciliationCheck.filter(check => !check.hasMatchingSection)
+            });
           }
         }
 
@@ -1932,20 +1995,25 @@ export const SessionBuilderPage: React.FC = () => {
 
   return (
     <ToastProvider>
-      <SessionBuilderProvider
-        sessionId={sessionId}
-        prefilledTopics={prefilledTopics}
-        savedVariant={savedVariant}
+      <EditModeProvider
+        initialSessionId={sessionId}
+        initialSessionStatus={isEditMode ? SessionStatus.DRAFT : SessionStatus.DRAFT}
       >
-        <SessionBuilderScreen
-          routeSessionId={sessionId}
+        <SessionBuilderProvider
+          sessionId={sessionId}
           prefilledTopics={prefilledTopics}
           savedVariant={savedVariant}
-          initialStep={initialStep}
-          isEditMode={isEditMode}
-          existingSessionId={isEditMode ? sessionId : undefined}
-        />
-      </SessionBuilderProvider>
+        >
+          <SessionBuilderScreen
+            routeSessionId={sessionId}
+            prefilledTopics={prefilledTopics}
+            savedVariant={savedVariant}
+            initialStep={initialStep}
+            isEditMode={isEditMode}
+            existingSessionId={isEditMode ? sessionId : undefined}
+          />
+        </SessionBuilderProvider>
+      </EditModeProvider>
     </ToastProvider>
   );
 };

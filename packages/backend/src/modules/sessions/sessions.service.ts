@@ -361,6 +361,7 @@ export class SessionsService {
       .leftJoinAndSelect('session.landingPage', 'landingPage')
       .leftJoinAndSelect('session.incentives', 'incentives')
       .leftJoinAndSelect('session.location', 'location')
+      .leftJoinAndSelect('session.category', 'category')
       .leftJoinAndSelect('session.trainer', 'primaryTrainer')
       .leftJoinAndSelect('session.trainerAssignments', 'trainerAssignments')
       .leftJoinAndSelect('trainerAssignments.trainer', 'trainer')
@@ -1875,6 +1876,11 @@ export class SessionsService {
   async addOutlineSection(sessionId: string, dto: AddOutlineSectionDto): Promise<SessionOutlinePayload> {
     const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
 
+    // Check if the associated session is published - if so, block editing
+    if (draft.session?.status === SessionStatus.PUBLISHED) {
+      throw new ForbiddenException('Cannot add sections to published sessions. Create a new version to make changes.');
+    }
+
     const insertPosition = dto.position && dto.position > 0
       ? Math.min(Math.floor(dto.position), outline.sections.length + 1)
       : outline.sections.length + 1;
@@ -1896,6 +1902,12 @@ export class SessionsService {
 
   async updateOutlineSection(sessionId: string, dto: UpdateOutlineSectionDto): Promise<SessionOutlinePayload> {
     const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+
+    // Check if the associated session is published - if so, block editing
+    if (draft.session?.status === SessionStatus.PUBLISHED) {
+      throw new ForbiddenException('Cannot update sections of published sessions. Create a new version to make changes.');
+    }
+
     let sectionFound = false;
 
     const nextSections = outline.sections.map((section) => {
@@ -1939,6 +1951,12 @@ export class SessionsService {
 
   async removeOutlineSection(sessionId: string, dto: RemoveOutlineSectionDto): Promise<SessionOutlinePayload> {
     const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+
+    // Check if the associated session is published - if so, block editing
+    if (draft.session?.status === SessionStatus.PUBLISHED) {
+      throw new ForbiddenException('Cannot remove sections from published sessions. Create a new version to make changes.');
+    }
+
     const sections = outline.sections.filter((section) => section.id !== dto.sectionId);
 
     if (sections.length === outline.sections.length) {
@@ -1958,6 +1976,11 @@ export class SessionsService {
 
   async reorderOutlineSections(sessionId: string, dto: ReorderOutlineSectionsDto): Promise<SessionOutlinePayload> {
     const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+
+    // Check if the associated session is published - if so, block editing
+    if (draft.session?.status === SessionStatus.PUBLISHED) {
+      throw new ForbiddenException('Cannot reorder sections of published sessions. Create a new version to make changes.');
+    }
 
     const sectionMap = new Map(outline.sections.map((section) => [section.id, section]));
     const ordered: FlexibleSessionSection[] = [];
@@ -1986,6 +2009,12 @@ export class SessionsService {
 
   async duplicateOutlineSection(sessionId: string, dto: DuplicateOutlineSectionDto): Promise<SessionOutlinePayload> {
     const { draft, payload, outline } = await this.getDraftWithPayload(sessionId);
+
+    // Check if the associated session is published - if so, block editing
+    if (draft.session?.status === SessionStatus.PUBLISHED) {
+      throw new ForbiddenException('Cannot duplicate sections in published sessions. Create a new version to make changes.');
+    }
+
     const index = outline.sections.findIndex((section) => section.id === dto.sectionId);
 
     if (index < 0) {

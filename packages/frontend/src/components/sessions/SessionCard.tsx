@@ -6,7 +6,7 @@ import { SessionStatus } from '@leadership-training/shared';
 import { maskTrainerName, getTrainerDisplayString } from '../../utils/trainerPrivacy';
 import { transformLocationName, getShortLocationDisplay } from '../../utils/locationPrivacy';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { Calendar, Clock, MapPin, Users, Edit, Eye } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, Edit, Eye, Trash2 } from 'lucide-react';
 
 interface SessionWithRelations {
   id: string;
@@ -44,6 +44,8 @@ interface SessionCardProps {
   onSelectionChange?: (sessionId: string) => void;
   onEditSession?: (sessionId: string) => void;
   onViewDetails?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string) => void;
+  onReadinessClick?: (sessionId: string) => void;
   availableCategories?: Array<{ id: string; name: string }>;
 }
 
@@ -109,9 +111,16 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   onSelectionChange,
   onEditSession,
   onViewDetails,
+  onDeleteSession,
+  onReadinessClick,
   availableCategories = []
 }) => {
   const breakpoint = useBreakpoint();
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('SessionCard rendered with onDeleteSession:', !!onDeleteSession, 'for session:', session.id);
+  }, [onDeleteSession, session.id]);
 
   // Helper: Format duration from minutes
   const formatDuration = (durationMinutes?: number) => {
@@ -299,44 +308,75 @@ export const SessionCard: React.FC<SessionCardProps> = ({
             {categoryName}
           </Badge>
           {session.readinessScore !== undefined && (
-            <div className="flex items-center gap-1">
+            <div
+              className={`flex items-center gap-1 cursor-pointer transition-all duration-200 hover:opacity-80 ${
+                onReadinessClick ? 'hover:bg-slate-100 px-2 py-1 rounded-md -mx-2' : ''
+              }`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onReadinessClick?.(session.id);
+              }}
+              title={onReadinessClick ? "Click to view readiness details" : "Readiness score"}
+            >
               <div className={`h-2 w-2 rounded-full ${
                 session.readinessScore >= 80 ? 'bg-green-500' :
                 session.readinessScore >= 60 ? 'bg-yellow-500' :
                 'bg-red-500'
               }`}></div>
               <span className="text-xs text-slate-600">{session.readinessScore}%</span>
+              {onReadinessClick && (
+                <svg className="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              )}
             </div>
           )}
         </div>
 
   
         {/* Action Buttons */}
-        <div className="flex gap-2 mt-auto pt-3 border-t border-slate-100">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onViewDetails(session.id);
-            }}
-            className="flex-1 h-9 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
-          >
-            <Eye className="h-3 w-3 mr-1.5" />
-            View Details
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditSession(session.id);
-            }}
-            className="h-9 px-3 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white border-blue-600 hover:border-blue-700 transition-all duration-200 shadow-sm hover:shadow"
-          >
-            <Edit className="h-3 w-3 mr-1" />
-            Edit
-          </Button>
+        <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(session.id);
+              }}
+              className="w-8 h-8 p-0 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
+              title="View Details"
+            >
+              <Eye className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditSession(session.id);
+              }}
+              className="w-8 h-8 p-0 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
+              title="Edit"
+            >
+              <Edit className="h-3 w-3" />
+            </Button>
+          </div>
+          {onDeleteSession && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('SessionCard delete button clicked:', session.id);
+                onDeleteSession(session.id);
+              }}
+              className="w-8 h-8 p-0 text-xs text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+              title="Delete"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

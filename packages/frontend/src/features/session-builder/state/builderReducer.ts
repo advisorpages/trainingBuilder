@@ -117,6 +117,16 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
           selectedVersionId: action.payload,
         },
       };
+    case 'AUTOSAVE_SUCCESS':
+      if (!state.draft) return state;
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          lastAutosaveAt: action.payload.savedAt,
+          isDirty: false,
+        },
+      };
     case 'ACCEPT_AI_VERSION':
       if (!state.draft) return state;
       return {

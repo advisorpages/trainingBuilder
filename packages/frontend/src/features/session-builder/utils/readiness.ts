@@ -14,9 +14,7 @@ interface ReadinessItemOptions {
   hasAcceptedVersion: boolean;
 }
 
-const OPTIONAL_BONUS_CAP = 10;
-
-export const MIN_PUBLISH_SCORE = 90;
+export const MIN_PUBLISH_SCORE = 100;
 
 export function getReadinessItems(
   metadata: SessionMetadata,
@@ -26,74 +24,26 @@ export function getReadinessItems(
 
   return [
     {
-      id: 'title',
-      label: 'Session Title',
-      description: 'Clear, descriptive title for your session',
-      completed: !!metadata.title?.trim(),
+      id: 'trainers',
+      label: 'Trainer Assignment',
+      description: 'All topics have trainers assigned',
+      completed: !!(metadata.topics && metadata.topics.length > 0 && metadata.topics.every(topic => topic.trainerIds && topic.trainerIds.length > 0)),
       required: true,
-      weight: 15,
-    },
-    {
-      id: 'outcome',
-      label: 'Desired Outcome',
-      description: 'What participants will be able to do after the session',
-      completed: !!metadata.desiredOutcome?.trim(),
-      required: true,
-      weight: 20,
-    },
-    {
-      id: 'category',
-      label: 'Category',
-      description: 'Training category for proper classification',
-      completed: !!metadata.category?.trim(),
-      required: true,
-      weight: 10,
-    },
-    {
-      id: 'sessionType',
-      label: 'Session Type',
-      description: 'Format of your training session',
-      completed: !!metadata.sessionType,
-      required: true,
-      weight: 10,
+      weight: 40,
     },
     {
       id: 'schedule',
-      label: 'Schedule',
+      label: 'Scheduling',
       description: 'Date and time for the session',
       completed: !!metadata.startDate && !!metadata.startTime && !!metadata.endTime,
       required: true,
-      weight: 10,
+      weight: 35,
     },
     {
-      id: 'problem',
-      label: 'Current Problem',
-      description: 'Challenge or issue the session addresses',
-      completed: !!metadata.currentProblem?.trim(),
-      required: false,
-      weight: 10,
-    },
-    {
-      id: 'topics',
-      label: 'Specific Topics',
-      description: 'Key topics, frameworks, or skills to cover',
-      completed: !!metadata.specificTopics?.trim(),
-      required: false,
-      weight: 10,
-    },
-    {
-      id: 'outline',
-      label: 'Session Outline',
-      description: 'Generated session structure with sections',
-      completed: hasOutline,
-      required: true,
-      weight: 20,
-    },
-    {
-      id: 'accepted_content',
-      label: 'Approved Content',
-      description: 'Accepted AI-generated version for your session',
-      completed: hasAcceptedVersion,
+      id: 'location',
+      label: 'Location Assignment',
+      description: 'Session has a location assigned',
+      completed: !!metadata.locationId,
       required: true,
       weight: 25,
     },
@@ -105,30 +55,7 @@ export function getDraftReadinessItems(draft: SessionDraftData | null): Readines
     return [];
   }
 
-  const hasOutline = !!draft.outline && draft.outline.sections.length > 0;
-  const hasAcceptedVersion = !!draft.acceptedVersionId;
-
-  // If a version is accepted, also check if we have AI versions with sections as a fallback
-  const acceptedVersion = draft.aiVersions.find(v => v.id === draft.acceptedVersionId);
-  const hasAcceptedVersionWithContent = hasAcceptedVersion && acceptedVersion?.sections && acceptedVersion.sections.length > 0;
-
-  // Use either the outline sections OR the accepted version sections
-  const effectiveHasOutline = hasOutline || hasAcceptedVersionWithContent;
-
-  // Debug logging for troubleshooting
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Readiness Debug:', {
-      hasOutline,
-      hasAcceptedVersion,
-      hasAcceptedVersionWithContent,
-      effectiveHasOutline,
-      outlineSectionsCount: draft.outline?.sections?.length || 0,
-      acceptedVersionSectionsCount: acceptedVersion?.sections?.length || 0,
-      acceptedVersionId: draft.acceptedVersionId,
-    });
-  }
-
-  return getReadinessItems(draft.metadata, { hasOutline: effectiveHasOutline, hasAcceptedVersion });
+  return getReadinessItems(draft.metadata, { hasOutline: false, hasAcceptedVersion: false });
 }
 
 export function calculateReadinessScore(items: ReadinessItem[]): number {
@@ -136,28 +63,12 @@ export function calculateReadinessScore(items: ReadinessItem[]): number {
     return 0;
   }
 
-  const requiredItems = items.filter((item) => item.required);
-  const optionalItems = items.filter((item) => !item.required);
-
-  const totalRequiredWeight = requiredItems.reduce((sum, item) => sum + item.weight, 0);
-  const completedRequiredWeight = requiredItems
+  const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+  const completedWeight = items
     .filter((item) => item.completed)
     .reduce((sum, item) => sum + item.weight, 0);
 
-  const baseScore = totalRequiredWeight
-    ? (completedRequiredWeight / totalRequiredWeight) * 100
-    : 0;
-
-  const totalOptionalWeight = optionalItems.reduce((sum, item) => sum + item.weight, 0);
-  const completedOptionalWeight = optionalItems
-    .filter((item) => item.completed)
-    .reduce((sum, item) => sum + item.weight, 0);
-
-  const optionalBonus = totalOptionalWeight
-    ? (completedOptionalWeight / totalOptionalWeight) * OPTIONAL_BONUS_CAP
-    : 0;
-
-  return Math.round(Math.min(100, baseScore + optionalBonus));
+  return totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0;
 }
 
 export function areRequiredItemsComplete(items: ReadinessItem[]): boolean {

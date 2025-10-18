@@ -243,12 +243,13 @@ const generateTestDataWithTopics = (): SessionMetadata => {
     location: 'Onsite - Training Room B',
     topics: [
       {
+        id: crypto.randomUUID(),
         title: 'Investment Basics Refresher',
         description: 'Review core investment concepts, mutual fund structures, fee types, and how funds fit into diversified portfolios.',
         durationMinutes: 30,
         learningOutcomes: 'Revisit the core terms and fund types before we dive into client conversations.',
         trainerNotes: bulletify([
-          'Kick off with a quick “explain it to a friend” warm-up.',
+          'Kick off with a quick "explain it to a friend" warm-up.',
           'Summarize the three categories of mutual funds.',
           'Highlight one real-life fund example from our current portfolio.',
         ]),
@@ -257,12 +258,13 @@ const generateTestDataWithTopics = (): SessionMetadata => {
         callToAction: 'Ask each advisor to note one fund they want to recommend this week.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Applying Mutual Funds to Client Scenarios',
         description: 'Map investor profiles to mutual fund categories, practice suitability conversations, and surface compliance guardrails.',
         durationMinutes: 30,
         learningOutcomes: 'Practice matching different investor goals to the right fund story.',
         trainerNotes: bulletify([
-          'Run the “client profile” matching activity in pairs.',
+          'Run the "client profile" matching activity in pairs.',
           'Model how to explain risk with plain-language comparisons.',
           'Pause after each scenario to surface compliance reminders.',
         ]),
@@ -271,12 +273,13 @@ const generateTestDataWithTopics = (): SessionMetadata => {
         callToAction: 'Have each advisor jot down a follow-up question to ask their next client.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Pitching and Closing Playbook',
         description: 'Build confidence handling objections, reinforce next-step commitments, and workshop closing language that drives conversions.',
         durationMinutes: 30,
         learningOutcomes: 'Give advisors a simple script to close with confidence.',
         trainerNotes: bulletify([
-          'Role-play a “last-minute objection” with volunteers.',
+          'Role-play a "last-minute objection" with volunteers.',
           'Capture winning phrases on the board.',
           'End with a personal commitment share-out.',
         ]),
@@ -316,12 +319,13 @@ const generateRecruitingAgentsData = (): SessionMetadata => {
     marketingToneName: DEFAULT_MARKETING_TONE_NAME,
     topics: [
       {
+        id: crypto.randomUUID(),
         title: 'Start With Our Story',
         description: 'Simple talking points that hook new agents and show why our team wins.',
         durationMinutes: 25,
         learningOutcomes: 'Leaders can share a three-minute story that makes candidates curious.',
         trainerNotes: bulletify([
-          'Play a quick “why I joined” reel from current agents.',
+          'Play a quick "why I joined" reel from current agents.',
           'Break down the story formula: hook, proof, invite.',
           'Have leaders practice the story in pairs with a timer.',
         ]),
@@ -330,6 +334,7 @@ const generateRecruitingAgentsData = (): SessionMetadata => {
         callToAction: 'Ask each leader to schedule one story call this week.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Find Great Agent Leads',
         description: 'Hands-on look at sourcing tactics: social media, local events, and partner shout-outs.',
         durationMinutes: 30,
@@ -337,13 +342,14 @@ const generateRecruitingAgentsData = (): SessionMetadata => {
         trainerNotes: bulletify([
           'Review the three-channel prospecting cheat sheet.',
           'Walk the group through a live LinkedIn search.',
-          'Build a “10 names in 10 minutes” action list.',
+          'Build a "10 names in 10 minutes" action list.',
         ]),
         materialsNeeded: bulletify(['Prospecting worksheet', 'Sample messaging templates']),
-        deliveryGuidance: 'Encourage leaders to share what’s already working before covering new tactics.',
+        deliveryGuidance: 'Encourage leaders to share what\'s already working before covering new tactics.',
         callToAction: 'Leaders pick one new recruiting channel to test this month.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Nail the Discovery Call',
         description: 'Structure, questions, and confident next steps that convert strong candidates.',
         durationMinutes: 35,
@@ -375,6 +381,7 @@ const structureTemplates: Array<{
     description: 'Open strong, teach new ideas, then apply them before wrapping.',
     topics: [
       {
+        id: crypto.randomUUID(),
         title: 'Kick-off & Focus',
         description: 'Warm the room, name the session promise, and surface what attendees hope to get.',
         durationMinutes: 15,
@@ -382,27 +389,29 @@ const structureTemplates: Array<{
         trainerNotes: bulletify([
           'Run a quick icebreaker tied to the session theme.',
           'Share the session promise and write it where everyone can see.',
-          'Capture one “must solve” question from the group.',
+          'Capture one "must solve" question from the group.',
         ]),
         materialsNeeded: bulletify(['Timer', 'Whiteboard or slide with promise statement']),
         deliveryGuidance: 'Keep energy high—model the pace and tone you want for the rest of the workshop.',
         callToAction: 'Invite everyone to write one personal goal for the next 90 minutes.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Teach & Explore',
         description: 'Walk through the core concepts with stories, visuals, or demos.',
         durationMinutes: 40,
         learningOutcomes: 'Participants can describe the new ideas in plain language and connect them to their day-to-day.',
         trainerNotes: bulletify([
           'Explain each concept and tie it to a real story or example.',
-          'Pause every 10 minutes for a “turn and teach” mini-share.',
-          'Highlight the “watch outs” your team has already faced.',
+          'Pause every 10 minutes for a "turn and teach" mini-share.',
+          'Highlight the "watch outs" your team has already faced.',
         ]),
         materialsNeeded: bulletify(['Slides or visual aids', 'Concept cheat sheet']),
         deliveryGuidance: 'Keep the talk-to-interaction ratio balanced: aim for 5 minutes of teaching, then a quick engagement.',
         callToAction: 'Ask each table to pick the idea they want to start using this week.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Apply & Commit',
         description: 'Give them time to practice and leave with a clear next step.',
         durationMinutes: 25,
@@ -424,19 +433,21 @@ const structureTemplates: Array<{
     description: 'Fast-paced format for quick refreshers or focused coaching.',
     topics: [
       {
+        id: crypto.randomUUID(),
         title: 'Set the Stage',
         description: 'Connect to why this hour matters right now.',
         durationMinutes: 10,
-        learningOutcomes: 'Participants know the goal for the hour and how it connects to today’s priorities.',
+        learningOutcomes: 'Participants know the goal for the hour and how it connects to today\'s priorities.',
         trainerNotes: bulletify([
           'Share a quick story or metric that creates urgency.',
           'Invite the group to name one challenge they want to solve in the next 60 minutes.',
         ]),
         materialsNeeded: bulletify(['Flip chart or slide with key stat']),
         deliveryGuidance: 'Keep it tight—no more than two minutes on introductions.',
-        callToAction: 'Ask everyone to jot a “win if…” statement on a sticky note.',
+        callToAction: 'Ask everyone to jot a "win if…" statement on a sticky note.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Learn & Discuss',
         description: 'Surface one big insight and let the room react.',
         durationMinutes: 25,
@@ -451,13 +462,14 @@ const structureTemplates: Array<{
         callToAction: 'Challenge the group to pick the insight they want to defend to a sceptic tomorrow.',
       },
       {
+        id: crypto.randomUUID(),
         title: 'Practice & Commit',
         description: 'Try it on and agree on the very next micro-step.',
         durationMinutes: 15,
         learningOutcomes: 'Participants leave knowing exactly what they will try today.',
         trainerNotes: bulletify([
           'Run a paired or small-group practice round.',
-          'Share quick feedback prompts (“What landed? What would you tweak?”).',
+          'Share quick feedback prompts ("What landed? What would you tweak?").',
           'End with a two-sentence commitment share.',
         ]),
         materialsNeeded: bulletify(['Practice worksheet', 'Timer']),

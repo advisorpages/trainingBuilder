@@ -7,7 +7,7 @@ export interface ReadinessCheck {
   description: string;
   passed: boolean;
   weight: number;
-  category: 'content' | 'metadata' | 'assignment' | 'integration';
+  category: 'assignment';
 }
 
 export interface ReadinessScore {
@@ -21,13 +21,13 @@ export interface ReadinessScore {
 
 @Injectable()
 export class ReadinessScoringService {
-  private readonly PUBLISH_THRESHOLD = 0; // Minimum 0% readiness to publish (temporarily disabled for testing - TODO: Set back to 80% for production)
+  private readonly PUBLISH_THRESHOLD = 100; // Minimum 100% readiness to publish (all items required)
 
   async calculateReadinessScore(session: Session): Promise<ReadinessScore> {
     const checks = await this.performReadinessChecks(session);
     const totalScore = checks.reduce((sum, check) => sum + (check.passed ? check.weight : 0), 0);
     const maxScore = checks.reduce((sum, check) => sum + check.weight, 0);
-    const percentage = Math.round((totalScore / maxScore) * 100);
+    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
     const recommendedActions = this.generateRecommendedActions(checks);
 
@@ -44,108 +44,42 @@ export class ReadinessScoringService {
   private async performReadinessChecks(session: Session): Promise<ReadinessCheck[]> {
     const checks: ReadinessCheck[] = [];
 
-    // Core Metadata Checks (30 points total)
-    checks.push({
-      id: 'has-title',
-      name: 'Session Title',
-      description: 'Session has a descriptive title',
-      passed: !!session.title && session.title.trim().length >= 3,
-      weight: 10,
-      category: 'metadata',
-    });
-
-    checks.push({
-      id: 'has-objective',
-      name: 'Learning Objective',
-      description: 'Session has clear learning objectives',
-      passed: !!session.objective && session.objective.trim().length >= 20,
-      weight: 15,
-      category: 'metadata',
-    });
-
-    checks.push({
-      id: 'has-audience',
-      name: 'Target Audience',
-      description: 'Session defines target audience',
-      passed: !!session.audienceId || !!session.audience,
-      weight: 5,
-      category: 'metadata',
-    });
-
-    // Content Quality Checks (35 points total)
-    const hasContentVersions = session.contentVersions && session.contentVersions.length > 0;
-    checks.push({
-      id: 'has-content-versions',
-      name: 'Content Versions',
-      description: 'Session has content versions (AI or manual)',
-      passed: hasContentVersions,
-      weight: 15,
-      category: 'content',
-    });
-
-    const hasAgendaItems = session.agendaItems && session.agendaItems.length > 0;
-    checks.push({
-      id: 'has-agenda-items',
-      name: 'Session Agenda',
-      description: 'Session has structured agenda items',
-      passed: hasAgendaItems,
-      weight: 10,
-      category: 'content',
-    });
-
-    const hasSufficientDuration = session.durationMinutes && session.durationMinutes >= 15;
-    checks.push({
-      id: 'sufficient-duration',
-      name: 'Duration Set',
-      description: 'Session duration is at least 15 minutes',
-      passed: hasSufficientDuration,
-      weight: 10,
-      category: 'content',
-    });
-
-    // Assignment & Delivery Checks (20 points total)
+    // Check 1: All topics have trainers assigned (40 points)
     const sessionTopics = session.sessionTopics ?? [];
-    const hasTrainerAssigned = sessionTopics.some(
-      (sessionTopic) => sessionTopic.trainerId !== undefined && sessionTopic.trainerId !== null,
-    );
+    const allTopicsHaveTrainers = sessionTopics.length > 0 &&
+      sessionTopics.every(
+        (sessionTopic) => sessionTopic.trainerId !== undefined && sessionTopic.trainerId !== null,
+      );
+
     checks.push({
-      id: 'trainer-assigned',
+      id: 'all-topics-trainers-assigned',
       name: 'Trainer Assignment',
-      description: 'Session has at least one trainer assigned',
-      passed: hasTrainerAssigned,
-      weight: 15,
+      description: 'All topics in the session have trainers assigned',
+      passed: allTopicsHaveTrainers,
+      weight: 40,
       category: 'assignment',
     });
 
+    // Check 2: Session has scheduled date and time (35 points)
     const hasSchedule = !!session.scheduledAt;
     checks.push({
       id: 'scheduled',
       name: 'Scheduling',
-      description: 'Session has a scheduled date/time',
+      description: 'Session has a scheduled date and time',
       passed: hasSchedule,
-      weight: 5,
+      weight: 35,
       category: 'assignment',
     });
 
-    // Integration & Landing Page Checks (15 points total)
-    const hasLandingPage = !!session.landingPage;
+    // Check 3: Session has location assigned (25 points)
+    const hasLocation = !!session.locationId;
     checks.push({
-      id: 'landing-page',
-      name: 'Landing Page',
-      description: 'Session has associated landing page',
-      passed: hasLandingPage,
-      weight: 10,
-      category: 'integration',
-    });
-
-    const hasIncentives = session.incentives && session.incentives.length > 0;
-    checks.push({
-      id: 'incentives-linked',
-      name: 'Incentive Linkage',
-      description: 'Session is linked to relevant incentives',
-      passed: hasIncentives,
-      weight: 5,
-      category: 'integration',
+      id: 'location-assigned',
+      name: 'Location Assignment',
+      description: 'Session has a location assigned',
+      passed: hasLocation,
+      weight: 25,
+      category: 'assignment',
     });
 
     return checks;
@@ -155,32 +89,15 @@ export class ReadinessScoringService {
     const failedChecks = checks.filter(check => !check.passed);
     const actions: string[] = [];
 
-    // Group by category and provide specific guidance
-    const checksByCategory = failedChecks.reduce((groups, check) => {
-      if (!groups[check.category]) groups[check.category] = [];
-      groups[check.category].push(check);
-      return groups;
-    }, {} as Record<string, ReadinessCheck[]>);
-
-    if (checksByCategory.metadata?.length) {
-      actions.push('Complete session metadata: ' +
-        checksByCategory.metadata.map(c => c.name.toLowerCase()).join(', '));
-    }
-
-    if (checksByCategory.content?.length) {
-      actions.push('Develop session content: ' +
-        checksByCategory.content.map(c => c.name.toLowerCase()).join(', '));
-    }
-
-    if (checksByCategory.assignment?.length) {
-      actions.push('Assign delivery resources: ' +
-        checksByCategory.assignment.map(c => c.name.toLowerCase()).join(', '));
-    }
-
-    if (checksByCategory.integration?.length) {
-      actions.push('Set up session integrations: ' +
-        checksByCategory.integration.map(c => c.name.toLowerCase()).join(', '));
-    }
+    failedChecks.forEach(check => {
+      if (check.id === 'all-topics-trainers-assigned') {
+        actions.push('Assign trainers to all topics in the session');
+      } else if (check.id === 'scheduled') {
+        actions.push('Set a date and time for the session');
+      } else if (check.id === 'location-assigned') {
+        actions.push('Assign a location for the session');
+      }
+    });
 
     if (actions.length === 0) {
       actions.push('Session is ready for publishing');
@@ -199,25 +116,12 @@ export class ReadinessScoringService {
   }
 
   getChecklistForCategory(category: string): Partial<ReadinessCheck>[] {
-    // Return empty checklist items for building UI forms
+    // Return checklist items for building UI forms
     const checklists = {
-      metadata: [
-        { id: 'has-title', name: 'Session Title', description: 'Add descriptive session title' },
-        { id: 'has-objective', name: 'Learning Objective', description: 'Define clear learning outcomes' },
-        { id: 'has-audience', name: 'Target Audience', description: 'Specify target audience' },
-      ],
-      content: [
-        { id: 'has-content-versions', name: 'Content Versions', description: 'Generate or upload session content' },
-        { id: 'has-agenda-items', name: 'Session Agenda', description: 'Create structured session timeline' },
-        { id: 'sufficient-duration', name: 'Duration Set', description: 'Set appropriate session duration' },
-      ],
       assignment: [
-        { id: 'trainer-assigned', name: 'Trainer Assignment', description: 'Assign qualified trainer(s)' },
+        { id: 'all-topics-trainers-assigned', name: 'Trainer Assignment', description: 'Assign trainers to all topics' },
         { id: 'scheduled', name: 'Scheduling', description: 'Set date and time for delivery' },
-      ],
-      integration: [
-        { id: 'landing-page', name: 'Landing Page', description: 'Create registration landing page' },
-        { id: 'incentives-linked', name: 'Incentive Linkage', description: 'Link relevant incentives or rewards' },
+        { id: 'location-assigned', name: 'Location Assignment', description: 'Assign a location for the session' },
       ],
     };
 

@@ -121,10 +121,28 @@ const extractTrainerInfo = (
   return { trainerId, trainerName };
 };
 
+// Deterministic UUID generator for session topics - ensures consistency across transformations
+const generateDeterministicTopicId = (sessionId: string, topicId: number): string => {
+  // Create a deterministic UUID based on session ID and topic ID for consistency
+  const seed = `${sessionId}-topic-${topicId}`;
+  // Simple hash function to create consistent UUIDs
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const char = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+
+  // Generate UUID-like string using the hash
+  const hex = Math.abs(hash).toString(16).padStart(8, '0');
+  return `topic-${hex}-${sessionId.substring(0, 8)}`;
+};
+
 // Transform SessionTopicDetail to SessionTopicDraft
 export const transformSessionTopicDetailToDraft = (
   topicDetail: SessionTopicDetail,
-  index: number
+  index: number,
+  sessionId?: string
 ): SessionTopicDraft => {
   const { trainerId, trainerName } = extractTrainerInfo(topicDetail);
 
@@ -140,7 +158,21 @@ export const transformSessionTopicDetailToDraft = (
   // Use topic trainer notes if available, otherwise use session topic notes
   const trainerNotes = topic?.trainerNotes || topicDetail.notes || '';
 
+  // Generate deterministic ID if sessionId is available, otherwise use random UUID
+  const stableId = sessionId
+    ? generateDeterministicTopicId(sessionId, topicDetail.topicId)
+    : crypto.randomUUID();
+
+  console.log('[transformSessionTopicDetailToDraft] Generated topic:', {
+    sessionId,
+    topicId: topicDetail.topicId,
+    stableId,
+    sectionId: `existing-topic-${topicDetail.topicId}`,
+    title: title.substring(0, 50)
+  });
+
   return {
+    id: stableId,
     sectionId: `existing-topic-${topicDetail.topicId}`,
     topicId: topicDetail.topicId,
     title,
@@ -159,7 +191,8 @@ export const transformSessionTopicDetailToDraft = (
 
 // Transform session topics to flexible sections format
 export const transformSessionTopicsToSections = (
-  sessionTopics: SessionTopicDetail[]
+  sessionTopics: SessionTopicDetail[],
+  sessionId?: string
 ): FlexibleSessionSection[] => {
   return sessionTopics.map((topicDetail, index) => {
     const { trainerId, trainerName } = extractTrainerInfo(topicDetail);
@@ -179,8 +212,20 @@ export const transformSessionTopicsToSections = (
     // Use topic trainer notes if available, otherwise use session topic notes
     const trainerNotes = topic?.trainerNotes || topicDetail.notes || '';
 
+    // Use the same deterministic ID pattern as topics for consistency
+    const sectionId = sessionId
+      ? generateDeterministicTopicId(sessionId, topicDetail.topicId)
+      : `existing-topic-${topicDetail.topicId}`;
+
+    console.log('[transformSessionTopicsToSections] Generated section:', {
+      sessionId,
+      topicId: topicDetail.topicId,
+      sectionId,
+      title: title.substring(0, 50)
+    });
+
     return {
-      id: `existing-topic-${topicDetail.topicId}`,
+      id: sectionId,
       type: 'topic' as const,
       title,
       description,
@@ -207,7 +252,13 @@ export const createBasicOutlineFromSession = (
   session: Session,
   sessionTopics: SessionTopicDetail[]
 ) => {
-  const sections = transformSessionTopicsToSections(sessionTopics);
+  const sections = transformSessionTopicsToSections(sessionTopics, session.id);
+
+  console.log('[createBasicOutlineFromSession] Created outline:', {
+    sessionId: session.id,
+    sectionsCount: sections.length,
+    totalDuration: sections.reduce((total, section) => total + (section.duration || 30), 0)
+  });
 
   return {
     sections,
@@ -239,8 +290,26 @@ export const transformSessionToBuilderData = (session: Session) => {
   const metadata = transformSessionToMetadata(session);
   const outline = createBasicOutlineFromSession(session, sessionTopics);
   const topics = sessionTopics.map((topicDetail: SessionTopicDetail, index: number) =>
-    transformSessionTopicDetailToDraft(topicDetail, index)
+    transformSessionTopicDetailToDraft(topicDetail, index, session.id)
   );
+
+  // Validate ID consistency between topics and outline sections
+  const idConsistencyCheck = topics.map((topic, index) => {
+    const matchingSection = outline.sections.find(section => section.id === topic.id);
+    return {
+      topicId: topic.topicId,
+      topicStableId: topic.id,
+      sectionId: matchingSection?.id,
+      hasMatch: !!matchingSection,
+      title: topic.title.substring(0, 30)
+    };
+  });
+
+  console.log('[transformSessionToBuilderData] ID consistency check:', {
+    sessionId: session.id,
+    consistency: idConsistencyCheck,
+    allMatched: idConsistencyCheck.every(check => check.hasMatch)
+  });
 
   console.log('[transformSessionToBuilderData] Transformation result:', {
     topicsCount: topics.length,

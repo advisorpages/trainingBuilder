@@ -8,6 +8,7 @@ import { trainerService } from '../../../services/trainer.service';
 import { cn } from '../../../lib/utils';
 import type { DropResult, DraggableProvidedDragHandleProps } from '@hello-pangea/dnd';
 import { SessionDetailsSection } from './SessionDetailsSection';
+import { EditModeGuard, useCanEdit } from '../../../components/EditModeGuard';
 
 interface TrainerAndTopicAssignmentStepProps {
   topics: SessionTopicDraft[];
@@ -41,6 +42,7 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
   onMoveSection,
   onUpdateMetadata,
 }) => {
+  const canEdit = useCanEdit();
   const [editingTopicIndex, setEditingTopicIndex] = React.useState<number | null>(null);
   const [editingTopic, setEditingTopic] = React.useState<SessionTopicDraft | null>(null);
   const [expandedTopics, setExpandedTopics] = React.useState<Set<number>>(new Set());
@@ -200,9 +202,17 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
   };
 
   const handleTopicReorder = React.useCallback(async (fromIndex: number, toIndex: number) => {
+    // Prevent reordering if not in edit mode
+    if (!canEdit) {
+      console.warn('[TrainerAndTopicAssignmentStep] Reorder blocked - not in edit mode');
+      return;
+    }
+
     if (fromIndex === toIndex) {
       return;
     }
+
+    console.log('🔄 [TrainerAndTopicAssignmentStep] Starting topic reorder:', { fromIndex, toIndex, canEdit });
 
     const updatedTopics = [...topics];
     const [movedTopic] = updatedTopics.splice(fromIndex, 1);
@@ -229,23 +239,178 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
     }));
 
     await Promise.resolve(onTopicsChange(realignedTopics));
-  }, [topics, onMoveSection, onTopicsChange]);
+    console.log('✅ [TrainerAndTopicAssignmentStep] Topic reorder completed successfully');
+  }, [topics, onMoveSection, onTopicsChange, canEdit]);
 
   const handleDragEnd = React.useCallback((result: DropResult) => {
-    const { destination, source } = result;
-    if (!destination || destination.index === source.index) {
+    // Block drag operations if not in edit mode
+    if (!canEdit) {
+      console.warn('🚫 [TrainerAndTopicAssignmentStep] Drag operation blocked - not in edit mode');
       return;
     }
-    void handleTopicReorder(source.index, destination.index);
-  }, [handleTopicReorder]);
+
+    console.log('🎯 Drag end triggered:', {
+      source: { index: result.source.index, droppableId: result.source.droppableId },
+      destination: result.destination ? { index: result.destination.index, droppableId: result.destination.droppableId } : null,
+      draggableId: result.draggableId,
+      canEdit
+    });
+
+    const { destination, source } = result;
+
+    // Validate drag result
+    if (!destination) {
+      console.warn('🚫 Drag cancelled - no destination');
+      return;
+    }
+
+    if (destination.index === source.index) {
+      console.log('🚫 Drag cancelled - no movement needed (same index)');
+      return;
+    }
+
+    if (destination.droppableId !== source.droppableId) {
+      console.warn('🚫 Drag cancelled - different droppable containers');
+      return;
+    }
+
+    // Validate indices are within bounds
+    if (source.index < 0 || source.index >= topics.length ||
+        destination.index < 0 || destination.index >= topics.length) {
+      console.error('❌ Invalid drag indices:', {
+        sourceIndex: source.index,
+        destinationIndex: destination.index,
+        topicsLength: topics.length
+      });
+      return;
+    }
+
+    console.log('📦 Reordering topic from', source.index, 'to', destination.index);
+    console.log('📊 Topic being moved:', {
+      topicId: topics[source.index]?.id,
+      title: topics[source.index]?.title?.substring(0, 30),
+      sectionId: topics[source.index]?.sectionId
+    });
+
+    try {
+      void handleTopicReorder(source.index, destination.index);
+    } catch (error) {
+      console.error('❌ Error during topic reordering:', error);
+      // Optional: Show user feedback about the error
+      if (error instanceof Error) {
+        console.error('Error details:', error.message, error.stack);
+      }
+    }
+  }, [handleTopicReorder, topics.length, canEdit]);
 
   const handleTopicDelete = (topicIndex: number) => {
     const updatedTopics = topics.filter((_, index) => index !== topicIndex);
     void Promise.resolve(onTopicsChange(updatedTopics));
   };
 
+  // Helper function to ensure topics have stable IDs
+  const ensureTopicHasStableId = React.useCallback((topic: SessionTopicDraft): SessionTopicDraft => {
+    if (!topic.id) {
+      console.log('🔧 Assigning stable ID to topic:', topic.title);
+      return {
+        ...topic,
+        id: crypto.randomUUID()
+      };
+    }
+    return topic;
+  }, []);
+
+  // Comprehensive topic validation on mount and when topics change
+  React.useEffect(() => {
+    console.log('🔍 [TopicValidation] Starting comprehensive topic validation...');
+
+    const validationResults = {
+      totalTopics: topics.length,
+      topicsWithoutIds: 0,
+      topicsWithoutSectionIds: 0,
+      duplicateIds: [] as string[],
+      orphanedTopics: [] as number[],
+      idSectionMismatch: [] as number[]
+    };
+
+    const idMap = new Map<string, number>();
+    const sectionIdMap = new Map<string, number>();
+
+    topics.forEach((topic, index) => {
+      // Check for missing ID
+      if (!topic.id) {
+        validationResults.topicsWithoutIds++;
+        console.warn(`⚠️ Topic at index ${index} missing ID:`, topic.title);
+      } else {
+        // Check for duplicate IDs
+        if (idMap.has(topic.id)) {
+          validationResults.duplicateIds.push(topic.id);
+          console.warn(`⚠️ Duplicate ID found: ${topic.id} at indices ${idMap.get(topic.id)} and ${index}`);
+        } else {
+          idMap.set(topic.id, index);
+        }
+      }
+
+      // Check for missing sectionId
+      if (!topic.sectionId) {
+        validationResults.topicsWithoutSectionIds++;
+        console.warn(`⚠️ Topic at index ${index} missing sectionId:`, topic.title);
+      } else {
+        // Check for duplicate sectionIds
+        if (sectionIdMap.has(topic.sectionId)) {
+          console.warn(`⚠️ Duplicate sectionId found: ${topic.sectionId} at indices ${sectionIdMap.get(topic.sectionId)} and ${index}`);
+        } else {
+          sectionIdMap.set(topic.sectionId, index);
+        }
+      }
+
+      // Check ID/sectionId consistency (both should be present for existing topics)
+      if (topic.id && topic.sectionId) {
+        const expectedSectionId = topic.id;
+        const hasMatchingSectionId = topic.sectionId === expectedSectionId ||
+                                    topic.sectionId === `existing-topic-${topic.topicId}`;
+
+        if (!hasMatchingSectionId) {
+          validationResults.idSectionMismatch.push(index);
+          console.warn(`⚠️ ID/sectionId mismatch at index ${index}:`, {
+            topicId: topic.id,
+            sectionId: topic.sectionId,
+            topicDbId: topic.topicId,
+            title: topic.title?.substring(0, 50)
+          });
+        }
+      }
+    });
+
+    console.log('📊 [TopicValidation] Validation results:', validationResults);
+
+    // Auto-fix topics without IDs
+    if (validationResults.topicsWithoutIds > 0) {
+      console.log('🔧 Auto-fixing topics without stable IDs...');
+      const updatedTopics = topics.map(topic => ensureTopicHasStableId(topic));
+      void Promise.resolve(onTopicsChange(updatedTopics));
+    }
+
+    // Report critical issues
+    if (validationResults.duplicateIds.length > 0) {
+      console.error('❌ Critical: Duplicate topic IDs found - drag and drop may not work correctly');
+    }
+
+    if (validationResults.idSectionMismatch.length > 0) {
+      console.warn('⚠️ Warning: Topics with ID/sectionId mismatches detected - reordering may have issues');
+    }
+
+    // Log success if everything looks good
+    if (validationResults.topicsWithoutIds === 0 &&
+        validationResults.duplicateIds.length === 0 &&
+        validationResults.idSectionMismatch.length === 0) {
+      console.log('✅ [TopicValidation] All topics passed validation - drag and drop should work correctly');
+    }
+  }, [topics.length]); // Re-run when topic count changes
+
   const handleAddTopic = () => {
     const newTopic: SessionTopicDraft = {
+      id: crypto.randomUUID(),
       title: 'New Topic',
       description: '',
       durationMinutes: 30,
@@ -255,6 +420,7 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
       deliveryGuidance: '',
       callToAction: '',
     };
+    console.log('➕ Adding new topic with ID:', newTopic.id);
     void Promise.resolve(onTopicsChange([...topics, newTopic]));
   };
 
@@ -301,7 +467,7 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
     return () => {
       cancelled = true;
     };
-  }, [topics, resolvedTrainerNames]);
+  }, [topics, resolvedTrainerNames, onTopicsChange, ensureTopicHasStableId]);
 
   // Toggle topic expansion
   const toggleTopicExpansion = (topicIndex: number) => {
@@ -338,20 +504,71 @@ export const TrainerAndTopicAssignmentStep: React.FC<TrainerAndTopicAssignmentSt
   const assignedCount = topics.filter(topic => topic.trainerId).length;
   const completionProgress = totalTopics > 0 ? (assignedCount / totalTopics) * 100 : 0;
 
-  // Helper function to generate stable keys for topics
-  const getTopicKey = (topic: SessionTopicDraft, index: number) => {
+  // Helper function to generate stable keys for topics with enhanced legacy support
+  const getTopicKey = React.useCallback((topic: SessionTopicDraft, index: number) => {
+    // Debug logging to track key generation
+    console.log('🔍 getTopicKey called:', {
+      topicId: topic.id,
+      sectionId: topic.sectionId,
+      topicDbId: topic.topicId,
+      title: topic.title?.substring(0, 30),
+      index
+    });
+
+    // Priority 1: Use the stable topic ID if available (most reliable)
+    if (topic.id) {
+      // Check if this looks like a UUID or deterministic ID
+      const isUuidLike = topic.id.includes('-') && topic.id.length > 20;
+      const isDeterministic = topic.id.startsWith('topic-') && topic.id.includes('-');
+
+      if (isUuidLike || isDeterministic) {
+        const key = `topic-${topic.id}`;
+        console.log('✅ Using stable topic.id:', key);
+        return key;
+      } else {
+        console.warn('⚠️ Topic.id present but not in expected format:', topic.id);
+      }
+    }
+
+    // Priority 2: Try to match deterministic ID patterns from session transformation
+    if (topic.sectionId && topic.sectionId.startsWith('existing-topic-')) {
+      const key = `section-${topic.sectionId}`;
+      console.log('✅ Using sectionId (existing topic pattern):', key);
+      return key;
+    }
+
+    // Priority 3: Fall back to sectionId for backward compatibility
     if (topic.sectionId) {
-      return `section-${topic.sectionId}`;
+      const key = `section-${topic.sectionId}`;
+      console.log('⚠️ Using sectionId (fallback):', key);
+      return key;
     }
-    // Always include the index to ensure uniqueness, even when topicIds are the same
+
+    // Priority 4: Legacy deterministic ID pattern matching
     if (topic.topicId) {
-      return `topic-${topic.topicId}-${index}`;
+      // Try to generate a consistent deterministic ID
+      const fallbackKey = `legacy-topic-${topic.topicId}-${index}`;
+      console.log('⚠️ Using legacy topicId fallback:', fallbackKey);
+      return fallbackKey;
     }
+
+    // Priority 5: Title-based key with sanitization
     if (topic.title) {
-      return `topic-${topic.title.replace(/\s+/g, '-').toLowerCase()}-${index}`;
+      const sanitizedTitle = topic.title
+        .replace(/[^\w\s-]/g, '') // Remove special chars except spaces and hyphens
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .toLowerCase()
+        .substring(0, 30); // Limit length
+      const key = `title-${sanitizedTitle}-${index}`;
+      console.log('⚠️ Using sanitized title-based key:', key);
+      return key;
     }
-    return `topic-${index}`;
-  };
+
+    // Priority 6: Last resort - index-based key
+    const key = `topic-${index}`;
+    console.log('🚨 Using index fallback (last resort):', key);
+    return key;
+  }, []);
 
 interface TopicCardProps {
   topic: SessionTopicDraft;
@@ -419,11 +636,13 @@ const TopicCardComponent: React.FC<TopicCardProps> = ({
               <button
                 type="button"
                 className={cn(
-                  'p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-white transition-colors cursor-grab active:cursor-grabbing',
+                  'p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-white transition-colors',
+                  canEdit ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-50',
                   isDragging && 'text-blue-600 bg-white shadow-sm'
                 )}
-                aria-label="Drag to reorder topic"
-                {...dragHandleProps}
+                aria-label={canEdit ? "Drag to reorder topic" : "Reordering disabled - session is published"}
+                {...(canEdit ? dragHandleProps : {})}
+                disabled={!canEdit}
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 20 20" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 5h6M7 9h6M7 13h6M7 17h6" />
@@ -819,117 +1038,140 @@ const TopicCard = React.memo(TopicCardComponent);
 TopicCard.displayName = 'TopicCard';
 
   return (
-    <div className="space-y-6">
-      {/* Session Details Section */}
-      <SessionDetailsSection
-        metadata={metadata}
-        topics={topics}
-        onUpdateMetadata={onUpdateMetadata}
-      />
-
-      {/* Topic Cards */}
+    <EditModeGuard
+      showCreateVersionButton={true}
+      onCreateVersion={() => {
+        // TODO: Implement create new version functionality
+        console.log('Create new version functionality not yet implemented');
+      }}
+    >
       <div className="space-y-6">
-        {topics.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-slate-300 rounded-lg bg-slate-50">
-            <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <p className="text-sm text-slate-600 mb-4">No topics yet</p>
-            <Button onClick={handleAddTopic}>
-              <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        {/* Session Details Section */}
+        <SessionDetailsSection
+          metadata={metadata}
+          topics={topics}
+          onUpdateMetadata={onUpdateMetadata}
+        />
+
+        {/* Topic Cards */}
+        <div className="space-y-6">
+          {topics.length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-slate-300 rounded-lg bg-slate-50">
+              <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-sm text-slate-600 mb-4">No topics yet</p>
+              <Button onClick={handleAddTopic} disabled={!canEdit}>
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Your First Topic
+              </Button>
+            </div>
+          ) : (
+            <DragDropContext onDragEnd={canEdit ? handleDragEnd : undefined}>
+              <Droppable droppableId="trainer-topics">
+                {(droppableProvided) => (
+                  <div
+                    ref={droppableProvided.innerRef}
+                    {...droppableProvided.droppableProps}
+                    className="space-y-6"
+                  >
+                    {topics.map((topic, index) => {
+                      const topicKey = getTopicKey(topic, index);
+                      const stateKey = getTopicStateKey(topic, index);
+                      const isExpanded = expandedTopics.has(index);
+                      const isEditing = editingTopicIndex === index;
+                      // Get trainer ID from local state first, then fall back to topic state
+                      const storedTrainerId = topicTrainers[stateKey];
+                      const currentTrainerId = storedTrainerId ?? topic.trainerId;
+
+                      // Get trainer name from topic metadata, resolved names cache, or simplified trainer list
+                      const trainerName = topic.trainerName ?? (
+                        currentTrainerId
+                          ? resolvedTrainerNames[currentTrainerId] ||
+                            allTrainers.find(t => t.id === currentTrainerId)?.name
+                          : undefined
+                      );
+
+                      // Update isAssigned based on currentTrainerId
+                      const isAssigned = Boolean(currentTrainerId);
+
+                      // Debug logging for each topic rendering
+                      console.log(`🏷️ Rendering topic ${index}:`, {
+                        topicKey,
+                        draggableId: topicKey,
+                        topicId: topic.id,
+                        sectionId: topic.sectionId,
+                        title: topic.title,
+                        canEdit
+                      });
+
+                      return (
+                        <Draggable
+                          key={topicKey}
+                          draggableId={topicKey}
+                          index={index}
+                          isDragDisabled={!canEdit}
+                        >
+                          {(draggableProvided, snapshot) => (
+                            <div
+                              ref={draggableProvided.innerRef}
+                              {...draggableProvided.draggableProps}
+                              style={draggableProvided.draggableProps.style as React.CSSProperties}
+                            >
+                              <TopicCard
+                                topic={topic}
+                                topicIndex={index}
+                                topicKey={topicKey}
+                                isExpanded={isExpanded}
+                                isEditing={isEditing}
+                                trainerName={trainerName}
+                                currentTrainerId={currentTrainerId}
+                                localTrainerId={storedTrainerId}
+                                isAssigned={isAssigned}
+                                onToggleExpansion={toggleTopicExpansion}
+                                onEdit={canEdit ? handleTopicEdit : undefined}
+                                onDelete={canEdit ? handleTopicDelete : undefined}
+                                onAssignTrainer={canEdit ? handleAssignTrainer : undefined}
+                                onTopicFieldChange={handleTopicFieldChange}
+                                onTopicSave={handleTopicSave}
+                                onTopicCancel={handleTopicCancel}
+                                editingTopic={editingTopic}
+                                dragHandleProps={draggableProvided.dragHandleProps}
+                                isDragging={snapshot.isDragging}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
+                    {droppableProvided.placeholder}
+                  </div>
+                )}
+              </Droppable>
+            </DragDropContext>
+          )}
+        </div>
+
+        {/* Add Topic Button */}
+        {topics.length > 0 && (
+          <div className="flex justify-center pt-4">
+            <Button
+              onClick={handleAddTopic}
+              variant="outline"
+              size="lg"
+              className="gap-2"
+              disabled={!canEdit}
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Add Your First Topic
+              Add Topic
             </Button>
           </div>
-        ) : (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="trainer-topics">
-              {(droppableProvided) => (
-                <div
-                  ref={droppableProvided.innerRef}
-                  {...droppableProvided.droppableProps}
-                  className="space-y-6"
-                >
-                  {topics.map((topic, index) => {
-                    const topicKey = getTopicKey(topic, index);
-                    const stateKey = getTopicStateKey(topic, index);
-                    const isExpanded = expandedTopics.has(index);
-                    const isEditing = editingTopicIndex === index;
-                    // Get trainer ID from local state first, then fall back to topic state
-                    const storedTrainerId = topicTrainers[stateKey];
-                    const currentTrainerId = storedTrainerId ?? topic.trainerId;
-
-                    // Get trainer name from topic metadata, resolved names cache, or simplified trainer list
-                    const trainerName = topic.trainerName ?? (
-                      currentTrainerId
-                        ? resolvedTrainerNames[currentTrainerId] ||
-                          allTrainers.find(t => t.id === currentTrainerId)?.name
-                        : undefined
-                    );
-
-                    // Update isAssigned based on currentTrainerId
-                    const isAssigned = Boolean(currentTrainerId);
-
-  
-                    return (
-                      <Draggable key={topicKey} draggableId={topicKey} index={index}>
-                        {(draggableProvided, snapshot) => (
-                          <div
-                            ref={draggableProvided.innerRef}
-                            {...draggableProvided.draggableProps}
-                            style={draggableProvided.draggableProps.style as React.CSSProperties}
-                          >
-                            <TopicCard
-                              topic={topic}
-                              topicIndex={index}
-                              topicKey={topicKey}
-                              isExpanded={isExpanded}
-                              isEditing={isEditing}
-                              trainerName={trainerName}
-                              currentTrainerId={currentTrainerId}
-                              localTrainerId={storedTrainerId}
-                              isAssigned={isAssigned}
-                              onToggleExpansion={toggleTopicExpansion}
-                              onEdit={handleTopicEdit}
-                              onDelete={handleTopicDelete}
-                              onAssignTrainer={handleAssignTrainer}
-                              onTopicFieldChange={handleTopicFieldChange}
-                              onTopicSave={handleTopicSave}
-                              onTopicCancel={handleTopicCancel}
-                              editingTopic={editingTopic}
-                              dragHandleProps={draggableProvided.dragHandleProps}
-                              isDragging={snapshot.isDragging}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
-                    );
-                  })}
-                  {droppableProvided.placeholder}
-                </div>
-              )}
-            </Droppable>
-          </DragDropContext>
         )}
       </div>
-
-      {/* Add Topic Button */}
-      {topics.length > 0 && (
-        <div className="flex justify-center pt-4">
-          <Button
-            onClick={handleAddTopic}
-            variant="outline"
-            size="lg"
-            className="gap-2"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Topic
-          </Button>
-        </div>
-      )}
-    </div>
+    </EditModeGuard>
   );
 };
