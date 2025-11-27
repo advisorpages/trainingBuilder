@@ -180,6 +180,14 @@ export class SessionsController {
     return this.sessionsService.update(id, dto);
   }
 
+  @Patch(':id/status')
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: SessionStatus; reason?: string }
+  ) {
+    return this.sessionsService.updateStatus(id, body.status, body.reason);
+  }
+
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.sessionsService.remove(id);
@@ -239,5 +247,14 @@ export class SessionsController {
   @Get(':id/readiness')
   async getReadinessScore(@Param('id') id: string) {
     return this.sessionsService.getReadinessScore(id);
+  }
+
+  @Patch(':sessionId/topics/:topicId')
+  async updateSessionTopicTrainer(
+    @Param('sessionId') sessionId: string,
+    @Param('topicId') topicId: string,
+    @Body() body: { trainerId: number | null }
+  ) {
+    return this.sessionsService.updateSessionTopicTrainer(sessionId, topicId, body.trainerId);
   }
 }

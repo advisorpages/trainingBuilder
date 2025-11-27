@@ -22,6 +22,7 @@ import { RagSettings } from './rag-settings.entity';
 import { AiPromptSetting } from './ai-prompt-setting.entity';
 import { VariantCache } from './variant-cache.entity';
 import { SavedVariant } from './saved-variant.entity';
+import { PersonalizedName } from './personalized-name.entity';
 
 export * from './base.entity';
 export * from './session.entity';
@@ -48,6 +49,7 @@ export * from './rag-settings.entity';
 export * from './ai-prompt-setting.entity';
 export * from './variant-cache.entity';
 export * from './saved-variant.entity';
+export * from './personalized-name.entity';
 
 export const entities = [
   Session,
@@ -74,4 +76,5 @@ export const entities = [
   AiPromptSetting,
   VariantCache,
   SavedVariant,
+  PersonalizedName,
 ];

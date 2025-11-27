@@ -50,6 +50,7 @@ export const ManageSessionsPage: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [deleteDialogOpening, setDeleteDialogOpening] = useState(false);
   const [selectedTab, setSelectedTab] = useState('published');
+  const [togglingSessionId, setTogglingSessionId] = useState<string | null>(null);
   const breakpoint = useBreakpoint();
 
   useEffect(() => {
@@ -147,6 +148,10 @@ export const ManageSessionsPage: React.FC = () => {
     setDetailsModalOpen(true);
   };
 
+  const handleViewSession = (sessionId: string) => {
+    navigate(`/sessions/view/${sessionId}`);
+  };
+
   const handleCloseDetailsModal = () => {
     setDetailsModalOpen(false);
     setSelectedSession(null);
@@ -233,6 +238,34 @@ export const ManageSessionsPage: React.FC = () => {
   const handleCancelDelete = () => {
     setDeleteDialogOpen(false);
     setSessionToDelete(null);
+  };
+
+  const handleStatusToggle = async (sessionId: string) => {
+    setTogglingSessionId(sessionId);
+    try {
+      const session = sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
+      const updatedSession = await sessionService.toggleSessionStatus(sessionId, session.status);
+
+      // Update the session in the local state
+      setSessions(prevSessions =>
+        prevSessions.map(s =>
+          s.id === sessionId ? { ...s, status: updatedSession.status } : s
+        )
+      );
+
+      // If the session was moved to draft, optionally navigate to edit mode
+      if (updatedSession.status === SessionStatus.DRAFT) {
+        // You could optionally navigate to edit mode here
+        // navigate(`/sessions/builder/edit/${sessionId}`);
+      }
+    } catch (error) {
+      console.error('Failed to toggle session status:', error);
+      // You could show a toast notification here
+    } finally {
+      setTogglingSessionId(null);
+    }
   };
 
   // Helper function to get ordered topics with trainers
@@ -427,9 +460,12 @@ export const ManageSessionsPage: React.FC = () => {
                         isSelected={selectedSession === session.id}
                         onSelectionChange={handleSessionSelect}
                         onEditSession={handleEditSession}
+                        onViewSession={handleViewSession}
                         onViewDetails={handleViewDetails}
                         onDeleteSession={handleDeleteSession}
                         onReadinessClick={handleReadinessClick}
+                        onStatusToggle={handleStatusToggle}
+                        isTogglingStatus={togglingSessionId === session.id}
                         availableCategories={availableCategories}
                       />
                     ))}
@@ -467,9 +503,12 @@ export const ManageSessionsPage: React.FC = () => {
                         isSelected={selectedSession === session.id}
                         onSelectionChange={handleSessionSelect}
                         onEditSession={handleEditSession}
+                        onViewSession={handleViewSession}
                         onViewDetails={handleViewDetails}
                         onDeleteSession={handleDeleteSession}
                         onReadinessClick={handleReadinessClick}
+                        onStatusToggle={handleStatusToggle}
+                        isTogglingStatus={togglingSessionId === session.id}
                         availableCategories={availableCategories}
                       />
                     ))}

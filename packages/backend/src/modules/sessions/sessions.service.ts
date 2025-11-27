@@ -2852,6 +2852,55 @@ export class SessionsService {
     return { updated: updates.length };
   }
 
+  async updateStatus(sessionId: string, status: SessionStatus, reason?: string): Promise<Session> {
+    console.log('Backend service - updateStatus called with:', { sessionId, status, reason });
+
+    const session = await this.sessionsRepository.findOne({
+      where: { id: sessionId },
+      relations: [
+        'contentVersions',
+        'agendaItems',
+        'trainer',
+        'trainerAssignments',
+        'trainerAssignments.trainer',
+        'sessionTopics',
+        'sessionTopics.trainer',
+        'sessionTopics.topic',
+        'landingPage',
+        'incentives',
+        'tone',
+        'marketingTone',
+      ],
+    });
+
+    if (!session) {
+      throw new Error(`Session with ID ${sessionId} not found`);
+    }
+
+    if (session.status === status) {
+      console.log(`Session ${sessionId} already has status ${status}, no update needed`);
+      return session;
+    }
+
+    const previousStatus = session.status;
+    console.log(`Session ${sessionId}: changing status from ${previousStatus} to ${status}`);
+
+    session.status = status;
+    this.applyPublishTimestamp(session, previousStatus);
+
+    const readiness = await this.readinessScoringService.calculateReadinessScore(session);
+    session.readinessScore = readiness.percentage;
+
+    const updatedSession = await this.sessionsRepository.save(session);
+
+    if (previousStatus && readiness) {
+      await this.recordStatusTransition(updatedSession, previousStatus, readiness);
+    }
+
+    console.log(`Backend service - successfully updated session ${sessionId} status to ${status}`);
+    return updatedSession;
+  }
+
   async bulkArchive(sessionIds: string[]): Promise<{ archived: number }> {
     const result = await this.bulkUpdateStatus(sessionIds, SessionStatus.RETIRED);
     return { archived: result.updated };
@@ -3006,6 +3055,42 @@ export class SessionsService {
       assignment: this.readinessScoringService.getChecklistForCategory('assignment'),
       integration: this.readinessScoringService.getChecklistForCategory('integration'),
     };
+  }
+
+  async updateSessionTopicTrainer(sessionId: string, topicId: string, trainerId: number | null) {
+    // Parse the topicId as number since it's stored as int in the database
+    const topicIdNum = parseInt(topicId, 10);
+    if (isNaN(topicIdNum)) {
+      throw new Error(`Invalid topic ID: ${topicId}`);
+    }
+
+    // Find the session topic using composite key
+    const sessionTopic = await this.sessionTopicsRepository.findOne({
+      where: {
+        sessionId: sessionId,
+        topicId: topicIdNum
+      },
+      relations: ['session', 'trainer'],
+    });
+
+    if (!sessionTopic) {
+      throw new Error(`Session topic for session ${sessionId} and topic ${topicId} not found`);
+    }
+
+    // Update the trainer assignment
+    sessionTopic.trainerId = trainerId;
+    sessionTopic.trainer = null; // Clear the relation cache
+
+    await this.sessionTopicsRepository.save(sessionTopic);
+
+    // Return the updated session topic with trainer relation loaded
+    return await this.sessionTopicsRepository.findOne({
+      where: {
+        sessionId: sessionId,
+        topicId: topicIdNum
+      },
+      relations: ['trainer', 'topic'],
+    });
   }
 
   

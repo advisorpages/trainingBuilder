@@ -1,12 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent } from '../../ui/card';
 import { Badge } from '../../ui/badge';
 import { Button } from '../../ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../ui/dialog';
 import { SessionStatus } from '@leadership-training/shared';
 import { maskTrainerName, getTrainerDisplayString } from '../../utils/trainerPrivacy';
 import { transformLocationName, getShortLocationDisplay } from '../../utils/locationPrivacy';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
-import { Calendar, Clock, MapPin, Users, Edit, Eye, Trash2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, Edit, Eye, Trash2, FileEdit, Loader2 } from 'lucide-react';
 
 interface SessionWithRelations {
   id: string;
@@ -43,9 +44,12 @@ interface SessionCardProps {
   isSelected?: boolean;
   onSelectionChange?: (sessionId: string) => void;
   onEditSession?: (sessionId: string) => void;
+  onViewSession?: (sessionId: string) => void;
   onViewDetails?: (sessionId: string) => void;
   onDeleteSession?: (sessionId: string) => void;
   onReadinessClick?: (sessionId: string) => void;
+  onStatusToggle?: (sessionId: string) => Promise<void>;
+  isTogglingStatus?: boolean;
   availableCategories?: Array<{ id: string; name: string }>;
 }
 
@@ -110,17 +114,48 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   isSelected = false,
   onSelectionChange,
   onEditSession,
+  onViewSession,
   onViewDetails,
   onDeleteSession,
   onReadinessClick,
+  onStatusToggle,
+  isTogglingStatus = false,
   availableCategories = []
 }) => {
   const breakpoint = useBreakpoint();
+  const [statusToggleDialogOpen, setStatusToggleDialogOpen] = useState(false);
+  const [isLocalToggling, setIsLocalToggling] = useState(false);
 
   // Debug logging
   React.useEffect(() => {
     console.log('SessionCard rendered with onDeleteSession:', !!onDeleteSession, 'for session:', session.id);
   }, [onDeleteSession, session.id]);
+
+  // Check if status can be toggled
+  const canToggleStatus = (session.status === SessionStatus.PUBLISHED || session.status === SessionStatus.DRAFT) && onStatusToggle;
+  const isPublished = session.status === SessionStatus.PUBLISHED;
+
+  // Handle status toggle with confirmation
+  const handleStatusToggleClick = () => {
+    if (canToggleStatus) {
+      setStatusToggleDialogOpen(true);
+    }
+  };
+
+  const handleConfirmStatusToggle = async () => {
+    if (!onStatusToggle) return;
+
+    setIsLocalToggling(true);
+    try {
+      await onStatusToggle(session.id);
+      setStatusToggleDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to toggle session status:', error);
+      // You could show a toast notification here
+    } finally {
+      setIsLocalToggling(false);
+    }
+  };
 
   // Helper: Format duration from minutes
   const formatDuration = (durationMinutes?: number) => {
@@ -337,30 +372,72 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         {/* Action Buttons */}
         <div className="flex items-center justify-between mt-auto pt-3 border-t border-slate-100">
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewDetails(session.id);
-              }}
-              className="w-8 h-8 p-0 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
-              title="View Details"
-            >
-              <Eye className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditSession(session.id);
-              }}
-              className="w-8 h-8 p-0 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
-              title="Edit"
-            >
-              <Edit className="h-3 w-3" />
-            </Button>
+            {session.status === SessionStatus.PUBLISHED ? (
+              // Published sessions: View button
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onViewSession?.(session.id);
+                }}
+                className="w-8 h-8 p-0 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
+                title="View Session"
+              >
+                <Eye className="h-3 w-3" />
+              </Button>
+            ) : (
+              // Draft sessions: View Details and Edit buttons
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewDetails(session.id);
+                  }}
+                  className="w-8 h-8 p-0 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
+                  title="View Details"
+                >
+                  <Eye className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditSession(session.id);
+                  }}
+                  className="w-8 h-8 p-0 text-xs font-medium bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 transition-all duration-200"
+                  title="Edit"
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+              </>
+            )}
+            {canToggleStatus && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleStatusToggleClick();
+                }}
+                disabled={isLocalToggling || isTogglingStatus}
+                className={`w-8 h-8 p-0 text-xs font-medium transition-all duration-200 ${
+                  isPublished
+                    ? 'bg-slate-50 hover:bg-slate-100 border-slate-300 hover:border-slate-400 text-slate-700'
+                    : 'bg-blue-50 hover:bg-blue-100 border-blue-200 hover:border-blue-300 text-blue-700'
+                }`}
+                title={isPublished ? 'Return to Draft' : 'Publish Session'}
+              >
+                {isLocalToggling || isTogglingStatus ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  isPublished ? <FileEdit className="h-3 w-3" /> : <Eye className="h-3 w-3" />
+                )}
+              </Button>
+            )}
           </div>
           {onDeleteSession && (
             <Button
@@ -379,6 +456,49 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           )}
         </div>
       </CardContent>
+
+      {/* Status Toggle Confirmation Dialog */}
+      <Dialog open={statusToggleDialogOpen} onOpenChange={setStatusToggleDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isPublished ? 'Return to Draft?' : 'Publish Session?'}
+            </DialogTitle>
+            <DialogDescription>
+              {isPublished ? (
+                <>
+                  This will return "{session.title}" to draft status, allowing you to make edits.
+                  The session will no longer be visible to participants until you publish it again.
+                </>
+              ) : (
+                <>
+                  This will publish "{session.title}", making it visible to participants.
+                  You can still make trainer assignments, but other edits will require returning to draft status.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setStatusToggleDialogOpen(false)}
+              disabled={isLocalToggling || isTogglingStatus}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmStatusToggle}
+              disabled={isLocalToggling || isTogglingStatus}
+              variant={isPublished ? "secondary" : "default"}
+            >
+              {(isLocalToggling || isTogglingStatus) && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              {isPublished ? 'Return to Draft' : 'Publish Session'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

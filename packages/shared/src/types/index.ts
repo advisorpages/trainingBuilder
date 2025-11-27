@@ -9,6 +9,19 @@ export interface User {
   role: Role;
   authoredSessions?: Session[];
   authoredIncentives?: Incentive[];
+  displayName?: string;
+}
+
+export interface PersonalizedName {
+  id: string;
+  userId: string;
+  type: PersonalizedNameType;
+  customLabel?: string;
+  name: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  user?: User;
 }
 
 export interface Role {
@@ -23,6 +36,18 @@ export enum UserRole {
   BROKER = 'Broker',
   CONTENT_DEVELOPER = 'Content Developer',
   TRAINER = 'Trainer',
+}
+
+export enum PersonalizedNameType {
+  HUSBAND = 'husband',
+  WIFE = 'wife',
+  PARTNER = 'partner',
+  CHILD = 'child',
+  PARENT = 'parent',
+  SIBLING = 'sibling',
+  FRIEND = 'friend',
+  COLLEAGUE = 'colleague',
+  OTHER = 'other'
 }
 
 // Session-related types

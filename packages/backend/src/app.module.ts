@@ -27,6 +27,7 @@ import { AIInteractionsModule } from './modules/ai-interactions/ai-interactions.
 import { RagSettingsModule } from './modules/rag-settings/rag-settings.module';
 import { AiPromptsModule } from './modules/ai-prompts/ai-prompts.module';
 import { SavedVariantsModule } from './modules/saved-variants/saved-variants.module';
+import { PersonalizedNamesModule } from './modules/personalized-names/personalized-names.module';
 import { entities } from './entities';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -76,6 +77,7 @@ import { SnakeNamingStrategy } from './config/snake-naming.strategy';
     RagSettingsModule,
     AiPromptsModule,
     SavedVariantsModule,
+    PersonalizedNamesModule,
   ],
   controllers: [AppController],
   providers: [

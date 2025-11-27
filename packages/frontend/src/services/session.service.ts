@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Session, RegistrationRequest } from '@leadership-training/shared';
+import { Session, RegistrationRequest, SessionStatus } from '@leadership-training/shared';
 import { API_ENDPOINTS } from '@leadership-training/shared';
 import { api } from './api.service';
 
@@ -319,6 +319,26 @@ class SessionService {
     return session.sessionOutlineData || null;
   }
 
+  // Toggle session status between published and draft
+  async toggleSessionStatus(sessionId: string, currentStatus: SessionStatus): Promise<Session> {
+    try {
+      const newStatus = currentStatus === SessionStatus.PUBLISHED ? SessionStatus.DRAFT : SessionStatus.PUBLISHED;
+      const reason = currentStatus === SessionStatus.PUBLISHED
+        ? 'Returning to draft for editing'
+        : 'Publishing session';
+
+      const response = await this.updateSessionStatus(sessionId, {
+        status: newStatus,
+        reason
+      });
+
+      return response;
+    } catch (error: any) {
+      console.error('Failed to toggle session status:', error);
+      throw new Error(error.response?.data?.message || 'Failed to toggle session status');
+    }
+  }
+
   // Update session topics order
   async updateSessionTopics(sessionId: string, sessionTopics: SessionTopicAssignmentPayload[]): Promise<Session> {
     try {
@@ -326,6 +346,15 @@ class SessionService {
       return response.data;
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Failed to update session topics');
+    }
+  }
+
+  // Update a single session topic (for trainer assignment)
+  async updateSessionTopic(sessionId: string, topicId: string, updates: Partial<SessionTopicAssignmentPayload>): Promise<void> {
+    try {
+      await api.patch(`${this.base}/${sessionId}/topics/${topicId}`, updates);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Failed to update session topic');
     }
   }
 }

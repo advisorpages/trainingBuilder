@@ -24,6 +24,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage'
 import SessionAITunerPage from './pages/SessionAITunerPage'
 import HomePage from './pages/HomePage'
 import { SavedVariantsPage } from './pages/SavedVariantsPage'
+import { SessionViewPage } from './pages/SessionViewPage'
 import './App.css'
 
 
@@ -75,6 +76,14 @@ function App() {
             element={
               <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
                 <SessionEditPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sessions/view/:sessionId"
+            element={
+              <ProtectedRoute requiredRoles={[UserRole.CONTENT_DEVELOPER, UserRole.BROKER]}>
+                <SessionViewPage />
               </ProtectedRoute>
             }
           />
